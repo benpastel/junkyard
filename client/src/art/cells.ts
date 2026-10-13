@@ -56,14 +56,32 @@ export function drawCell(ctx: CanvasRenderingContext2D, type: CellType, dir: Dir
 function drawFeature(ctx: CanvasRenderingContext2D, type: CellType, s: number, color: string, unlit: boolean) {
   switch (type) {
     case "core": {
+      // Cockpit seen from above: glass canopy, the pilot's shoulders and helmet, visor facing forward.
+      ctx.fillStyle = "#16222e";
+      ctx.beginPath();
+      ctx.ellipse(s / 2, s * 0.5, s * 0.4, s * 0.44, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(160,200,230,0.35)";
+      ctx.lineWidth = Math.max(1, s * 0.04);
+      ctx.stroke();
+      ctx.fillStyle = shade(color, -0.35);
+      ctx.beginPath();
+      ctx.ellipse(s / 2, s * 0.64, s * 0.27, s * 0.13, 0, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(s / 2, s / 2, s * 0.3, 0, Math.PI * 2);
+      ctx.arc(s / 2, s * 0.5, s * 0.17, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.fillStyle = "#c8ecff";
       ctx.beginPath();
-      ctx.arc(s / 2, s * 0.42, s * 0.1, 0, Math.PI * 2);
+      ctx.ellipse(s / 2, s * 0.41, s * 0.11, s * 0.05, 0, 0, Math.PI * 2);
       ctx.fill();
+      // Glint on the canopy glass.
+      ctx.strokeStyle = "rgba(255,255,255,0.35)";
+      ctx.lineWidth = Math.max(1, s * 0.035);
+      ctx.beginPath();
+      ctx.arc(s / 2, s * 0.5, s * 0.33, Math.PI * 1.15, Math.PI * 1.4);
+      ctx.stroke();
       break;
     }
     case "hull":
@@ -146,6 +164,16 @@ function drawFeature(ctx: CanvasRenderingContext2D, type: CellType, s: number, c
       break;
     }
   }
+}
+
+/** Darken (amount < 0) or lighten a #rrggbb colour. */
+function shade(hex: string, amount: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (sh: number) => {
+    const v = (n >> sh) & 255;
+    return Math.round(amount < 0 ? v * (1 + amount) : v + (255 - v) * amount);
+  };
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
 }
 
 function neon(ctx: CanvasRenderingContext2D, s: number, unlit: boolean, paint: () => void) {

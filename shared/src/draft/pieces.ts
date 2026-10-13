@@ -54,7 +54,7 @@ export function placedCells(piece: Piece, x: number, y: number, rot: Dir, flip: 
 
 /** Every piece carries exactly one kind of part. */
 const SPECIAL_WEIGHTS: [CellType, number][] = [
-  ["engine", 32],
+  ["engine", 48],
   ["laser", 24],
   ["mirror", 7],
   ["armor", 7],
