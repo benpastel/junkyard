@@ -64,6 +64,36 @@ describe("arena", () => {
     a.dispose();
   });
 
+  it("mirrors reflect lasers without taking damage", () => {
+    const a = new Arena({ ships: [bp("a", ["i", "C", "^"]), bp("b", ["MMM", "MCM"])], seed: 1 });
+    run(a, 40, { a: { ...NO_INPUT, up: true } });
+    run(a, TICK_HZ * 3, { a: { ...NO_INPUT, laser: true } });
+    expect(a.ship("b")!.cellsLost).toBe(0);
+    a.dispose();
+  });
+
+  it("armor deflects collisions on its edge", () => {
+    // a rams head-first into b's front row; returns the damage b took.
+    const damageTaken = (front: string) => {
+      const a = new Arena({ ships: [bp("a", ["###", "#C#", "^^^"]), bp("b", [front.repeat(3), "#C#"])], seed: 1 });
+      const taken = (id: string) => a.ship(id)!.body.cells.reduce((s, c) => s + (c.maxHp - c.hp), 0);
+      // Thrust until the ships touch, then measure right away (before the bounce carries anyone into the ring).
+      const gap = () => {
+        const p = a.ship("a")!.body.rb!.translation();
+        const q = a.ship("b")!.body.rb!.translation();
+        return Math.hypot(p.x - q.x, p.y - q.y);
+      };
+      for (let i = 0; i < TICK_HZ * 6 && gap() > 3.2; i++) a.step({ a: { ...NO_INPUT, up: true } });
+      run(a, 15, {});
+      // Destroyed cells leave the body, so count them via cellsLost.
+      const dmg = taken("b") + a.ship("b")!.cellsLost * 100;
+      a.dispose();
+      return dmg;
+    };
+    expect(damageTaken("#")).toBeGreaterThan(0);
+    expect(damageTaken("A")).toBe(0);
+  });
+
   it("is deterministic", () => {
     const mk = () =>
       new Arena({ ships: SANDBOX_SHIPS.map((s, i) => bp(`p${i}`, s.rows)), seed: 42 });
