@@ -25,7 +25,7 @@ Online multiplayer, fast-paced, round-based game:
 
 ## Pieces and cells
 
-- A piece is a pentomino of 5 **cells**. Most cells are plain hull; a piece may carry one (or more) special cells: engine, laser, grappling hook, ram, mirror, armor.
+- A piece is a pentomino of 5 **cells**. Most cells are plain hull; a piece may carry one (or more) special cells: engine, laser, grappling hook, saw, mirror, armor.
 - **Edge pieces** protect one edge (their `dir`):
   - **Mirror**: neon edge that reflects lasers striking it (beams can bounce back at the shooter).
   - **Armor**: silver plate that deflects collisions on that edge with no damage and a strong bounce.
@@ -38,7 +38,9 @@ Online multiplayer, fast-paced, round-based game:
 
 ## Art
 
-- **Material families:** physical parts (ram, grapple, armor) share bare silver metal; energy parts (laser, mirror) share neon yellow. Engines are hot orange; the core and small trim use the player colour.
+- **Overhanging parts:** a part sticks out past its square in its working direction (laser barrels, saw blades, engine bells, shield strips), so its silhouette says what it is and which way it points. Ships are drawn in two passes (all plates, then all parts). A part whose overhang would land on another cell is covered, so it does nothing and is drawn faded.
+- Engines are drawn firing during the draft (easier to read) and off in the arena until they fire.
+- The core is a canopy with the pilot seen from above, helmet in the player colour.
 - Each cell looks independent for now; long-term each placed piece should look like one cohesive salvaged chunk.
 
 - Theme: junkyard / scrapyard salvage. Crisp pentomino shapes that snap satisfyingly to the grid, with grimy mismatched salvage art.
@@ -52,7 +54,8 @@ Online multiplayer, fast-paced, round-based game:
 - **Weapons:** fixed-direction, one key per weapon type. Currently Z = lasers, X = grapple (toggle).
 - **Controls bar:** the arena shows each key as a clickable button that lights while held; the draft uses the same buttons for rotate (Q/E), flip (F) and discard (Esc).
   - lasers (ranged, raycasts)
-  - ramming (damage scales with impact)
+  - collisions above a speed threshold break one cell on each side
+  - **saw**: a spinning blade with its own round hitbox past the cell; it cuts whatever it touches (one hit every 0.2s, at any speed) and takes no harm from it. Armor facing the blade turns it.
   - grappling hook (attaches two ships, applies force as it retracts)
   - maybe knockback / recoil
 - **Damage:** parts break after `HITS_TO_BREAK` hits (currently 1: the first hit breaks them; 2 would give one warning crack). A laser shot or an impact above a speed threshold is one hit; an open ram takes none and deals two.

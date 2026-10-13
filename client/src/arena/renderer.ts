@@ -12,7 +12,11 @@ import {
   type InitCell,
 } from "@ja/shared/sim/view";
 import { openChecker } from "@ja/shared";
-import { drawCell } from "../art/cells";
+import { drawCellPart, drawCellPlate, type CellStyle } from "../art/cells";
+
+/** Where the engine bell ends and the laser barrel tip sits, in cells from the cell centre (see art/cells.ts). */
+const NOZZLE_END = 0.67;
+const BARREL_TIP = 0.97;
 
 /** Seconds the view lags behind the newest snapshot, so there's always a pair to interpolate between. */
 const RENDER_DELAY = 0.1;
@@ -152,7 +156,7 @@ export class ArenaRenderer {
 
     // Debris under ships.
     const sorted = [...bodies].sort((a, b) => (a.owner ? 1 : 0) - (b.owner ? 1 : 0));
-    for (const b of sorted) this.drawBody(ctx, b, S, toScreen);
+    for (const b of sorted) this.drawBody(ctx, b, S, toScreen, nowMs);
     for (const b of bodies) if (b.owner) this.drawEngines(ctx, b, S, toScreen, nowMs);
     this.drawHooks(ctx, bodies, S, toScreen);
     for (const b of bodies) if (b.owner) this.drawCharge(ctx, b, S, toScreen, nowMs);
@@ -255,7 +259,12 @@ export class ArenaRenderer {
     switch (e.e) {
       case "shot": {
         const color = this.cellInfo.get(e.from)?.color ?? "#ff6040";
-        this.beams.push({ x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, life: 0.14, max: 0.14, color, width: 0.22 });
+        // The sim fires from the cell's edge; start the visible beam at the barrel tip when it's that long.
+        const len = Math.hypot(e.x2 - e.x1, e.y2 - e.y1);
+        const skip = this.cellInfo.get(e.from)?.type === "laser" && len > BARREL_TIP ? (BARREL_TIP - 0.5) / len : 0;
+        const x1 = e.x1 + (e.x2 - e.x1) * skip;
+        const y1 = e.y1 + (e.y2 - e.y1) * skip;
+        this.beams.push({ x1, y1, x2: e.x2, y2: e.y2, life: 0.14, max: 0.14, color, width: 0.22 });
         if (e.hit) this.burst(e.x2, e.y2, 5, "#ffd9a0", 4, 0.25);
         break;
       }
@@ -528,7 +537,7 @@ export class ArenaRenderer {
     return check;
   }
 
-  private drawBody(ctx: CanvasRenderingContext2D, b: BodyView, S: number, toScreen: (x: number, y: number) => { x: number; y: number }) {
+  private drawBody(ctx: CanvasRenderingContext2D, b: BodyView, S: number, toScreen: (x: number, y: number) => { x: number; y: number }, nowMs: number) {
     const cells = this.bodyCells.get(b.snap.id);
     if (!cells) return;
     const p = toScreen(b.x, b.y);
@@ -545,20 +554,27 @@ export class ArenaRenderer {
       if (c) ctx.fillRect((c.x - 0.5) * S + S * 0.12, (c.y - 0.5) * S + S * 0.12, S, S);
     }
     const isOpen = this.openCheckerFor(cells.cells);
-    cells.cells.forEach((cid, i) => {
-      const c = this.cellInfo.get(cid);
-      if (!c) return;
-      ctx.save();
-      ctx.translate((c.x - 0.5) * S, (c.y - 0.5) * S);
-      const damage = (cells.dmg[i] ?? 0) / 9;
-      drawCell(ctx, c.type, c.dir, S, {
-        color: debris ? "#3a3836" : c.color,
-        damage: debris ? 0 : damage,
-        variant: cid,
-        inactive: debris || !isOpen(c),
-      });
-      ctx.restore();
+    const style = (c: CellInfo, i: number): CellStyle => ({
+      color: debris ? "#3a3836" : c.color,
+      damage: debris ? 0 : (cells.dmg[i] ?? 0) / 9,
+      variant: c.cid,
+      inactive: debris || !isOpen(c),
+      // Engines are drawn off; drawEngines adds the flame while they fire.
+      thrusting: false,
+      time: nowMs / 1000,
     });
+    // Two passes: parts overhang their square, so they go on top of every plate.
+    for (const pass of [drawCellPlate, null] as const) {
+      cells.cells.forEach((cid, i) => {
+        const c = this.cellInfo.get(cid);
+        if (!c) return;
+        ctx.save();
+        ctx.translate((c.x - 0.5) * S, (c.y - 0.5) * S);
+        if (pass) pass(ctx, S, style(c, i));
+        else drawCellPart(ctx, c.type, c.dir, S, style(c, i));
+        ctx.restore();
+      });
+    }
     ctx.restore();
   }
 
@@ -576,8 +592,8 @@ export class ArenaRenderer {
       const base = localToWorld(b.x, b.y, b.a, c.x, c.y);
       const flicker = 0.8 + 0.2 * Math.sin(nowMs * 0.05 + cid * 1.7);
       const len = (0.5 + lv * 1.3) * flicker;
-      const start = toScreen(base.x + back.x * 0.5, base.y + back.y * 0.5);
-      const end = toScreen(base.x + back.x * (0.5 + len), base.y + back.y * (0.5 + len));
+      const start = toScreen(base.x + back.x * NOZZLE_END, base.y + back.y * NOZZLE_END);
+      const end = toScreen(base.x + back.x * (NOZZLE_END + len), base.y + back.y * (NOZZLE_END + len));
       const grad = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
       grad.addColorStop(0, `rgba(255,240,200,${0.9 * lv})`);
       grad.addColorStop(0.35, `rgba(255,160,60,${0.75 * lv})`);
@@ -605,7 +621,7 @@ export class ArenaRenderer {
       const dirA = (c.dir * Math.PI) / 2 + b.a;
       const fwd = { x: Math.sin(dirA), y: -Math.cos(dirA) };
       const base = localToWorld(b.x, b.y, b.a, c.x, c.y);
-      const p = toScreen(base.x + fwd.x * 0.5, base.y + fwd.y * 0.5);
+      const p = toScreen(base.x + fwd.x * BARREL_TIP, base.y + fwd.y * BARREL_TIP);
       const r = S * (0.15 + (level / 9) * 0.35) * (0.9 + 0.1 * Math.sin(nowMs * 0.04));
       const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 2);
       grad.addColorStop(0, "rgba(255,230,220,0.95)");

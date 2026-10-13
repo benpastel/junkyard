@@ -189,6 +189,15 @@ describe("arena", () => {
     b.dispose();
   });
 
+  it("a spinning saw keeps cutting what it touches and isn't hurt by it", () => {
+    const a = new Arena({ ships: [bp("a", ["R", "C", "^"]), bp("b", ["###", "###", "###", "#C#"])], seed: 1 });
+    run(a, TICK_HZ * 5, { a: { ...NO_INPUT, up: true } });
+    const saw = a.ship("a")!.body.cells.find((c) => c.type === "saw");
+    expect(saw?.alive).toBe(true);
+    expect(a.ship("b")!.cellsLost).toBeGreaterThanOrEqual(3);
+    a.dispose();
+  });
+
   it("is deterministic", () => {
     const mk = () =>
       new Arena({ ships: SANDBOX_SHIPS.map((s, i) => bp(`p${i}`, s.rows)), seed: 42 });

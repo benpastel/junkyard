@@ -13,7 +13,7 @@ export const CELL_HP: Record<CellType, number> = {
   engine: HITS_TO_BREAK,
   laser: HITS_TO_BREAK,
   grapple: HITS_TO_BREAK,
-  ram: HITS_TO_BREAK,
+  saw: HITS_TO_BREAK,
   mirror: HITS_TO_BREAK,
   armor: HITS_TO_BREAK,
 };
@@ -46,8 +46,11 @@ export const SIM = {
 
   /** Relative speed at the contact below which collisions do no damage; above it, each side takes one hit. */
   impactThreshold: 4,
-  /** Hits an open ram deals on impact (it takes none itself). */
-  ramDealHits: 2,
+  /** Saw blade: a ball this big, centred this far out from the saw cell's centre toward its dir. */
+  sawRadius: 0.45,
+  sawReach: 0.45,
+  /** A blade in contact with something cuts it (one hit) this often. */
+  sawCutSeconds: 0.2,
   impactPairCooldownSeconds: 0.25,
   /** Bounciness of armor cells (other cells use 0.2). */
   armorRestitution: 0.8,
@@ -72,7 +75,7 @@ export const SIM = {
    */
   crushForce: 20000,
   crushSeconds: 0.15,
-  /** Two crush-proof edges (armor/ram) pressed together give way after this much longer. */
+  /** Two crush-proof parts (armor/saw) pressed together give way after this much longer. */
   crushProofFactor: 3,
   /** Cells pressed into the ring itself (rather than another ship) give way after this much longer. */
   crushWallFactor: 3,

@@ -11,7 +11,7 @@ export function workingDir(type: CellType, dir: Dir): Dir | null {
       return ((dir + 2) % 4) as Dir;
     case "laser":
     case "grapple":
-    case "ram":
+    case "saw":
     case "mirror":
     case "armor":
       return dir;

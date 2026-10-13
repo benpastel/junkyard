@@ -1,170 +1,219 @@
-// Programmer art for ship cells. Used by both the draft screen and the arena,
-// so a ship looks the same in both. Plates are deliberately plain so the working
-// parts (and which way they point) read at a glance.
+// Ship cell art, shared by the draft screen and the arena.
+// Style: junk plates + parts that stick out past their cell in their working direction,
+// so a part's silhouette (not a tiny glyph) says what it is and which way it points.
+//
+// Overhang means draw order matters: draw every cell's plate first, then every cell's part,
+// or later plates paint over earlier overhangs. drawCell does both for one-off cells
+// (piece previews etc); ship renderers should call drawCellPlate / drawCellPart in two passes.
 import type { CellType, Dir } from "@ja/shared";
 
 export interface CellStyle {
-  /** Player colour, used for the core. */
+  /** Player colour, used for the cockpit. */
   color: string;
   /** 0 = pristine, 1 = about to fall off. */
   damage?: number;
-  /** Stable per-cell number, used to vary damage cracks. */
+  /** Stable per-cell number; varies plate colour, rust, and damage cracks. */
   variant?: number;
-  /** Covered by the ship's own hull, so the part does nothing: drawn dimmed and unlit. */
+  /** Covered by the ship's own hull, so the part does nothing. */
   inactive?: boolean;
+  /** Engine is firing right now. Omit to always show the flame (draft screen). */
+  thrusting?: boolean;
+  /** Seconds, for spinning saws and flickering flames. Omit for a still blade. */
+  time?: number;
 }
 
-const PLATE = "#3b3f46";
-const PLATE_EDGE = "#24272c";
-
-// Material families: physical parts (ram, grapple, armor) share bare silver metal;
-// energy parts (laser, mirror) share neon yellow. Engines are hot orange.
+const EDGE = "#24272c";
+const DARK = "#1c1e22";
+const TAPE = "#b9b29a";
 export const METAL = "#c9ced4";
 export const METAL_DARK = "#7d838b";
 export const NEON = "#f2ea3c";
 export const HOT = "#ff8a2a";
+const YEL = "#ffe08a";
+const PLATES = ["#4a4038", "#3b3f46", "#46473c", "#3a4148", "#4a3f3f"];
+
+/** One cell's plate (+ damage) filling (0,0)-(size,size). */
+export function drawCellPlate(ctx: CanvasRenderingContext2D, size: number, style: CellStyle) {
+  const v = style.variant ?? 0;
+  ctx.save();
+  ctx.scale(size, size);
+  const d = pen(ctx);
+  d.rect(0, 0, 1, 1, PLATES[v % PLATES.length]!);
+  ctx.strokeStyle = EDGE;
+  ctx.lineWidth = 0.04;
+  ctx.strokeRect(0.02, 0.02, 0.96, 0.96);
+  for (const [x, y] of [[0.13, 0.13], [0.87, 0.13], [0.13, 0.87], [0.87, 0.87]] as const) d.circle(x, y, 0.035, "#7a756c");
+  if (v % 2) d.rect(0.55, 0.55, 0.3, 0.25, "rgba(150,80,40,.35)");
+  ctx.restore();
+  if (style.damage && style.damage > 0) drawDamage(ctx, size, style.damage, v);
+}
 
 /**
- * Draws one cell filling the square (0,0)-(size,size) of `ctx`'s current transform.
- * `dir` is in the ship frame (0 = up/forward).
+ * The working part on top of a plate. May draw outside (0,0)-(size,size), up to ~0.7 cells
+ * past the working edge (more for engine flames). `dir` is in the ship frame (0 = up/forward).
  */
-export function drawCell(ctx: CanvasRenderingContext2D, type: CellType, dir: Dir, size: number, style: CellStyle) {
-  const s = size;
+export function drawCellPart(ctx: CanvasRenderingContext2D, type: CellType, dir: Dir, size: number, style: CellStyle) {
   ctx.save();
-
-  ctx.fillStyle = PLATE;
-  ctx.fillRect(0, 0, s, s);
-  ctx.strokeStyle = PLATE_EDGE;
-  ctx.lineWidth = Math.max(1, s * 0.04);
-  ctx.strokeRect(0.5, 0.5, s - 1, s - 1);
-
-  // Rotate so "up" in the drawing code below is the cell's dir.
-  ctx.translate(s / 2, s / 2);
+  // rotate so "up" in the part code is the cell's dir, then work in cell units
+  ctx.translate(size / 2, size / 2);
   ctx.rotate((dir * Math.PI) / 2);
-  ctx.translate(-s / 2, -s / 2);
-  drawFeature(ctx, type, s, style.color, !!style.inactive);
+  ctx.translate(-size / 2, -size / 2);
+  ctx.scale(size, size);
+  if (style.inactive) ctx.globalAlpha = 0.35;
+  PARTS[type]?.(pen(ctx), style);
   ctx.restore();
-
-  // Covered shield edges just go unlit (drawn above); other covered parts are dimmed whole.
-  if (style.inactive && type !== "mirror" && type !== "armor") {
-    ctx.fillStyle = "rgba(8,9,11,0.6)";
-    ctx.fillRect(0, 0, s, s);
-  }
-  if (style.damage && style.damage > 0) drawDamage(ctx, s, style.damage, style.variant ?? 0);
 }
 
-function drawFeature(ctx: CanvasRenderingContext2D, type: CellType, s: number, color: string, unlit: boolean) {
-  switch (type) {
-    case "core": {
-      // Cockpit seen from above: glass canopy, the pilot's shoulders and helmet, visor facing forward.
-      ctx.fillStyle = "#16222e";
-      ctx.beginPath();
-      ctx.ellipse(s / 2, s * 0.5, s * 0.4, s * 0.44, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(160,200,230,0.35)";
-      ctx.lineWidth = Math.max(1, s * 0.04);
-      ctx.stroke();
-      ctx.fillStyle = shade(color, -0.35);
-      ctx.beginPath();
-      ctx.ellipse(s / 2, s * 0.64, s * 0.27, s * 0.13, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(s / 2, s * 0.5, s * 0.17, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#c8ecff";
-      ctx.beginPath();
-      ctx.ellipse(s / 2, s * 0.41, s * 0.11, s * 0.05, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Glint on the canopy glass.
-      ctx.strokeStyle = "rgba(255,255,255,0.35)";
-      ctx.lineWidth = Math.max(1, s * 0.035);
-      ctx.beginPath();
-      ctx.arc(s / 2, s * 0.5, s * 0.33, Math.PI * 1.15, Math.PI * 1.4);
-      ctx.stroke();
-      break;
-    }
-    case "hull":
-      break;
-    case "engine": {
-      // Pushes toward "up": a bold arrow pointing up, with the nozzle flaring out of the bottom edge.
-      ctx.fillStyle = "#1c1e22";
-      ctx.beginPath();
-      ctx.moveTo(s * 0.3, s * 0.62);
-      ctx.lineTo(s * 0.7, s * 0.62);
-      ctx.lineTo(s * 0.88, s);
-      ctx.lineTo(s * 0.12, s);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = unlit ? "#6b4a30" : HOT;
-      ctx.fillRect(s * 0.18, s * 0.9, s * 0.64, s * 0.1);
-      ctx.beginPath();
-      ctx.moveTo(s * 0.5, s * 0.08);
-      ctx.lineTo(s * 0.82, s * 0.48);
-      ctx.lineTo(s * 0.62, s * 0.48);
-      ctx.lineTo(s * 0.62, s * 0.58);
-      ctx.lineTo(s * 0.38, s * 0.58);
-      ctx.lineTo(s * 0.38, s * 0.48);
-      ctx.lineTo(s * 0.18, s * 0.48);
-      ctx.closePath();
-      ctx.fill();
-      break;
-    }
-    case "laser": {
-      // A barrel running from a base block out through the top edge.
-      ctx.fillStyle = "#1c1e22";
-      ctx.fillRect(s * 0.26, s * 0.56, s * 0.48, s * 0.34);
-      neon(ctx, s, unlit, () => {
-        ctx.fillRect(s * 0.4, 0, s * 0.2, s * 0.62);
-        ctx.fillRect(s * 0.32, 0, s * 0.36, s * 0.1);
-      });
-      break;
-    }
-    case "mirror": {
-      // Reflective edge along the top.
-      neon(ctx, s, unlit, () => ctx.fillRect(0, 0, s, s * 0.18));
-      break;
-    }
-    case "armor": {
-      // Thick plate along the top.
-      if (unlit) {
-        ctx.fillStyle = "#5a5e64";
-        ctx.fillRect(0, 0, s, s * 0.26);
-      } else metalRect(ctx, 0, 0, s, s * 0.26);
-      break;
-    }
-    case "grapple": {
-      ctx.strokeStyle = METAL_DARK;
-      ctx.lineWidth = s * 0.1;
-      ctx.beginPath();
-      ctx.moveTo(s / 2, s * 0.85);
-      ctx.lineTo(s / 2, s * 0.2);
-      ctx.stroke();
-      ctx.strokeStyle = METAL;
-      ctx.lineWidth = s * 0.1;
-      ctx.beginPath();
-      ctx.moveTo(s * 0.22, s * 0.4);
-      ctx.lineTo(s / 2, s * 0.1);
-      ctx.lineTo(s * 0.78, s * 0.4);
-      ctx.stroke();
-      break;
-    }
-    case "ram": {
-      const g = ctx.createLinearGradient(s * 0.1, 0, s * 0.9, 0);
-      g.addColorStop(0, METAL_DARK);
-      g.addColorStop(0.45, METAL);
-      g.addColorStop(1, METAL_DARK);
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.moveTo(s * 0.1, s * 0.85);
-      ctx.lineTo(s / 2, 0);
-      ctx.lineTo(s * 0.9, s * 0.85);
-      ctx.closePath();
-      ctx.fill();
-      break;
-    }
-  }
+/** Plate + part for a lone cell. Don't use this cell-by-cell for whole ships; see top of file. */
+export function drawCell(ctx: CanvasRenderingContext2D, type: CellType, dir: Dir, size: number, style: CellStyle) {
+  drawCellPlate(ctx, size, style);
+  drawCellPart(ctx, type, dir, size, style);
 }
+
+type Pen = ReturnType<typeof pen>;
+
+// tiny drawing vocab in cell units, keeps the part code below readable
+function pen(ctx: CanvasRenderingContext2D) {
+  return {
+    ctx,
+    poly(pts: [number, number][], fill: string) {
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+    },
+    rect(x: number, y: number, w: number, h: number, fill: string) {
+      ctx.fillStyle = fill;
+      ctx.fillRect(x, y, w, h);
+    },
+    circle(x: number, y: number, r: number, fill: string) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = fill;
+      ctx.fill();
+    },
+    ellipse(x: number, y: number, rx: number, ry: number, fill: string) {
+      ctx.beginPath();
+      ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fillStyle = fill;
+      ctx.fill();
+    },
+    line(pts: [number, number][], stroke: string, w: number) {
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = w;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    },
+    arc(x: number, y: number, r: number, a0: number, a1: number, stroke: string, w: number) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, a0, a1);
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = w;
+      ctx.lineCap = "round";
+      ctx.stroke();
+    },
+  };
+}
+
+const PI = Math.PI;
+
+const PARTS: Partial<Record<CellType, (d: Pen, s: CellStyle) => void>> = {
+  // bubble canopy with the pilot seen from above: shoulders, helmet, visor facing forward
+  core(d, s) {
+    d.ellipse(0.5, 0.5, 0.4, 0.42, "#16222e");
+    d.ctx.strokeStyle = "rgba(160,200,230,.4)";
+    d.ctx.lineWidth = 0.04;
+    d.ctx.stroke();
+    d.ellipse(0.5, 0.64, 0.27, 0.13, shade(s.color, -0.45));
+    d.circle(0.5, 0.5, 0.17, s.color);
+    d.ellipse(0.5, 0.41, 0.11, 0.05, "#c8ecff");
+    d.arc(0.5, 0.5, 0.32, PI * 1.15, PI * 1.4, "rgba(255,255,255,.4)", 0.035);
+    d.rect(0.06, 0.8, 0.3, 0.08, TAPE);
+  },
+
+  hull() {},
+
+  // pushes "up"; bell + flame hang out the back
+  engine(d, s) {
+    d.rect(0.2, 0.3, 0.6, 0.55, DARK);
+    d.circle(0.5, 0.42, 0.16, "#555b63");
+    d.poly([[0.32, 0.8], [0.68, 0.8], [0.9, 1.18], [0.1, 1.15]], METAL_DARK);
+    d.poly([[0.38, 0.86], [0.62, 0.86], [0.78, 1.13], [0.22, 1.12]], "#2a2d33");
+    d.rect(0.2, 0.62, 0.6, 0.08, TAPE);
+    const firing = (s.thrusting ?? true) && !s.inactive;
+    if (firing) {
+      // flicker a bit when we have a clock
+      const len = 0.75 * (s.time === undefined ? 1 : 0.85 + 0.15 * Math.sin(s.time * 40 + (s.variant ?? 0)));
+      d.poly([[0.18, 1.17], [0.5, 1.17 + len], [0.82, 1.17]], HOT);
+      d.poly([[0.34, 1.17], [0.5, 1.17 + len * 0.55], [0.66, 1.17]], YEL);
+    }
+  },
+
+  // coil gun: copper rings on a long barrel, glowing tip
+  laser(d, s) {
+    d.rect(0.25, 0.58, 0.5, 0.32, DARK);
+    d.rect(0.42, -0.45, 0.16, 1.08, "#2a2d33");
+    for (const y of [0.42, 0.17, -0.08, -0.33]) d.rect(0.32, y, 0.36, 0.08, "#c87a3a");
+    d.circle(0.5, -0.47, 0.07, s.inactive ? "#6b6838" : NEON);
+  },
+
+  // ripper wheel: hooked teeth sticking out front, spins if given a clock.
+  // Hub and reach match the sim's blade hitbox (SIM.sawReach / sawRadius).
+  saw(d, s) {
+    d.rect(0.3, 0.55, 0.4, 0.38, DARK);
+    const ctx = d.ctx;
+    ctx.save();
+    ctx.translate(0.5, 0.05);
+    ctx.rotate(s.time === undefined || s.inactive ? 0 : s.time * 12);
+    const n = 8;
+    const pts: [number, number][] = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i * 2 * PI) / n;
+      const b = a + (PI / n) * 1.6;
+      pts.push([Math.cos(a) * 0.32, Math.sin(a) * 0.32], [Math.cos(b) * 0.52, Math.sin(b) * 0.52]);
+    }
+    d.poly(pts, METAL);
+    d.circle(0, 0, 0.3, "#8d939b");
+    for (let i = 0; i < 4; i++) {
+      const a = (i * PI) / 2 + 0.4;
+      d.circle(Math.cos(a) * 0.17, Math.sin(a) * 0.17, 0.05, "#5a6068");
+    }
+    d.circle(0, 0, 0.07, DARK);
+    ctx.restore();
+  },
+
+  // anchor, crown pointing forward, rope coiled at the base
+  grapple(d) {
+    d.arc(0.5, 0.68, 0.18, 0, PI * 2, "#8a6a3c", 0.06);
+    d.arc(0.5, 0.68, 0.1, 0, PI * 2, "#8a6a3c", 0.05);
+    d.line([[0.5, 0.5], [0.5, -0.3]], METAL_DARK, 0.09);
+    d.line([[0.3, 0.2], [0.7, 0.2]], METAL_DARK, 0.07);
+    d.arc(0.5, -0.02, 0.36, PI * 1.12, PI * 1.88, METAL_DARK, 0.09);
+    d.poly([[0.12, -0.08], [0.22, -0.22], [0.28, -0.06]], METAL_DARK);
+    d.poly([[0.88, -0.08], [0.78, -0.22], [0.72, -0.06]], METAL_DARK);
+  },
+
+  // riveted band; adjacent armor cells join into one wall
+  armor(d) {
+    d.rect(0, -0.16, 1, 0.42, METAL_DARK);
+    d.rect(0, -0.16, 1, 0.14, METAL);
+    for (const x of [0.2, 0.5, 0.8]) d.circle(x, 0.12, 0.04, EDGE);
+  },
+
+  // laser-yellow faceted strip: only reflects lasers, so it shares their colour
+  mirror(d, s) {
+    d.rect(0, -0.14, 1, 0.28, s.inactive ? "#6b6838" : NEON);
+    for (let i = 0; i < 3; i++) {
+      const o = i * 0.33;
+      d.poly([[0.08 + o, 0.14], [0.2 + o, -0.14], [0.27 + o, -0.14], [0.15 + o, 0.14]], "#fffbd0");
+    }
+    d.rect(0, 0.1, 1, 0.04, "#a89a1a");
+  },
+};
 
 /** Darken (amount < 0) or lighten a #rrggbb colour. */
 function shade(hex: string, amount: number): string {
@@ -174,30 +223,6 @@ function shade(hex: string, amount: number): string {
     return Math.round(amount < 0 ? v * (1 + amount) : v + (255 - v) * amount);
   };
   return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
-}
-
-function neon(ctx: CanvasRenderingContext2D, s: number, unlit: boolean, paint: () => void) {
-  ctx.save();
-  if (unlit) {
-    ctx.fillStyle = "#6b6838";
-    paint();
-    ctx.restore();
-    return;
-  }
-  ctx.fillStyle = NEON;
-  ctx.shadowColor = NEON;
-  ctx.shadowBlur = Math.max(2, s * 0.3);
-  paint();
-  ctx.restore();
-}
-
-function metalRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  const g = ctx.createLinearGradient(x, y, x, y + h);
-  g.addColorStop(0, "#eef1f4");
-  g.addColorStop(0.4, METAL);
-  g.addColorStop(1, METAL_DARK);
-  ctx.fillStyle = g;
-  ctx.fillRect(x, y, w, h);
 }
 
 function drawDamage(ctx: CanvasRenderingContext2D, s: number, damage: number, v: number) {

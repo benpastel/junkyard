@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
 import { buildableSet, cellKey, placedCells, placementError, transformCells, type Piece } from "@ja/shared/draft";
 import { openChecker, type Cell, type Dir } from "@ja/shared";
-import { drawCell } from "../art/cells";
-import { cellVariant } from "./PieceCanvas";
+import { useClock } from "../art/useClock";
+import { cellVariant, drawShipCells } from "./PieceCanvas";
 
 export interface DragState {
   /** True while a piece card is being dragged with the pointer held down. */
@@ -14,6 +14,8 @@ export interface DragState {
 
 const FLASH_MS = 320;
 const MAX_CELL = 68;
+/** Margin around the hull, in cells, so parts overhanging the outer squares aren't clipped. */
+const PAD = 1;
 
 /** Top-left anchor that keeps the piece's middle under the pointer. */
 export function anchorFor(piece: Piece, rot: Dir, flip: boolean, hover: { x: number; y: number }) {
@@ -55,7 +57,7 @@ export function Board(props: {
     const wrap = wrapRef.current!;
     const fit = () => {
       const r = wrap.getBoundingClientRect();
-      setCell(Math.max(18, Math.min(MAX_CELL, Math.floor(Math.min(r.width / cols, r.height / rows)))));
+      setCell(Math.max(18, Math.min(MAX_CELL, Math.floor(Math.min(r.width / (cols + PAD * 2), r.height / (rows + PAD * 2))))));
     };
     fit();
     const ro = new ResizeObserver(fit);
@@ -86,13 +88,14 @@ export function Board(props: {
 
   const ghost = held && hover ? placedCells(held, ...anchorArgs(held, rot, flip, hover)) : null;
   const ghostValid = ghost ? placementError(buildable.current, cells, ghost) === null : false;
+  const time = useClock(cells.some((c) => c.type === "saw") || !!ghost?.some((c) => c.type === "saw"));
 
   // Draw.
   useLayoutEffect(() => {
     const canvas = canvasRef.current!;
     const dpr = window.devicePixelRatio || 1;
-    const W = cols * cell;
-    const H = rows * cell;
+    const W = (cols + PAD * 2) * cell;
+    const H = (rows + PAD * 2) * cell;
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
     canvas.style.width = `${W}px`;
@@ -100,34 +103,40 @@ export function Board(props: {
     const ctx = canvas.getContext("2d")!;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
+    ctx.translate(PAD * cell, PAD * cell);
     drawBay(ctx, hullRows, cell);
 
-    // Covered parts are judged against the ship as it would be with the ghost placed.
+    // Covered parts (including ones whose overhang lands on another piece) are judged against
+    // the ship as it would be with the ghost placed, and drawn faded.
     const isOpen = openChecker(ghost && ghostValid ? [...cells, ...ghost] : cells);
-    for (const c of cells) {
-      ctx.save();
-      ctx.translate(c.x * cell, c.y * cell);
-      drawCell(ctx, c.type, c.dir, cell, { color, variant: cellVariant(c.x, c.y), inactive: !isOpen(c) });
-      const t = flashes.current.get(cellKey(c.x, c.y));
-      if (t !== undefined) {
+    drawShipCells(
+      ctx,
+      cells,
+      cell,
+      (c) => ({ color, variant: cellVariant(c.x, c.y), inactive: !isOpen(c), time }),
+      (c) => {
+        const t = flashes.current.get(cellKey(c.x, c.y));
+        if (t === undefined) return;
         const k = 1 - Math.min(1, (performance.now() - t) / FLASH_MS);
         ctx.fillStyle = `rgba(255, 214, 150, ${0.55 * k})`;
         ctx.fillRect(0, 0, cell, cell);
-      }
-      ctx.restore();
-    }
+      },
+    );
 
     if (ghost) {
-      for (const c of ghost) {
-        ctx.save();
-        ctx.translate(c.x * cell, c.y * cell);
-        ctx.globalAlpha = ghostValid ? 0.9 : 0.55;
-        drawCell(ctx, c.type, c.dir, cell, { color, variant: cellVariant(c.x, c.y), inactive: ghostValid && !isOpen(c) });
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = ghostValid ? "rgba(127, 201, 107, 0.22)" : "rgba(224, 80, 58, 0.38)";
-        ctx.fillRect(0, 0, cell, cell);
-        ctx.restore();
-      }
+      ctx.save();
+      ctx.globalAlpha = ghostValid ? 0.9 : 0.55;
+      drawShipCells(
+        ctx,
+        ghost,
+        cell,
+        (c) => ({ color, variant: cellVariant(c.x, c.y), inactive: ghostValid && !isOpen(c), time }),
+        () => {
+          ctx.fillStyle = ghostValid ? "rgba(127, 201, 107, 0.22)" : "rgba(224, 80, 58, 0.38)";
+          ctx.fillRect(0, 0, cell, cell);
+        },
+      );
+      ctx.restore();
       // Outline the piece silhouette.
       const inGhost = new Set(ghost.map((c) => cellKey(c.x, c.y)));
       ctx.strokeStyle = ghostValid ? "#7fc96b" : "#e0503a";
@@ -153,7 +162,7 @@ export function Board(props: {
       if (clientX < r.left - slack || clientX > r.right + slack || clientY < r.top - slack || clientY > r.bottom + slack) {
         return null;
       }
-      return { x: Math.floor((clientX - r.left) / cell), y: Math.floor((clientY - r.top) / cell) };
+      return { x: Math.floor((clientX - r.left) / cell) - PAD, y: Math.floor((clientY - r.top) / cell) - PAD };
     },
     [cell, cols, rows],
   );

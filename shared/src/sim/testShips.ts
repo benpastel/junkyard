@@ -6,7 +6,7 @@ import type { Cell, CellType, Dir } from "../types.js";
  *   C core, # hull, M mirror edge up, A armor edge up
  *   engines (push direction): ^ > v <
  *   lasers (fire direction): i (up) } (right) ! (down) { (left)
- *   R ram pointing up, r ram pointing down, G grapple up, g grapple down
+ *   R saw pointing up, r saw pointing down, G grapple up, g grapple down
  *   . or space: empty
  */
 export function parseShip(rows: string[]): Cell[] {
@@ -23,8 +23,8 @@ export function parseShip(rows: string[]): Cell[] {
     "}": ["laser", 1],
     "!": ["laser", 2],
     "{": ["laser", 3],
-    R: ["ram", 0],
-    r: ["ram", 2],
+    R: ["saw", 0],
+    r: ["saw", 2],
     G: ["grapple", 0],
     g: ["grapple", 2],
   };

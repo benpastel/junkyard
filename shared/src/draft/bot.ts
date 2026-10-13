@@ -79,8 +79,8 @@ function typeValue(type: CellType, ship: readonly Cell[]): number {
     case "armor":
       // Five shield cells per piece.
       return countType(ship, type) < 10 ? 1.5 : 0.6;
-    case "ram":
-      return countType(ship, "ram") < 1 ? 2 : 0.8;
+    case "saw":
+      return countType(ship, "saw") < 1 ? 2 : 0.8;
     case "grapple":
       return countType(ship, "grapple") < 1 ? 1.5 : 0.2;
     default:
@@ -148,7 +148,7 @@ function scorePlacement(p: Placement, ctx: ShipContext): number {
         break;
       }
       case "laser":
-      case "ram":
+      case "saw":
       case "grapple": {
         if (c.dir === 0) score += 3 - dy * 0.6;
         else if (c.dir === 2) score -= 2;

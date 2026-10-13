@@ -58,7 +58,7 @@ const SPECIAL_WEIGHTS: [CellType, number][] = [
   ["laser", 24],
   ["mirror", 7],
   ["armor", 7],
-  ["ram", 10],
+  ["saw", 10],
   ["grapple", 8],
 ];
 
@@ -103,7 +103,7 @@ function pickSpecialSlot(cells: Cell[], type: CellType, rng: Rng): [number, Dir]
     const openDirs = DIRS.filter((d) => open(c, d));
     const isTip = openDirs.length === 3;
     for (const d of DIRS) {
-      if (type === "laser" || type === "ram" || type === "grapple") {
+      if (type === "laser" || type === "saw" || type === "grapple") {
         // Point outward along an arm: a tip cell, facing away from its one neighbour.
         if (isTip && open(c, d) && !open(c, opposite(d))) slots.push([i, d]);
       } else if (type === "engine") {

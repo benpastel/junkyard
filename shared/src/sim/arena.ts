@@ -38,6 +38,8 @@ export interface SimCell {
   maxHp: number;
   alive: boolean;
   collider: Collider | null;
+  /** Saws: the round blade sticking out past the cell, a second collider on the same body. */
+  blade: Collider | null;
   body: SimBody | null;
   /** Engines: 0..1 thrust level. */
   thrust: number;
@@ -118,6 +120,9 @@ export class Arena {
   /** Optional debug log of everything that breaks and why. Unset in normal play (zero cost). */
   onLog: ((line: string) => void) | null = null;
   private readonly bounceCooldown = new Map<SimBody, number>();
+  /** Saw blades touching something: blade handle:other handle -> next tick it cuts. */
+  private readonly sawContacts = new Map<string, { blade: number; other: number; next: number }>();
+  private readonly bladeColliders = new Set<number>();
   /** Kinematic segments forming the rubber ring, and their collider handles. */
   private readonly walls: { rb: RigidBody; angle: number }[] = [];
   private readonly wallColliders = new Set<number>();
@@ -168,6 +173,7 @@ export class Arena {
         maxHp: CELL_HP[c.type],
         alive: true,
         collider: null,
+        blade: null,
         body: null,
         thrust: 0,
         charge: 0,
@@ -255,8 +261,16 @@ export class Arena {
     this.world.step(this.eventQueue);
 
     this.eventQueue.drainCollisionEvents((h1, h2, started) => {
+      const blade = this.bladeColliders.has(h1) ? h1 : this.bladeColliders.has(h2) ? h2 : null;
+      if (blade !== null) {
+        const key = h1 < h2 ? `${h1}:${h2}` : `${h2}:${h1}`;
+        if (started) this.sawContacts.set(key, { blade, other: blade === h1 ? h2 : h1, next: this.tickCount });
+        else this.sawContacts.delete(key);
+        return;
+      }
       if (started) this.onCollision(h1, h2, pre, touched);
     });
+    this.updateSaws(touched);
     this.eventQueue.drainContactForceEvents((e) => this.onPressure(e.collider1(), e.collider2(), e.totalForceMagnitude(), touched));
 
     this.updatePowerup();
@@ -401,6 +415,20 @@ export class Arena {
       .setContactForceEventThreshold(SIM.crushForce);
     const col = this.world.createCollider(desc, body.rb!);
     c.collider = col;
+    if (c.type === "saw") {
+      const d = DIR_VECTORS[c.dir];
+      const blade = this.world.createCollider(
+        RAPIER.ColliderDesc.ball(SIM.sawRadius)
+          .setTranslation(c.x + d.x * SIM.sawReach, c.y + d.y * SIM.sawReach)
+          .setDensity(SIM.cellDensity * 0.2)
+          .setFriction(0.1)
+          .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),
+        body.rb!,
+      );
+      c.blade = blade;
+      this.cellByCollider.set(blade.handle, c);
+      this.bladeColliders.add(blade.handle);
+    }
     c.body = body;
     body.cells.push(c);
     body.dirty = true;
@@ -413,6 +441,12 @@ export class Arena {
       this.cellByCollider.delete(c.collider.handle);
       this.world.removeCollider(c.collider, true);
       c.collider = null;
+    }
+    if (c.blade) {
+      this.cellByCollider.delete(c.blade.handle);
+      this.bladeColliders.delete(c.blade.handle);
+      this.world.removeCollider(c.blade, true);
+      c.blade = null;
     }
     if (c.body) {
       this.openCache.delete(c.body);
@@ -703,21 +737,11 @@ export class Arena {
     this.pairCooldown.set(key, this.tickCount + Math.round(SIM.impactPairCooldownSeconds * TICK_HZ));
 
     const base = speed - SIM.impactThreshold;
-    const ram1 = c1.type === "ram" && this.isOpen(c1);
-    const ram2 = c2.type === "ram" && this.isOpen(c2);
     // Armor deflects hits on its protected edge: neither cell takes damage, and the armor's bounciness does the rest.
-    const armored = (a: SimCell, wa: { x: number; y: number }, wb: { x: number; y: number }) => {
-      if (a.type !== "armor" || !this.isOpen(a)) return false;
-      const edge = this.cellWorldDir(a);
-      const dx = wb.x - wa.x;
-      const dy = wb.y - wa.y;
-      const len = Math.hypot(dx, dy) || 1;
-      return (dx * edge.x + dy * edge.y) / len > SIM.edgeFacingDot;
-    };
-    const deflected = armored(c1, w1, w2) || armored(c2, w2, w1);
-    // One hit each; an open ram takes none and deals extra.
-    const to1 = deflected || ram1 ? 0 : ram2 ? SIM.ramDealHits : 1;
-    const to2 = deflected || ram2 ? 0 : ram1 ? SIM.ramDealHits : 1;
+    const deflected = this.armorFacing(c1, w2) || this.armorFacing(c2, w1);
+    // One hit each.
+    const to1 = deflected ? 0 : 1;
+    const to2 = deflected ? 0 : 1;
     const mid = { x: (w1.x + w2.x) / 2, y: (w1.y + w2.y) / 2 };
     this.events.push({ e: "spark", x: r3(mid.x), y: r3(mid.y), power: Math.round(Math.min(9, base)) });
     const owner1 = b1.kind === "ship" ? b1.owner : null;
@@ -837,9 +861,50 @@ export class Arena {
     }
   }
 
-  /** An open armor edge or ram pointing at the other cell holds out against crushing. */
+  /** An open armor edge facing the point `at`: it deflects physical hits from there. */
+  private armorFacing(a: SimCell, at: { x: number; y: number }): boolean {
+    if (a.type !== "armor" || !this.isOpen(a)) return false;
+    const wa = this.cellWorld(a);
+    if (!wa) return false;
+    const edge = this.cellWorldDir(a);
+    const dx = at.x - wa.x;
+    const dy = at.y - wa.y;
+    return (dx * edge.x + dy * edge.y) / (Math.hypot(dx, dy) || 1) > SIM.edgeFacingDot;
+  }
+
+  /**
+   * Spinning saws cut whatever their blade touches, at any speed, once every SIM.sawCutSeconds
+   * while the contact lasts. Armor facing the blade turns it; a covered saw doesn't spin.
+   */
+  private updateSaws(touched: Set<SimBody>) {
+    for (const [key, contact] of this.sawContacts) {
+      if (contact.next > this.tickCount) continue;
+      const saw = this.cellByCollider.get(contact.blade);
+      if (!saw?.alive || !saw.body) {
+        this.sawContacts.delete(key);
+        continue;
+      }
+      contact.next = this.tickCount + Math.round(SIM.sawCutSeconds * TICK_HZ);
+      // Wall segments and other blades have no cell to cut.
+      const target = this.bladeColliders.has(contact.other) ? undefined : this.cellByCollider.get(contact.other);
+      if (!target?.alive || target.body === saw.body || !this.isOpen(saw)) continue;
+      const hub = this.bladeWorld(saw);
+      if (this.armorFacing(target, hub)) continue;
+      const at = this.cellWorld(target)!;
+      this.events.push({ e: "spark", x: r3((at.x + hub.x) / 2), y: r3((at.y + hub.y) / 2), power: 3 });
+      this.damageCell(target, 1, saw.body.owner, touched, "saw");
+    }
+  }
+
+  private bladeWorld(c: SimCell): { x: number; y: number } {
+    const p = this.cellWorld(c)!;
+    const d = this.cellWorldDir(c);
+    return { x: p.x + d.x * SIM.sawReach, y: p.y + d.y * SIM.sawReach };
+  }
+
+  /** An open armor edge or saw pointing at the other cell holds out against crushing. */
   private crushProof(c: SimCell, other: SimCell): boolean {
-    if ((c.type !== "armor" && c.type !== "ram") || !this.isOpen(c)) return false;
+    if ((c.type !== "armor" && c.type !== "saw") || !this.isOpen(c)) return false;
     const a = this.cellWorld(c);
     const b = this.cellWorld(other);
     if (!a || !b) return false;

@@ -47,8 +47,11 @@ await shot("04-draft");
 
 // Build: take offers and click around the core until each one lands.
 const board = await page.locator(".draft-board canvas").boundingBox();
-const cols = 9; // medium hull
-const cell = board.width / cols;
+const cols = 9; // hauler hull
+const PAD = 1; // board margin in cells (see Board.tsx)
+const cell = board.width / (cols + PAD * 2);
+board.x += PAD * cell;
+board.y += PAD * cell;
 const spots = [];
 for (let y = 0; y < cols; y++) for (let x = 0; x < cols; x++) spots.push([x, y]);
 spots.sort((a, b) => Math.hypot(a[0] - 4, a[1] - 4) - Math.hypot(b[0] - 4, b[1] - 4));

@@ -54,12 +54,12 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
   const cells = me.body.cells.filter((c) => c.alive);
   const lasers = cells.filter((c) => c.type === "laser");
   const grapples = cells.filter((c) => c.type === "grapple");
-  const rams = cells.filter((c) => c.type === "ram");
+  const saws = cells.filter((c) => c.type === "saw");
 
   if (st.rng.chance(0.3)) st.aimNoise = (st.rng.next() - 0.5) * 0.35;
 
   // Which local direction should face the enemy.
-  const aimCells = lasers.length ? lasers : rams.length ? rams : grapples;
+  const aimCells = lasers.length ? lasers : saws.length ? saws : grapples;
   const aimDir = dominantDir(aimCells.map((c) => c.dir));
   const aimLocal = Math.atan2(DIR_VECTORS[aimDir].y, DIR_VECTORS[aimDir].x);
 
