@@ -162,7 +162,6 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
   };
 
   if (target) {
-    input.laser = lasers.some((c) => aligned(arena.cellWorld(c), arena.cellWorldDir(c), target, 0.16, SIM.laserRange - 2));
     const hooked = arena.hasHooks(playerId);
     if (hooked) {
       st.hookedSince ??= arena.tickCount;

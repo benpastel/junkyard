@@ -28,12 +28,12 @@ export const SIM = {
   engineRampSeconds: 0.15,
 
   laserChargeSeconds: 0.25,
-  laserCooldownSeconds: 0.33,
+  laserCooldownSeconds: 0.8,
   laserRange: 25,
   /** Hits dealt per laser shot. */
   laserDamage: 1,
-  laserKnockback: 1.2,
-  laserRecoil: 0.35,
+  laserKnockback: 0.4,
+  laserRecoil: 0.1,
   /** How many times one beam can bounce off mirrors. */
   laserMaxBounces: 3,
 

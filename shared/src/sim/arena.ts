@@ -600,7 +600,8 @@ export class Arena {
     for (const c of ship.body.cells) {
       if (!c.alive || c.type !== "laser") continue;
       c.cooldown -= DT;
-      if (!input.laser || !this.isOpen(c)) {
+      // Lasers fire on their own whenever their line is clear.
+      if (!this.isOpen(c)) {
         c.charge = 0;
         continue;
       }

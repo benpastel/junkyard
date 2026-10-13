@@ -5,13 +5,12 @@ import { KeyButton } from "../ui/KeyButton";
 import { ArenaRenderer } from "./renderer";
 import "./arena.css";
 
-/** Keyboard layout. Arrow keys fire engines facing that way; letters fire weapons. */
+/** Keyboard layout. Arrow keys fire engines facing that way; letters fire weapons. Lasers fire on their own. */
 export const KEYMAP: Record<string, keyof InputState> = {
   ArrowUp: "up",
   ArrowDown: "down",
   ArrowLeft: "left",
   ArrowRight: "right",
-  KeyZ: "laser",
   KeyX: "grapple",
 };
 
@@ -144,15 +143,6 @@ function EngineIcon({ deg }: { deg: number }) {
   );
 }
 
-function LaserIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 20 20" aria-hidden>
-      <rect x="5" y="12" width="10" height="6" fill="#55585f" />
-      <rect x="8" y="1" width="4" height="12" fill="#f2ea3c" />
-      <rect x="6" y="1" width="8" height="2" fill="#f2ea3c" />
-    </svg>
-  );
-}
 
 function GrappleIcon() {
   return (
@@ -171,7 +161,6 @@ const CONTROLS: { input: keyof InputState; keyLabel: string; title: string; icon
     { input: "right", keyLabel: "→", title: "Fire right-pushing engines", icon: <EngineIcon deg={90} /> },
   ],
   [
-    { input: "laser", keyLabel: "Z", title: "Fire lasers", icon: <LaserIcon /> },
     { input: "grapple", keyLabel: "X", title: "Grapple", icon: <GrappleIcon /> },
   ],
 ];

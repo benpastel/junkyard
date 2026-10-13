@@ -56,8 +56,9 @@ export function placedCells(piece: Piece, x: number, y: number, rot: Dir, flip: 
 const SPECIAL_WEIGHTS: [CellType, number][] = [
   ["engine", 48],
   ["laser", 24],
-  ["mirror", 7],
-  ["armor", 7],
+  ["mirror", 14],
+  // Armor is switched off for now (its share moved to mirrors); the part still works if it shows up.
+  ["armor", 0],
   ["saw", 10],
   ["grapple", 8],
 ];

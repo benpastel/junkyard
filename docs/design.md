@@ -51,9 +51,9 @@ Online multiplayer, fast-paced, round-based game:
 - **Movement:** arrow keys. Each direction fires all engines facing the matching way (up fires back-facing engines), in the ship's frame.
 - **Physics:** thrust is applied at each engine's actual position, so a lopsided engine layout spins the ship. Ships are only sensible to pilot with weight-symmetric engines, and get weirder as cells fly off. That's intended.
 - **Rotation** will be hard with this scheme; dedicated rotation pieces (gyros) are a likely addition.
-- **Weapons:** fixed-direction, one key per weapon type. Currently Z = lasers, X = grapple (toggle).
+- **Weapons:** fixed-direction, one key per weapon type. Lasers fire automatically whenever their line is clear; X = grapple (toggle).
 - **Controls bar:** the arena shows each key as a clickable button that lights while held; the draft uses the same buttons for rotate (Q/E), flip (F) and discard (Esc).
-  - lasers (ranged, raycasts)
+  - lasers (ranged, raycasts; auto-firing, ~1.25 shots/s, light knockback)
   - collisions above a speed threshold break one cell on each side
   - **saw**: a spinning blade with its own round hitbox past the cell; it cuts whatever it touches (one hit every 0.2s, at any speed) and takes no harm from it. Armor facing the blade turns it.
   - grappling hook (attaches two ships, applies force as it retracts)
