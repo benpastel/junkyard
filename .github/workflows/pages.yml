@@ -28,7 +28,7 @@ jobs:
     env:
       # The Render service's wss:// origin with the /ws path. If the service is renamed
       # or recreated, its hostname changes and this must change with it.
-      VITE_WS_URL: wss://junkyard.onrender.com/ws
+      VITE_WS_URL: wss://junkyard-91j5.onrender.com/ws
 
     steps:
       - uses: actions/checkout@v4
