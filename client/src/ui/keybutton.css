@@ -1,0 +1,54 @@
+.key-button {
+  position: relative;
+  min-width: 52px;
+  height: 52px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+.key-button:hover:not(:disabled) {
+  color: var(--hazard);
+  border-color: var(--hazard);
+}
+
+.key-button.active {
+  color: var(--hazard);
+  border-color: var(--hazard);
+  background: #2a2618;
+  box-shadow:
+    inset 0 -2px 0 var(--hazard),
+    0 0 12px rgba(224, 178, 58, 0.25);
+}
+
+.key-button:active:not(:disabled),
+.key-button.active {
+  transform: translateY(1px);
+}
+
+.key-button kbd {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  min-width: 15px;
+  padding: 0 3px;
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 14px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-dim);
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  text-align: center;
+}
+
+.key-button.active kbd {
+  color: var(--hazard);
+  border-color: var(--hazard);
+}

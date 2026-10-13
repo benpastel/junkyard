@@ -72,13 +72,15 @@ function Game() {
   return (
     <>
       {screen}
-      {s.status === "closed" && (
+      {(s.status === "closed" || s.status === "reconnecting") && (
         <div className="overlay">
           <div className="panel overlay-box">
-            <h2>Disconnected</h2>
-            <button className="primary" onClick={() => net.connect(storedName(), room.id)}>
-              Reconnect
-            </button>
+            <h2>{s.status === "closed" ? "Disconnected" : "Reconnecting"}</h2>
+            {s.status === "closed" && (
+              <button className="primary" onClick={() => net.connect(storedName(), room.id)}>
+                Reconnect
+              </button>
+            )}
           </div>
         </div>
       )}

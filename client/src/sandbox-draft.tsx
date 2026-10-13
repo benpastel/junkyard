@@ -1,16 +1,16 @@
 // Local draft sandbox: me plus three bots, all in the browser. Open with ?sandbox=draft.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PLAYER_COLORS, Rng, type PlayerInfo } from "@ja/shared";
+import { PLAYER_COLORS, Rng, type HullId, type PlayerInfo } from "@ja/shared";
 import { Draft, draftBotAction, type DraftAction } from "@ja/shared/draft";
 import { DraftScreen } from "./draft/DraftScreen";
 
-const BUILD_SECONDS = 120;
+const BUILD_SECONDS = 60;
 const ME = "me";
 const BOTS = ["bot1", "bot2", "bot3"];
 
 export function SandboxDraft() {
   const params = new URLSearchParams(location.search);
-  const hull = (params.get("hull") as "small" | "medium" | "large" | null) ?? "medium";
+  const hull = (params.get("hull") as HullId | null) ?? "hauler";
   const seed = Number(params.get("seed") ?? 1);
 
   const draft = useMemo(() => new Draft({ playerIds: [ME, ...BOTS], hull, seed }), [hull, seed]);

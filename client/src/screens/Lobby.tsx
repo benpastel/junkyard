@@ -71,14 +71,15 @@ export function Lobby({ room, me, chat }: { room: RoomView; me: string | null; c
 }
 
 function HullOutline({ rows }: { rows: string[] }) {
-  const cell = 7;
+  const box = 80;
+  const cell = box / Math.max(rows[0]!.length, rows.length);
   return (
-    <svg width={11 * cell} height={11 * cell} viewBox={`0 0 ${11 * cell} ${11 * cell}`} aria-hidden>
-      <g transform={`translate(${((11 - rows[0]!.length) * cell) / 2} ${((11 - rows.length) * cell) / 2})`}>
+    <svg width={box} height={box} viewBox={`0 0 ${box} ${box}`} aria-hidden>
+      <g transform={`translate(${(box - rows[0]!.length * cell) / 2} ${(box - rows.length * cell) / 2})`}>
         {rows.flatMap((row, y) =>
           [...row].map((ch, x) =>
             ch === "." ? null : (
-              <rect key={`${x},${y}`} x={x * cell} y={y * cell} width={cell - 1} height={cell - 1} fill={ch === "C" ? "var(--rust)" : "currentColor"} />
+              <rect key={`${x},${y}`} x={x * cell} y={y * cell} width={cell * 0.85} height={cell * 0.85} fill={ch === "C" ? "var(--rust)" : "currentColor"} />
             ),
           ),
         )}

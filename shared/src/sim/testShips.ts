@@ -42,10 +42,10 @@ export const SANDBOX_SHIPS: { name: string; rows: string[] }[] = [
   {
     name: "Balanced",
     rows: [
-      ".i.i.",
+      ".iMi.",
       ">###<",
       ".#C#.",
-      ".#M#.",
+      ".###.",
       ".^#^.",
     ],
   },
@@ -69,9 +69,9 @@ export const SANDBOX_SHIPS: { name: string; rows: string[] }[] = [
   {
     name: "Brute",
     rows: [
-      "RRGRR",
+      "RAGAR",
       ">###<",
-      "A#C#A",
+      "##C##",
       "#####",
       "^^.^^",
     ],

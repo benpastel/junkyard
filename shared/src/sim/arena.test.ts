@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { NO_INPUT, type InputState, type ShipBlueprint } from "../types.js";
-import { Arena, arenaBotInput, initPhysics, TICK_HZ } from "./index.js";
+import { Arena, arenaBotInput, initPhysics, SIM, TICK_HZ } from "./index.js";
 import { SANDBOX_SHIPS, parseShip } from "./testShips.js";
 
 beforeAll(async () => {
@@ -108,6 +108,34 @@ describe("arena", () => {
     };
     expect(moved(covered)).toBeLessThan(0.01);
     expect(moved(open)).toBeGreaterThan(0.5);
+  });
+
+  it("the rubber ring bounces ships back without damage", () => {
+    // Backward engines (exhaust out the nose) drive the ship away from the centre, into the ring.
+    const a = new Arena({ ships: [bp("a", ["v#v", "#C#"]), bp("b", ["C"])], seed: 1 });
+    const rb = a.ship("a")!.body.rb!;
+    let bounced = false;
+    for (let i = 0; i < TICK_HZ * 6; i++) {
+      a.step({ a: { ...NO_INPUT, down: i < TICK_HZ * 2 } });
+      const p = rb.translation();
+      const v = rb.linvel();
+      if (p.x * v.x + p.y * v.y < -1) bounced = true;
+      expect(Math.hypot(p.x, p.y)).toBeLessThan(a.ringRadius);
+    }
+    expect(bounced).toBe(true);
+    expect(a.ship("a")!.cellsLost).toBe(0);
+    a.dispose();
+  });
+
+  it("the centre power-up makes its taker invulnerable", () => {
+    const a = new Arena({ ships: [bp("a", ["i", "C", "^"]), bp("b", ["#", "C"])], seed: 1 });
+    run(a, Math.round(SIM.powerupFirstSeconds * TICK_HZ) + 1, {});
+    expect(a.powerupActive).toBe(true);
+    // Fly a through the centre.
+    for (let i = 0; i < TICK_HZ * 4 && a.powerupActive; i++) a.step({ a: { ...NO_INPUT, up: true } });
+    expect(a.powerupActive).toBe(false);
+    expect(a.ship("a")!.invulnerableUntil).toBeGreaterThan(a.tickCount);
+    a.dispose();
   });
 
   it("is deterministic", () => {

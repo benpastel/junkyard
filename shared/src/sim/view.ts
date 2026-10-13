@@ -58,6 +58,8 @@ export interface BodySnap {
   thr?: [number, number][];
   /** Lasers currently charging: [cid, level 1..9]. Ships only. */
   chg?: [number, number][];
+  /** Present (1) while the ship is invulnerable. */
+  inv?: 1;
 }
 
 export interface HookSnap {
@@ -75,12 +77,17 @@ export type ArenaEvent =
   | { e: "hookMiss"; from: number; x1: number; y1: number; x2: number; y2: number }
   | { e: "boom"; cid: number; x: number; y: number; type: CellType }
   | { e: "spark"; x: number; y: number; power: number }
-  | { e: "died"; playerId: PlayerId; killerId: PlayerId | null };
+  | { e: "died"; playerId: PlayerId; killerId: PlayerId | null }
+  /** A ship bounced off the rubber ring. */
+  | { e: "bounce"; x: number; y: number; power: number }
+  | { e: "pickup"; playerId: PlayerId };
 
 /** Periodic state broadcast. */
 export interface ArenaSnapshot {
   tick: number;
   ring: number;
+  /** Whether the power-up orb is sitting at the centre. */
+  powerup: boolean;
   bodies: BodySnap[];
   hooks: HookSnap[];
   events: ArenaEvent[];

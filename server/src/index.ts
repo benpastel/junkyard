@@ -59,12 +59,14 @@ wss.on("connection", (socket: WebSocket) => {
     if (msg.t === "hello") {
       if (room) return;
       const code = msg.roomId?.toUpperCase();
-      room = code ? rooms.get(code) ?? null : createRoom();
-      if (!room) {
+      // Rooms live in memory, so a server restart forgets them. Asking for a code that doesn't
+      // exist recreates it as a fresh lobby, which keeps shared links and reconnects working.
+      if (code && !isRoomCode(code)) {
         socket.send(JSON.stringify({ t: "error", message: "Room not found" }));
         socket.close();
         return;
       }
+      room = code ? (rooms.get(code) ?? createRoom(code)) : createRoom();
       playerId = room.join(socket, String(msg.name ?? ""), msg.playerId);
       if (!playerId) {
         socket.send(JSON.stringify({ t: "error", message: "Room is full" }));
@@ -81,11 +83,14 @@ wss.on("connection", (socket: WebSocket) => {
   });
 });
 
-function createRoom(): Room {
-  let code: string;
-  do {
+function isRoomCode(code: string): boolean {
+  return code.length === 4 && [...code].every((ch) => ROOM_CODE_LETTERS.includes(ch));
+}
+
+function createRoom(code?: string): Room {
+  while (!code || rooms.has(code)) {
     code = Array.from({ length: 4 }, () => ROOM_CODE_LETTERS[Math.floor(Math.random() * ROOM_CODE_LETTERS.length)]).join("");
-  } while (rooms.has(code));
+  }
   const room = new Room(code);
   rooms.set(code, room);
   return room;

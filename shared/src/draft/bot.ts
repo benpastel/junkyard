@@ -1,4 +1,4 @@
-import { type Cell, type CellType, type Dir, type PlayerId } from "../types.js";
+import { DIR_VECTORS, type Cell, type CellType, type Dir, type PlayerId } from "../types.js";
 import { openChecker, workingDir } from "../cells.js";
 import type { Rng } from "../rng.js";
 import type { Draft, DraftAction, DraftView } from "./index.js";
@@ -77,7 +77,8 @@ function typeValue(type: CellType, ship: readonly Cell[]): number {
       return countType(ship, "laser") < 2 ? 4 : 2;
     case "mirror":
     case "armor":
-      return countType(ship, type) < 2 ? 1.5 : 0.6;
+      // Five shield cells per piece.
+      return countType(ship, type) < 10 ? 1.5 : 0.6;
     case "ram":
       return countType(ship, "ram") < 1 ? 2 : 0.8;
     case "grapple":
@@ -87,9 +88,11 @@ function typeValue(type: CellType, ship: readonly Cell[]): number {
   }
 }
 
+/** Longer than any hull is wide or tall. */
+const LINE_LIMIT = 24;
+
 interface ShipContext {
   core: { x: number; y: number };
-  cells: readonly Cell[];
   /** Directional parts that currently have a clear line out. */
   openParts: Cell[];
   occupied: Set<string>;
@@ -103,7 +106,6 @@ function shipContext(view: DraftView): ShipContext {
   const isOpen = openChecker(ship);
   return {
     core,
-    cells: ship,
     openParts: ship.filter((c) => workingDir(c.type, c.dir) !== null && isOpen(c)),
     occupied: new Set(ship.map((c) => cellKey(c.x, c.y))),
     massTilt: ship.reduce((s, c) => s + (c.x - core.x), 0),
@@ -114,9 +116,20 @@ function shipContext(view: DraftView): ShipContext {
 function scorePlacement(p: Placement, ctx: ShipContext): number {
   const { core, occupied } = ctx;
   let score = 0;
-  const isOpen = openChecker([...ctx.cells, ...p.cells]);
+  // Same rule as openChecker, but without rebuilding a set per candidate (this runs thousands of times).
+  const mine = new Set(p.cells.map((c) => cellKey(c.x, c.y)));
+  const isOpen = (c: Cell) => {
+    const w = workingDir(c.type, c.dir);
+    if (w === null) return true;
+    const v = DIR_VECTORS[w];
+    for (let x = c.x + v.x, y = c.y + v.y, i = 0; i < LINE_LIMIT; x += v.x, y += v.y, i++) {
+      const k = cellKey(x, y);
+      if (occupied.has(k) || mine.has(k)) return false;
+    }
+    return true;
+  };
   // Covering a part we already placed switches it off.
-  for (const c of ctx.openParts) if (!isOpen(c)) score -= 5;
+  for (const c of ctx.openParts) if (!isOpen(c)) score -= c.type === "mirror" || c.type === "armor" ? 1 : 5;
 
   for (const c of p.cells) {
     const dy = c.y - core.y; // positive = toward the back
@@ -144,9 +157,8 @@ function scorePlacement(p: Placement, ctx: ShipContext): number {
       }
       case "mirror":
       case "armor": {
-        // The protected edge belongs on the outside, ideally facing forward.
-        if (!isOpen(c)) score -= 4;
-        else score += c.dir === 0 ? 2 : c.dir === 2 ? 0.3 : 1;
+        // The protected edges belong on the outside, ideally facing forward.
+        if (isOpen(c)) score += c.dir === 0 ? 0.8 : c.dir === 2 ? 0.2 : 0.5;
         break;
       }
     }

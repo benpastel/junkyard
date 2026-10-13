@@ -8,7 +8,7 @@ export const CELL_HP: Record<CellType, number> = {
   grapple: 2,
   ram: 5,
   mirror: 4,
-  armor: 8,
+  armor: 6,
 };
 
 /** Arena tuning. Times are in seconds, distances in cells (= world units), forces in mass·units/s². */
@@ -50,11 +50,18 @@ export const SIM = {
   spawnMinRadius: 14,
   spawnRadiusPerShip: 4.5,
   ringStartPadding: 14,
-  ringMinRadius: 7,
+  ringMinRadius: 10,
   ringDelaySeconds: 8,
   ringShrinkSeconds: 90,
-  ringDamage: 1,
-  ringDamageIntervalSeconds: 0.5,
+  /** The ring is a rubber wall: bounciness of a ship hitting it (1 = perfectly elastic). */
+  ringRestitution: 0.9,
+
+  /** Power-up orb at the arena centre: grab it for a few seconds of invulnerability. */
+  powerupFirstSeconds: 10,
+  powerupRespawnSeconds: 20,
+  /** Picked up when any cell centre comes this close to the orb. */
+  powerupPickupRadius: 1.4,
+  invulnerableSeconds: 5,
 
   debrisLifetimeSeconds: 15,
   debrisScatterImpulse: 0.6,

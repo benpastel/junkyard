@@ -1,5 +1,5 @@
 // Canvas 2D arena renderer. Consumes snapshots, interpolates ~100ms behind the
-// newest one, and draws ships, effects and the ring of fire. No React in here.
+// newest one, and draws ships, effects, the rubber ring and the power-up. No React in here.
 import type { PlayerId } from "@ja/shared";
 import {
   TICK_HZ,
@@ -148,6 +148,7 @@ export class ArenaRenderer {
     this.drawBackdrop(ctx, width, height, S);
     this.drawGrid(ctx, width, height, S, toScreen);
     this.drawRing(ctx, width, height, S, ring, toScreen, nowMs);
+    this.drawPowerup(ctx, S, toScreen, nowMs);
 
     // Debris under ships.
     const sorted = [...bodies].sort((a, b) => (a.owner ? 1 : 0) - (b.owner ? 1 : 0));
@@ -155,6 +156,7 @@ export class ArenaRenderer {
     for (const b of bodies) if (b.owner) this.drawEngines(ctx, b, S, toScreen, nowMs);
     this.drawHooks(ctx, bodies, S, toScreen);
     for (const b of bodies) if (b.owner) this.drawCharge(ctx, b, S, toScreen, nowMs);
+    for (const b of bodies) if (b.snap.inv) this.drawShield(ctx, b, S, toScreen, nowMs);
     this.drawBeams(ctx, S, toScreen);
     this.drawParticles(ctx, S, toScreen);
     this.drawNames(ctx, bodies, S, toScreen);
@@ -289,6 +291,14 @@ export class ArenaRenderer {
         this.burst(e.x, e.y, 4 + e.power * 2, "#fff0c0", 5 + e.power, 0.3);
         if (e.power >= 3 && this.isNearCamera(e.x, e.y)) this.shake = Math.min(1.2, this.shake + 0.1 * e.power);
         break;
+      case "bounce":
+        this.wobbles.push({ a: Math.atan2(e.y, e.x), power: e.power, life: 1 });
+        this.burst(e.x, e.y, 3 + e.power, "#c9ced4", 3 + e.power * 0.5, 0.25);
+        break;
+      case "pickup":
+        this.particles.push({ kind: "ring", x: 0, y: 0, vx: 0, vy: 0, life: 0.5, max: 0.5, size: 4, color: "#8cf0ff", rot: 0, vr: 0 });
+        this.burst(0, 0, 24, "#bff6ff", 8, 0.5);
+        break;
       case "died": {
         this.dead.add(e.playerId);
         const p = this.lastShipPos.get(e.playerId);
@@ -329,6 +339,8 @@ export class ArenaRenderer {
     for (const b of this.beams) b.life -= dt;
     this.beams = this.beams.filter((b) => b.life > 0);
     this.shake = Math.max(0, this.shake - dt * 3);
+    for (const wb of this.wobbles) wb.life -= dt * 1.8;
+    this.wobbles = this.wobbles.filter((wb) => wb.life > 0);
   }
 
   /** Cosmetic randomness only; never touches the sim. */
@@ -386,6 +398,9 @@ export class ArenaRenderer {
     }
   }
 
+  /** Bounce dents travelling round the rubber ring: angle, strength, seconds left. */
+  private wobbles: { a: number; power: number; life: number }[] = [];
+
   private drawRing(
     ctx: CanvasRenderingContext2D,
     w: number,
@@ -396,53 +411,108 @@ export class ArenaRenderer {
     nowMs: number,
   ) {
     const c = toScreen(0, 0);
-    const r = ring * S;
+    const rot = this.camRot ?? 0;
+    const t = nowMs / 1000;
+    // Radius at a world angle, dented outward where something just bounced.
+    const radiusAt = (a: number) => {
+      let r = ring;
+      for (const wb of this.wobbles) {
+        const d = Math.atan2(Math.sin(a - wb.a), Math.cos(a - wb.a));
+        r += wb.power * 0.12 * wb.life * Math.exp(-(d * d) / 0.02) * Math.cos(t * 28);
+      }
+      return r;
+    };
+    const N = 220;
+    const path = (offset: number) => {
+      ctx.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const a = (i / N) * Math.PI * 2;
+        const r = (radiusAt(a) + offset) * S;
+        const x = c.x + Math.cos(a + rot) * r;
+        const y = c.y + Math.sin(a + rot) * r;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+    };
 
-    // Hazy burning zone outside the ring.
+    // Dim everything outside the ring.
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, w, h);
-    ctx.arc(c.x, c.y, r, 0, Math.PI * 2, true);
-    const haze = ctx.createRadialGradient(c.x, c.y, r, c.x, c.y, r + 14 * S);
-    haze.addColorStop(0, "rgba(255,90,30,0.30)");
-    haze.addColorStop(0.25, "rgba(160,40,15,0.22)");
-    haze.addColorStop(1, "rgba(60,10,5,0.35)");
-    ctx.fillStyle = haze;
+    ctx.arc(c.x, c.y, (ring + 0.9) * S, 0, Math.PI * 2, true);
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fill("evenodd");
     ctx.restore();
 
-    // Glowing edge.
+    // The rubber bumper: a thick dark tube with a soft highlight on its inner face.
+    ctx.save();
+    ctx.lineJoin = "round";
+    path(0.45);
+    ctx.strokeStyle = "#1a1b1e";
+    ctx.lineWidth = 0.9 * S;
+    ctx.stroke();
+    path(0.25);
+    ctx.strokeStyle = "#2c2e33";
+    ctx.lineWidth = 0.45 * S;
+    ctx.stroke();
+    path(0.08);
+    ctx.strokeStyle = "rgba(170,175,185,0.35)";
+    ctx.lineWidth = Math.max(1, 0.08 * S);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawPowerup(ctx: CanvasRenderingContext2D, S: number, toScreen: (x: number, y: number) => { x: number; y: number }, nowMs: number) {
+    if (!this.current?.powerup) return;
+    const p = toScreen(0, 0);
+    const t = nowMs / 1000;
+    const r = (0.55 + 0.08 * Math.sin(t * 5)) * S;
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    for (const [width, alpha, color] of [
-      [1.6, 0.12, "255,80,20"],
-      [0.8, 0.25, "255,120,40"],
-      [0.25, 0.9, "255,200,120"],
-    ] as const) {
-      ctx.strokeStyle = `rgba(${color},${alpha})`;
-      ctx.lineWidth = width * S;
-      ctx.beginPath();
-      ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
-      ctx.stroke();
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3);
+    g.addColorStop(0, "rgba(140,240,255,0.55)");
+    g.addColorStop(1, "rgba(140,240,255,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r * 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#e8fdff";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(140,240,255,0.9)";
+    ctx.lineWidth = Math.max(1, 0.1 * S);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, t * 3, t * 3 + Math.PI * 1.4);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** Shimmering bubble around an invulnerable ship. */
+  private drawShield(ctx: CanvasRenderingContext2D, b: BodyView, S: number, toScreen: (x: number, y: number) => { x: number; y: number }, nowMs: number) {
+    const cells = this.bodyCells.get(b.snap.id);
+    if (!cells) return;
+    let reach = 0;
+    for (const cid of cells.cells) {
+      const c = this.cellInfo.get(cid);
+      if (c) reach = Math.max(reach, Math.hypot(c.x, c.y));
     }
-    // Licking flames along the edge.
-    const n = Math.max(40, Math.floor(ring * 5));
-    const t = nowMs / 1000;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2;
-      const f = 0.5 + 0.5 * Math.sin(t * 7 + i * 2.3) * Math.sin(t * 3.1 + i * 0.7);
-      const len = (0.3 + f * 0.9) * S;
-      const px = c.x + Math.cos(a) * r;
-      const py = c.y + Math.sin(a) * r;
-      if (px < -50 || py < -50 || px > w + 50 || py > h + 50) continue;
-      const grad = ctx.createRadialGradient(px, py, 0, px, py, len);
-      grad.addColorStop(0, `rgba(255,170,70,${0.35 * f + 0.1})`);
-      grad.addColorStop(1, "rgba(255,60,10,0)");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(px, py, len, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    const p = toScreen(b.x, b.y);
+    const r = (reach + 1.2) * S;
+    const k = 0.5 + 0.5 * Math.sin(nowMs / 90);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const g = ctx.createRadialGradient(p.x, p.y, r * 0.6, p.x, p.y, r);
+    g.addColorStop(0, "rgba(140,240,255,0)");
+    g.addColorStop(1, `rgba(140,240,255,${0.18 + 0.12 * k})`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(190,248,255,${0.5 + 0.3 * k})`;
+    ctx.lineWidth = Math.max(1, 0.07 * S);
+    ctx.stroke();
     ctx.restore();
   }
 

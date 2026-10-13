@@ -7,7 +7,8 @@ import type { DraftView } from "@ja/shared/draft";
 import type { ArenaInit, ArenaSnapshot } from "@ja/shared/sim";
 
 export interface NetState {
-  status: "idle" | "connecting" | "open" | "closed";
+  /** "reconnecting" = dropped and retrying on its own; "closed" = gave up. */
+  status: "idle" | "connecting" | "open" | "reconnecting" | "closed";
   error: string | null;
   playerId: PlayerId | null;
   room: RoomView | null;
@@ -20,6 +21,8 @@ export interface NetState {
 }
 
 const SESSION_KEY = "ja.session";
+/** Automatic reconnect attempts after a drop (e.g. the server restarting) before showing the button. */
+const MAX_RETRIES = 10;
 
 interface Session {
   roomId: string;
@@ -39,11 +42,20 @@ class Net {
     results: null,
   };
   private ws: WebSocket | null = null;
+  private retries = 0;
+  /** Set when the server refuses us (room full, bad code): retrying won't help. */
+  private refused = false;
+  /** Whether the current connection has been welcomed into a room yet. */
+  private welcomed = false;
   private listeners = new Set<() => void>();
   private snapListeners = new Set<(s: ArenaSnapshot) => void>();
 
   connect(name: string, roomId: string | null) {
-    this.ws?.close();
+    this.refused = false;
+    this.welcomed = false;
+    const old = this.ws;
+    this.ws = null;
+    old?.close();
     const session = readSession();
     const playerId = session && roomId && session.roomId === roomId ? session.playerId : undefined;
 
@@ -53,12 +65,24 @@ class Net {
     this.set({ status: "connecting", error: null });
 
     ws.onopen = () => {
+      this.retries = 0;
       this.set({ status: "open" });
       this.send({ t: "hello", name, roomId: roomId ?? undefined, playerId });
     };
     ws.onmessage = (e) => this.receive(JSON.parse(e.data as string) as ServerMsg);
     ws.onclose = () => {
-      if (this.ws === ws) this.set({ status: "closed" });
+      if (this.ws !== ws) return;
+      // Rejoin whichever room we were in; the server recreates it if it restarted and forgot it.
+      const room = this.state.room?.id ?? roomId;
+      if (this.refused || this.retries >= MAX_RETRIES) {
+        this.set({ status: "closed" });
+        return;
+      }
+      this.retries++;
+      this.set({ status: "reconnecting" });
+      setTimeout(() => {
+        if (this.ws === ws) this.connect(name, room);
+      }, Math.min(4000, 300 * 2 ** this.retries));
     };
   }
 
@@ -81,9 +105,11 @@ class Net {
   private receive(msg: ServerMsg) {
     switch (msg.t) {
       case "welcome":
+        this.welcomed = true;
         writeSession({ roomId: msg.roomId, playerId: msg.playerId });
         history.replaceState(null, "", `?r=${msg.roomId}`);
-        this.set({ playerId: msg.playerId });
+        // Start clean: the room may be a fresh one after a server restart.
+        this.set({ playerId: msg.playerId, error: null, draft: null, arenaInit: null, results: null });
         return;
       case "room": {
         const phaseChanged = this.state.room?.phase !== msg.room.phase;
@@ -111,6 +137,7 @@ class Net {
         this.set({ results: msg.results });
         return;
       case "error":
+        if (!this.welcomed) this.refused = true;
         this.set({ error: msg.message });
         return;
     }

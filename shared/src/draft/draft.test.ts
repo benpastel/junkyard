@@ -73,22 +73,31 @@ describe("hulls", () => {
 });
 
 describe("generatePiece", () => {
-  it("makes 5-cell pieces with at most one special", () => {
+  it("makes 5-cell pieces: one special part, or a whole shield piece facing one way", () => {
     const rng = new Rng(7);
+    let shields = 0;
     for (let i = 0; i < 300; i++) {
       const p = generatePiece(rng, `p${i}`);
       expect(p.cells).toHaveLength(5);
-      expect(p.cells.filter((c) => c.type !== "hull").length).toBeLessThanOrEqual(1);
+      const special = p.cells.filter((c) => c.type !== "hull");
+      if (special.some((c) => c.type === "mirror" || c.type === "armor")) {
+        shields++;
+        expect(special).toHaveLength(5);
+        expect(new Set(special.map((c) => `${c.type}${c.dir}`)).size).toBe(1);
+      } else {
+        expect(special.length).toBeLessThanOrEqual(1);
+      }
       for (const c of p.cells) expect(c.type).not.toBe("core");
     }
+    expect(shields).toBeGreaterThan(0);
   });
 });
 
 describe("Draft", () => {
-  const core = hullCore("medium");
+  const core = hullCore("hauler");
 
   it("deals three offers and seeds the ship with a core", () => {
-    const d = new Draft({ playerIds: ["a", "b"], hull: "medium", seed: 1 });
+    const d = new Draft({ playerIds: ["a", "b"], hull: "hauler", seed: 1 });
     const v = d.view("a");
     expect(v.offers).toHaveLength(3);
     expect(v.cells).toEqual([{ ...core, type: "core", dir: 0 }]);
@@ -96,7 +105,7 @@ describe("Draft", () => {
   });
 
   it("taking an offer sends the rest to the pool; placing refills offers", () => {
-    const d = new Draft({ playerIds: ["a", "b"], hull: "medium", seed: 2 });
+    const d = new Draft({ playerIds: ["a", "b"], hull: "hauler", seed: 2 });
     const [first, ...rest] = d.view("a").offers;
     expect(d.apply("a", { type: "takeOffer", pieceId: first!.id })).toBeNull();
     let v = d.view("a");
@@ -116,7 +125,7 @@ describe("Draft", () => {
   });
 
   it("pool pieces are first come, first served", () => {
-    const d = new Draft({ playerIds: ["a", "b"], hull: "medium", seed: 3 });
+    const d = new Draft({ playerIds: ["a", "b"], hull: "hauler", seed: 3 });
     d.apply("a", { type: "takeOffer", pieceId: d.view("a").offers[0]!.id });
     const poolId = d.view("b").pool[0]!.id;
     expect(d.apply("b", { type: "takePool", pieceId: poolId })).toBeNull();
@@ -128,7 +137,7 @@ describe("Draft", () => {
   });
 
   it("rejects off-hull, overlapping and detached placements", () => {
-    const d = new Draft({ playerIds: ["a"], hull: "medium", seed: 4 });
+    const d = new Draft({ playerIds: ["a"], hull: "hauler", seed: 4 });
     d.apply("a", { type: "takeOffer", pieceId: d.view("a").offers[0]!.id });
     expect(d.apply("a", { type: "place", x: -3, y: -3, rot: 0, flip: false })).toBe("Off the hull");
     expect(d.apply("a", { type: "place", x: core.x, y: core.y, rot: 0, flip: false })).toMatch(/Overlaps|Off the hull/);
@@ -138,7 +147,7 @@ describe("Draft", () => {
   });
 
   it("caps the pool", () => {
-    const d = new Draft({ playerIds: ["a"], hull: "large", seed: 5 });
+    const d = new Draft({ playerIds: ["a"], hull: "barge", seed: 5 });
     for (let i = 0; i < 20; i++) {
       d.apply("a", { type: "takeOffer", pieceId: d.view("a").offers[0]!.id });
       d.apply("a", { type: "discard" });
@@ -146,7 +155,7 @@ describe("Draft", () => {
     expect(d.view("a").pool).toHaveLength(POOL_CAP);
   });
 
-  it("bots fill their ships without errors", () => {
+  it("bots fill their ships without errors", { timeout: 30000 }, () => {
     for (const hull of HULL_IDS) {
       const d = new Draft({ playerIds: ["b1", "b2", "b3"], hull, seed: 9 });
       const rng = new Rng(11);
@@ -158,11 +167,10 @@ describe("Draft", () => {
       }
       for (const id of ["b1", "b2", "b3"]) {
         const cells = d.blueprintCells(id);
-        // Pentominoes can leave gaps nothing fits in, which strands the cramped small hull early.
-        expect(cells.length).toBeGreaterThan(hullBuildable(hull).length * (hull === "small" ? 0.45 : 0.6));
+        // Pentominoes can leave gaps nothing fits in, especially on the odd-shaped hulls.
+        expect(cells.length).toBeGreaterThan(hullBuildable(hull).length * 0.5);
         expect(cells.filter((c) => c.type === "core")).toHaveLength(1);
-        // The small hull fills up fast, so an engine-less skiff is possible there.
-        if (hull !== "small") expect(cells.some((c) => c.type === "engine")).toBe(true);
+        expect(cells.some((c) => c.type === "engine")).toBe(true);
         expect(new Set(cells.map((c) => `${c.x},${c.y}`)).size).toBe(cells.length);
       }
     }

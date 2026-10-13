@@ -4,6 +4,7 @@ import { transformCells, type DraftAction, type DraftView, type Piece } from "@j
 import { Board, type DragState } from "./Board";
 import { PieceCanvas } from "./PieceCanvas";
 import { RivalShip } from "./RivalShip";
+import { KeyButton } from "../ui/KeyButton";
 import "./draft.css";
 
 export function DraftScreen(props: {
@@ -19,6 +20,8 @@ export function DraftScreen(props: {
   const [rot, setRot] = useState<Dir>(0);
   const [flip, setFlip] = useState(false);
   const [overBoard, setOverBoard] = useState(false);
+  // Over the held card and its buttons the card already shows the piece, so don't float one there.
+  const [overHand, setOverHand] = useState(false);
   // The piece we just asked to take, shown as held before the server confirms.
   const [pending, setPending] = useState<Piece | null>(null);
   // The piece we just asked to place, hidden until the server confirms (or a new view arrives).
@@ -39,6 +42,7 @@ export function DraftScreen(props: {
   useEffect(() => {
     setRot(0);
     setFlip(false);
+    if (!heldId) setOverHand(false);
   }, [heldId]);
 
   const rotate = useCallback((by: 1 | -1) => setRot((r) => (((r + by + 4) % 4) as Dir)), []);
@@ -66,18 +70,27 @@ export function DraftScreen(props: {
     [act, held, rot, flip],
   );
 
-  // Keyboard: R rotates, F flips, Esc discards.
+  // Always mirror left-right as seen on screen. The transform mirrors before rotating, and
+  // mirroring after a rotation r is the same as mirroring first and rotating by -r.
+  const toggleFlip = useCallback(() => {
+    setFlip((f) => !f);
+    setRot((r) => ((4 - r) % 4) as Dir);
+  }, []);
+
+  // Keyboard: Q / E rotate (R is an alias for E), F flips, Esc discards.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const k = e.key.toLowerCase();
-      if (k === "r") rotate(e.shiftKey ? -1 : 1);
-      else if (k === "f") setFlip((f) => !f);
+      if (k === "q") rotate(-1);
+      else if (k === "e") rotate(1);
+      else if (k === "r") rotate(e.shiftKey ? -1 : 1);
+      else if (k === "f") toggleFlip();
       else if (k === "escape") discard();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rotate, discard]);
+  }, [rotate, toggleFlip, discard]);
 
   // Right-click rotates while holding; wheel rotates too.
   useEffect(() => {
@@ -114,13 +127,16 @@ export function DraftScreen(props: {
     <div className="draft">
       <aside className="draft-side">
         {heldShape && (
-          <section className="draft-hand">
+          <section className="draft-hand" onPointerEnter={() => setOverHand(true)} onPointerLeave={() => setOverHand(false)}>
             <div className="piece-card held">
               <PieceCanvas cells={heldShape} cell={26} color={color} />
             </div>
-            <button className="draft-discard" onClick={discard}>
-              Discard
-            </button>
+            <div className="draft-tools">
+              <KeyButton title="Rotate counter-clockwise" keyLabel="Q" icon={<RotateIcon ccw />} onClick={() => rotate(-1)} />
+              <KeyButton title="Rotate clockwise" keyLabel="E" icon={<RotateIcon />} onClick={() => rotate(1)} />
+              <KeyButton title="Flip" keyLabel="F" icon={<FlipIcon />} onClick={toggleFlip} active={flip} />
+              <KeyButton title="Discard" keyLabel="Esc" icon={<DiscardIcon />} onClick={discard} />
+            </div>
           </section>
         )}
         {view.offers.length > 0 && (
@@ -171,8 +187,37 @@ export function DraftScreen(props: {
         )}
       </aside>
 
-      {heldShape && !overBoard && <FloatingPiece cells={heldShape} color={color} />}
+      {heldShape && !overBoard && !overHand && <FloatingPiece cells={heldShape} color={color} />}
     </div>
+  );
+}
+
+const ICON = { width: 26, height: 26, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" } as const;
+
+function RotateIcon({ ccw }: { ccw?: boolean }) {
+  return (
+    <svg {...ICON} style={ccw ? { transform: "scaleX(-1)" } : undefined} aria-hidden>
+      <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+      <path d="M20 4v5h-5" />
+    </svg>
+  );
+}
+
+function FlipIcon() {
+  return (
+    <svg {...ICON} aria-hidden>
+      <path d="M12 3v18" strokeDasharray="2 2.5" />
+      <path d="M9 7 4 12l5 5V7Z" />
+      <path d="M15 7l5 5-5 5V7Z" />
+    </svg>
+  );
+}
+
+function DiscardIcon() {
+  return (
+    <svg {...ICON} aria-hidden>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
   );
 }
 

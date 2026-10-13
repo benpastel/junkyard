@@ -79,6 +79,11 @@ export function generatePiece(rng: Rng, id: string): Piece {
   const coords = PENTOMINOES[shape];
   const cells: Cell[] = coords.map(([x, y]) => ({ x, y, type: "hull", dir: 0 }));
   const special = pickSpecial(rng);
+  if (special === "mirror" || special === "armor") {
+    // Shield pieces protect the same edge on every cell, so a whole side of the piece is covered.
+    const dir = rng.pick(DIRS);
+    return { id, shape, cells: cells.map((c) => ({ ...c, type: special, dir })) };
+  }
   if (special) {
     const [index, dir] = pickSpecialSlot(cells, special, rng);
     cells[index] = { ...cells[index]!, type: special, dir };

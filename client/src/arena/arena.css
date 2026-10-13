@@ -33,3 +33,22 @@
   box-shadow: none;
   border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
 }
+
+.arena-controls {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 20px;
+  padding: 8px;
+  background: rgba(12, 14, 18, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+}
+
+.arena-controls-group {
+  display: flex;
+  gap: 6px;
+}

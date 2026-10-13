@@ -71,6 +71,8 @@ export interface ShipRecord {
   cellsDestroyed: number;
   cellsLost: number;
   cellCount: number;
+  /** Tick until which the ship takes no damage. */
+  invulnerableUntil: number;
 }
 
 interface Hook {
@@ -106,6 +108,9 @@ export class Arena {
   private readonly prevInputs = new Map<PlayerId, InputState>();
   private readonly pairCooldown = new Map<string, number>();
   private hooks: Hook[] = [];
+  /** Tick at which the power-up orb next appears, or null while it is sitting at the centre. */
+  private powerupAt: number | null = Math.round(SIM.powerupFirstSeconds * TICK_HZ);
+  private readonly bounceCooldown = new Map<SimBody, number>();
   /** Per-body "is this part's line clear?" checkers, rebuilt whenever a body's cells change. */
   private openCache = new Map<SimBody, (c: SimCell) => boolean>();
   private events: ArenaEvent[] = [];
@@ -167,6 +172,7 @@ export class Arena {
         cellsDestroyed: 0,
         cellsLost: 0,
         cellCount: cells.length,
+        invulnerableUntil: 0,
       };
       this.ships.push(rec);
       this.shipByPlayer.set(bp.playerId, rec);
@@ -237,7 +243,8 @@ export class Arena {
       if (started) this.onCollision(h1, h2, pre, touched);
     });
 
-    if (this.tickCount % Math.round(SIM.ringDamageIntervalSeconds * TICK_HZ) === 0) this.ringDamage(touched);
+    this.ringBounce();
+    this.updatePowerup();
 
     for (const b of touched) this.splitBody(b);
     this.despawnDebris();
@@ -284,13 +291,15 @@ export class Arena {
         }
         if (thr.length) s.thr = thr;
         if (chg.length) s.chg = chg;
+        const ship = this.shipOf(b);
+        if (ship && ship.invulnerableUntil > this.tickCount) s.inv = 1;
       }
       bodies.push(s);
     }
     const hooks: HookSnap[] = this.hooks.map((h) => ({ from: h.from.cid, to: h.to.cid, ox: r3(h.ox), oy: r3(h.oy) }));
     const events = this.events;
     this.events = [];
-    return { tick: this.tickCount, ring: r3(this.ringRadius), bodies, hooks, events };
+    return { tick: this.tickCount, ring: r3(this.ringRadius), powerup: this.powerupActive, bodies, hooks, events };
   }
 
   results(): RoundResultRow[] {
@@ -415,6 +424,7 @@ export class Arena {
     const body = c.body;
     const ship = this.shipOf(body);
     if (ship && attacker && attacker !== ship.playerId) ship.lastDamager = attacker;
+    if (ship && ship.invulnerableUntil > this.tickCount) return;
     c.hp -= amount;
     if (body) body.dirty = true;
     if (c.hp > 0) return;
@@ -689,16 +699,72 @@ export class Arena {
     this.ringRadius = this.ringStart + (SIM.ringMinRadius - this.ringStart) * f;
   }
 
-  private ringDamage(touched: Set<SimBody>) {
-    const r2 = this.ringRadius * this.ringRadius;
-    for (const b of [...this.bodies]) {
-      for (const c of [...b.cells]) {
+  get powerupActive(): boolean {
+    return this.powerupAt === null;
+  }
+
+  /** The ring is a rubber wall: push any body poking through it back inside and bounce it off. */
+  private ringBounce() {
+    const R = this.ringRadius;
+    // The wall moves inward while shrinking, so it also shoves whatever it touches.
+    const wallSpeed = this.ringShrinking() ? (this.ringStart - SIM.ringMinRadius) / SIM.ringShrinkSeconds : 0;
+    for (const b of this.bodies) {
+      const rb = b.rb;
+      if (!rb) continue;
+      let deepest: { p: { x: number; y: number }; pen: number } | null = null;
+      for (const c of b.cells) {
         if (!c.alive) continue;
-        const p = this.cellWorld(c);
-        if (p && p.x * p.x + p.y * p.y > r2) this.damageCell(c, SIM.ringDamage, null, touched);
+        const p = this.cellWorld(c)!;
+        const pen = Math.hypot(p.x, p.y) + 0.5 - R;
+        if (pen > 0 && (!deepest || pen > deepest.pen)) deepest = { p, pen };
+      }
+      if (!deepest) continue;
+      const { p, pen } = deepest;
+      const d = Math.hypot(p.x, p.y) || 1;
+      const n = { x: p.x / d, y: p.y / d };
+      const t = rb.translation();
+      rb.setTranslation({ x: t.x - n.x * pen, y: t.y - n.y * pen }, true);
+
+      const v = rb.velocityAtPoint(p);
+      const vn = v.x * n.x + v.y * n.y + wallSpeed;
+      if (vn <= 0) continue;
+      const com = rb.worldCom();
+      const cross = (p.x - com.x) * n.y - (p.y - com.y) * n.x;
+      const meff = 1 / (1 / Math.max(1e-3, rb.mass()) + (cross * cross) / Math.max(1e-3, rb.principalInertia()));
+      const j = (1 + SIM.ringRestitution) * vn * meff;
+      rb.applyImpulseAtPoint({ x: -n.x * j, y: -n.y * j }, p, true);
+      if (vn > 2 && (this.bounceCooldown.get(b) ?? -1) <= this.tickCount) {
+        this.bounceCooldown.set(b, this.tickCount + 15);
+        this.events.push({ e: "bounce", x: r3(p.x + n.x * 0.5), y: r3(p.y + n.y * 0.5), power: Math.min(9, Math.round(vn)) });
       }
     }
   }
+
+  private ringShrinking(): boolean {
+    const t = this.tickCount / TICK_HZ - SIM.ringDelaySeconds;
+    return t > 0 && t < SIM.ringShrinkSeconds;
+  }
+
+  private updatePowerup() {
+    if (this.powerupAt !== null) {
+      if (this.tickCount >= this.powerupAt) this.powerupAt = null;
+      return;
+    }
+    const r2 = SIM.powerupPickupRadius * SIM.powerupPickupRadius;
+    for (const ship of this.ships) {
+      if (!ship.alive) continue;
+      const near = ship.body.cells.some((c) => {
+        const p = c.alive ? this.cellWorld(c) : null;
+        return !!p && p.x * p.x + p.y * p.y < r2;
+      });
+      if (!near) continue;
+      ship.invulnerableUntil = this.tickCount + Math.round(SIM.invulnerableSeconds * TICK_HZ);
+      this.powerupAt = this.tickCount + Math.round(SIM.powerupRespawnSeconds * TICK_HZ);
+      this.events.push({ e: "pickup", playerId: ship.playerId });
+      return;
+    }
+  }
+
 }
 
 function pointVel(p: PreVel, at: { x: number; y: number }) {

@@ -24,7 +24,7 @@ await page.getByLabel("Name").fill("Benji");
 await page.getByRole("button", { name: /create room/i }).click();
 await page.waitForSelector(".room-code");
 for (let i = 0; i < 3; i++) await page.getByRole("button", { name: /add bot/i }).click();
-await page.getByRole("button", { name: "1:00" }).click();
+await page.getByRole("button", { name: "0:45" }).click();
 await page.getByLabel("Chat message").fill("ready to scrap");
 await page.keyboard.press("Enter");
 await page.waitForTimeout(300);

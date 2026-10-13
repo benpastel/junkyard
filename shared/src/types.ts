@@ -56,17 +56,17 @@ export const NO_INPUT: InputState = {
   grapple: false,
 };
 
-export const HULL_IDS = ["small", "medium", "large"] as const;
+export const HULL_IDS = ["hauler", "barge", "wing", "panels", "strike", "wedge", "saucer"] as const;
 export type HullId = (typeof HULL_IDS)[number];
 
-export const BUILD_SECONDS_OPTIONS = [60, 90, 120, 180] as const;
+export const BUILD_SECONDS_OPTIONS = [30, 45, 60, 90] as const;
 
 export interface RoomSettings {
   buildSeconds: number;
   hull: HullId;
 }
 
-export const DEFAULT_SETTINGS: RoomSettings = { buildSeconds: 120, hull: "medium" };
+export const DEFAULT_SETTINGS: RoomSettings = { buildSeconds: 60, hull: "hauler" };
 
 export const PLAYER_COLORS = [
   "#e8743b",

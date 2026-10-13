@@ -78,6 +78,13 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
     desiredVel = { x: ux * speed, y: uy * speed };
   }
 
+  // Go for the power-up when it's closer than the fight.
+  if (arena.powerupActive && Math.hypot(pos.x, pos.y) < Math.min(dist, 18)) {
+    const r0 = Math.max(Math.hypot(pos.x, pos.y), 1e-3);
+    const speed = r0 > 4 ? 7 : 3;
+    desiredVel = { x: (-pos.x / r0) * speed, y: (-pos.y / r0) * speed };
+  }
+
   // Stay inside the ring.
   const r = Math.hypot(pos.x, pos.y);
   if (r > arena.ringRadius - 5) {
@@ -93,7 +100,7 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
     let fy = 0;
     let tq = 0;
     for (const c of cells) {
-      if (c.type !== "engine" || c.dir !== dir) continue;
+      if (c.type !== "engine" || c.dir !== dir || !arena.isOpen(c)) continue;
       const d = DIR_VECTORS[c.dir];
       const ex = (d.x * cos - d.y * sin) * SIM.engineForce;
       const ey = (d.x * sin + d.y * cos) * SIM.engineForce;

@@ -20,7 +20,7 @@ Online multiplayer, fast-paced, round-based game:
 
 - Each player privately sees **3 piece offers** at a time and takes one.
 - The two unused offers go into a **common pool** anyone can claim.
-- Timed. Default **2 minutes**; several lengths selectable in the lobby (values TBD).
+- Timed. Default **1 minute**; 0:30, 0:45, 1:00, 1:30 selectable in the lobby.
 - Ship space: **pre-made hull layouts of different sizes**, Galaxy Trucker style (exact sizes TBD).
 
 ## Pieces and cells

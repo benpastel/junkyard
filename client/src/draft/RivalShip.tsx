@@ -1,7 +1,8 @@
 import { memo, useLayoutEffect, useRef } from "react";
 import type { Cell } from "@ja/shared";
 
-const CELL = 7;
+/** Thumbnails fit in this many pixels whatever the hull size. */
+const BOX = 70;
 
 /** A small live thumbnail of a rival's ship: hull outline plus parts in their colour. */
 export const RivalShip = memo(function RivalShip(props: { hullRows: string[]; cells: Cell[]; color: string; name: string }) {
@@ -11,6 +12,7 @@ export const RivalShip = memo(function RivalShip(props: { hullRows: string[]; ce
   useLayoutEffect(() => {
     const canvas = ref.current!;
     const dpr = window.devicePixelRatio || 1;
+    const CELL = Math.max(3, Math.floor(BOX / Math.max(hullRows[0]!.length, hullRows.length)));
     const W = hullRows[0]!.length * CELL;
     const H = hullRows.length * CELL;
     canvas.width = W * dpr;

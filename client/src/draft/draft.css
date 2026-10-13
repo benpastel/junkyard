@@ -108,10 +108,15 @@
   transform: none;
 }
 
-.draft-discard {
-  height: 44px;
-  border-style: dashed;
-  color: var(--text-dim);
+.draft-tools {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.draft-tools .key-button {
+  width: 100%;
+  min-width: 0;
 }
 
 .draft-pool {
