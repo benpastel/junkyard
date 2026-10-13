@@ -11,6 +11,7 @@ import {
   type BodySnap,
   type InitCell,
 } from "@ja/shared/sim/view";
+import { openChecker } from "@ja/shared";
 import { drawCell } from "../art/cells";
 
 /** Seconds the view lags behind the newest snapshot, so there's always a pair to interpolate between. */
@@ -445,6 +446,18 @@ export class ArenaRenderer {
     ctx.restore();
   }
 
+  /** Open-line checkers per alive-cell list; a new list arrives whenever a body's cells change. */
+  private openCheckers = new WeakMap<readonly number[], ReturnType<typeof openChecker>>();
+
+  private openCheckerFor(cids: readonly number[]) {
+    let check = this.openCheckers.get(cids);
+    if (!check) {
+      check = openChecker(cids.flatMap((cid) => this.cellInfo.get(cid) ?? []));
+      this.openCheckers.set(cids, check);
+    }
+    return check;
+  }
+
   private drawBody(ctx: CanvasRenderingContext2D, b: BodyView, S: number, toScreen: (x: number, y: number) => { x: number; y: number }) {
     const cells = this.bodyCells.get(b.snap.id);
     if (!cells) return;
@@ -460,13 +473,19 @@ export class ArenaRenderer {
       const c = this.cellInfo.get(cid);
       if (c) ctx.fillRect((c.x - 0.5) * S + S * 0.12, (c.y - 0.5) * S + S * 0.12, S, S);
     }
+    const isOpen = this.openCheckerFor(cells.cells);
     cells.cells.forEach((cid, i) => {
       const c = this.cellInfo.get(cid);
       if (!c) return;
       ctx.save();
       ctx.translate((c.x - 0.5) * S, (c.y - 0.5) * S);
       const damage = (cells.dmg[i] ?? 0) / 9;
-      drawCell(ctx, c.type, c.dir, S, { color: debris ? "#5c564f" : c.color, damage: debris ? Math.max(0.6, damage) : damage, variant: cid });
+      drawCell(ctx, c.type, c.dir, S, {
+        color: debris ? "#5c564f" : c.color,
+        damage: debris ? Math.max(0.6, damage) : damage,
+        variant: cid,
+        inactive: !debris && !isOpen(c),
+      });
       ctx.restore();
     });
     ctx.restore();

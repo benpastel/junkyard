@@ -9,6 +9,8 @@ export interface CellStyle {
   damage?: number;
   /** Stable per-cell number so plating varies between cells. */
   variant?: number;
+  /** Covered by the ship's own hull, so the part does nothing: drawn dimmed and unlit. */
+  inactive?: boolean;
 }
 
 const PLATE: Record<CellType, string> = {
@@ -63,13 +65,17 @@ export function drawCell(ctx: CanvasRenderingContext2D, type: CellType, dir: Dir
   ctx.translate(s / 2, s / 2);
   ctx.rotate((dir * Math.PI) / 2);
   ctx.translate(-s / 2, -s / 2);
-  drawFeature(ctx, type, s, style.color);
+  drawFeature(ctx, type, s, style.color, !!style.inactive);
   ctx.restore();
+  if (style.inactive) {
+    ctx.fillStyle = "rgba(8,9,11,0.55)";
+    ctx.fillRect(0, 0, s, s);
+  }
 
   if (style.damage && style.damage > 0) drawDamage(ctx, s, style.damage, v);
 }
 
-function drawFeature(ctx: CanvasRenderingContext2D, type: CellType, s: number, color: string) {
+function drawFeature(ctx: CanvasRenderingContext2D, type: CellType, s: number, color: string, unlit: boolean) {
   switch (type) {
     case "core": {
       ctx.fillStyle = color;
@@ -118,7 +124,7 @@ function drawFeature(ctx: CanvasRenderingContext2D, type: CellType, s: number, c
       ctx.fillRect(s * 0.4, 0, s * 0.2, s * 0.6);
       ctx.fillStyle = color;
       ctx.fillRect(s * 0.28, s * 0.6, s * 0.44, s * 0.22);
-      neon(ctx, s, () => {
+      neon(ctx, s, unlit, () => {
         ctx.fillRect(s * 0.3, s * 0.5, s * 0.4, s * 0.07);
         ctx.fillRect(s * 0.42, s * 0.02, s * 0.16, s * 0.12);
       });
@@ -130,7 +136,7 @@ function drawFeature(ctx: CanvasRenderingContext2D, type: CellType, s: number, c
       ctx.fillRect(s * 0.38, s * 0.55, s * 0.24, s * 0.24);
       ctx.fillStyle = "#1e1f22";
       ctx.fillRect(s * 0.08, s * 0.16, s * 0.84, s * 0.1);
-      neon(ctx, s, () => ctx.fillRect(0, 0, s, s * 0.16));
+      neon(ctx, s, unlit, () => ctx.fillRect(0, 0, s, s * 0.16));
       break;
     }
     case "armor": {
@@ -183,8 +189,14 @@ function drawFeature(ctx: CanvasRenderingContext2D, type: CellType, s: number, c
   }
 }
 
-function neon(ctx: CanvasRenderingContext2D, s: number, paint: () => void) {
+function neon(ctx: CanvasRenderingContext2D, s: number, unlit: boolean, paint: () => void) {
   ctx.save();
+  if (unlit) {
+    ctx.fillStyle = "#6b6838";
+    paint();
+    ctx.restore();
+    return;
+  }
   ctx.fillStyle = NEON;
   ctx.shadowColor = NEON;
   ctx.shadowBlur = Math.max(2, s * 0.35);

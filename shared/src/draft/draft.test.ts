@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Rng } from "../rng.js";
+import { openChecker } from "../cells.js";
 import {
   Draft,
   draftBotAction,
@@ -189,3 +190,19 @@ function findValidSpot(d: Draft, id: string) {
   if (!spot) throw new Error("no spot");
   return spot;
 }
+
+describe("openChecker", () => {
+  it("needs the whole line clear, not just the neighbour", () => {
+    const cells: Cell[] = [
+      { x: 0, y: 0, type: "laser", dir: 1 },
+      { x: 1, y: 1, type: "hull", dir: 0 },
+      { x: 3, y: 0, type: "hull", dir: 0 },
+      { x: 0, y: 1, type: "engine", dir: 0 },
+    ];
+    const isOpen = openChecker(cells);
+    expect(isOpen(cells[0]!)).toBe(false); // hull two cells to the right
+    expect(isOpen(cells[3]!)).toBe(true); // exhaust points down, nothing below
+    expect(isOpen({ x: 1, y: 1, type: "hull", dir: 0 })).toBe(true);
+    expect(openChecker(cells.filter((_, i) => i !== 2))(cells[0]!)).toBe(true);
+  });
+});

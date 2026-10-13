@@ -31,6 +31,7 @@ Online multiplayer, fast-paced, round-based game:
   - **Armor**: silver plate that deflects collisions on that edge with no damage and a strong bounce.
 - Special cells have a facing that rotates with the piece.
 - **Damage is per cell**: single cells get destroyed / fall off. A piece is only a placement unit; after placement the ship is just a grid of cells.
+- **Covered parts do nothing.** A directional part (engine exhaust, laser, grapple, ram, mirror/armor edge) works only while the straight line from it in that direction has none of its own ship's cells. Shooting away the cover switches it on. Covered parts are drawn dimmed.
 - One **core / cockpit** cell per ship. If destroying cells disconnects part of the ship from the core, that part breaks off as debris. Ship dies when the core dies.
 
 ## Art

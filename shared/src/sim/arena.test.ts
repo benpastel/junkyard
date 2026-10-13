@@ -94,6 +94,22 @@ describe("arena", () => {
     expect(damageTaken("A")).toBe(0);
   });
 
+  it("covered parts stay off until their line clears", () => {
+    // The engine's exhaust points down into the hull below it, so it can't push.
+    const covered = new Arena({ ships: [bp("a", ["C", "^", "#"]), bp("b", ["C"])], seed: 1 });
+    const open = new Arena({ ships: [bp("a", ["#", "C", "^"]), bp("b", ["C"])], seed: 1 });
+    const moved = (arena: Arena) => {
+      const rb = arena.ship("a")!.body.rb!;
+      const p0 = rb.translation();
+      run(arena, 60, { a: { ...NO_INPUT, up: true } });
+      const p1 = rb.translation();
+      arena.dispose();
+      return Math.hypot(p1.x - p0.x, p1.y - p0.y);
+    };
+    expect(moved(covered)).toBeLessThan(0.01);
+    expect(moved(open)).toBeGreaterThan(0.5);
+  });
+
   it("is deterministic", () => {
     const mk = () =>
       new Arena({ ships: SANDBOX_SHIPS.map((s, i) => bp(`p${i}`, s.rows)), seed: 42 });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
 import { buildableSet, cellKey, placedCells, placementError, transformCells, type Piece } from "@ja/shared/draft";
-import type { Cell, Dir } from "@ja/shared";
+import { openChecker, type Cell, type Dir } from "@ja/shared";
 import { drawCell } from "../art/cells";
 import { cellVariant } from "./PieceCanvas";
 
@@ -102,10 +102,12 @@ export function Board(props: {
     ctx.clearRect(0, 0, W, H);
     drawBay(ctx, hullRows, cell);
 
+    // Covered parts are judged against the ship as it would be with the ghost placed.
+    const isOpen = openChecker(ghost && ghostValid ? [...cells, ...ghost] : cells);
     for (const c of cells) {
       ctx.save();
       ctx.translate(c.x * cell, c.y * cell);
-      drawCell(ctx, c.type, c.dir, cell, { color, variant: cellVariant(c.x, c.y) });
+      drawCell(ctx, c.type, c.dir, cell, { color, variant: cellVariant(c.x, c.y), inactive: !isOpen(c) });
       const t = flashes.current.get(cellKey(c.x, c.y));
       if (t !== undefined) {
         const k = 1 - Math.min(1, (performance.now() - t) / FLASH_MS);
@@ -120,7 +122,7 @@ export function Board(props: {
         ctx.save();
         ctx.translate(c.x * cell, c.y * cell);
         ctx.globalAlpha = ghostValid ? 0.9 : 0.55;
-        drawCell(ctx, c.type, c.dir, cell, { color, variant: cellVariant(c.x, c.y) });
+        drawCell(ctx, c.type, c.dir, cell, { color, variant: cellVariant(c.x, c.y), inactive: ghostValid && !isOpen(c) });
         ctx.globalAlpha = 1;
         ctx.fillStyle = ghostValid ? "rgba(127, 201, 107, 0.22)" : "rgba(224, 80, 58, 0.38)";
         ctx.fillRect(0, 0, cell, cell);

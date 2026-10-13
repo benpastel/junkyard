@@ -1,4 +1,5 @@
-import { DIR_VECTORS, type Cell, type CellType, type Dir, type PlayerId } from "../types.js";
+import { type Cell, type CellType, type Dir, type PlayerId } from "../types.js";
+import { openChecker, workingDir } from "../cells.js";
 import type { Rng } from "../rng.js";
 import type { Draft, DraftAction, DraftView } from "./index.js";
 import { hullCore } from "./hulls.js";
@@ -88,6 +89,9 @@ function typeValue(type: CellType, ship: readonly Cell[]): number {
 
 interface ShipContext {
   core: { x: number; y: number };
+  cells: readonly Cell[];
+  /** Directional parts that currently have a clear line out. */
+  openParts: Cell[];
   occupied: Set<string>;
   massTilt: number;
   engineTilt: number;
@@ -96,8 +100,11 @@ interface ShipContext {
 function shipContext(view: DraftView): ShipContext {
   const core = hullCore(view.hull);
   const ship = view.cells;
+  const isOpen = openChecker(ship);
   return {
     core,
+    cells: ship,
+    openParts: ship.filter((c) => workingDir(c.type, c.dir) !== null && isOpen(c)),
     occupied: new Set(ship.map((c) => cellKey(c.x, c.y))),
     massTilt: ship.reduce((s, c) => s + (c.x - core.x), 0),
     engineTilt: ship.filter((c) => c.type === "engine" && c.dir === 0).reduce((s, c) => s + (c.x - core.x), 0),
@@ -106,13 +113,13 @@ function shipContext(view: DraftView): ShipContext {
 
 function scorePlacement(p: Placement, ctx: ShipContext): number {
   const { core, occupied } = ctx;
-  const mine = new Set(p.cells.map((c) => cellKey(c.x, c.y)));
-  const blocked = (x: number, y: number) => occupied.has(cellKey(x, y)) || mine.has(cellKey(x, y));
   let score = 0;
+  const isOpen = openChecker([...ctx.cells, ...p.cells]);
+  // Covering a part we already placed switches it off.
+  for (const c of ctx.openParts) if (!isOpen(c)) score -= 5;
 
   for (const c of p.cells) {
     const dy = c.y - core.y; // positive = toward the back
-    const v = DIR_VECTORS[c.dir];
     // Compactness: touching the existing ship.
     for (const [dx, dyy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
       if (occupied.has(cellKey(c.x + dx, c.y + dyy))) score += 0.6;
@@ -124,7 +131,7 @@ function scorePlacement(p: Placement, ctx: ShipContext): number {
         if (c.dir === 0) score += 3 + dy * 0.8;
         else if (c.dir === 2) score -= 1;
         else score += 0.5 - dy * 0.3; // side thrusters steer best near the nose
-        if (blocked(c.x - v.x, c.y - v.y)) score -= 5; // nozzle buried
+        if (!isOpen(c)) score -= 5; // exhaust covered
         break;
       }
       case "laser":
@@ -132,13 +139,13 @@ function scorePlacement(p: Placement, ctx: ShipContext): number {
       case "grapple": {
         if (c.dir === 0) score += 3 - dy * 0.6;
         else if (c.dir === 2) score -= 2;
-        if (blocked(c.x + v.x, c.y + v.y)) score -= 5; // firing into our own hull
+        if (!isOpen(c)) score -= 5; // pointing into our own hull
         break;
       }
       case "mirror":
       case "armor": {
         // The protected edge belongs on the outside, ideally facing forward.
-        if (blocked(c.x + v.x, c.y + v.y)) score -= 4;
+        if (!isOpen(c)) score -= 4;
         else score += c.dir === 0 ? 2 : c.dir === 2 ? 0.3 : 1;
         break;
       }

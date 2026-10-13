@@ -2,6 +2,7 @@ import RAPIER from "@dimforge/rapier2d-deterministic-compat";
 import type { RigidBody, Collider, World, EventQueue } from "@dimforge/rapier2d-deterministic-compat";
 import { DIR_VECTORS, NO_INPUT, type CellType, type Dir, type InputState, type PlayerId, type RoundResultRow } from "../types.js";
 import { Rng } from "../rng.js";
+import { openChecker } from "../cells.js";
 import { CELL_HP, SIM } from "./constants.js";
 import {
   TICK_HZ,
@@ -105,6 +106,8 @@ export class Arena {
   private readonly prevInputs = new Map<PlayerId, InputState>();
   private readonly pairCooldown = new Map<string, number>();
   private hooks: Hook[] = [];
+  /** Per-body "is this part's line clear?" checkers, rebuilt whenever a body's cells change. */
+  private openCache = new Map<SimBody, (c: SimCell) => boolean>();
   private events: ArenaEvent[] = [];
   private nextBodyId = 1;
   private snapCount = 0;
@@ -325,6 +328,18 @@ export class Arena {
     return { x: d.x * Math.cos(a) - d.y * Math.sin(a), y: d.x * Math.sin(a) + d.y * Math.cos(a) };
   }
 
+  /** Whether a directional part has a clear line out of its own body (covered parts do nothing). */
+  isOpen(c: SimCell): boolean {
+    const b = c.body;
+    if (!b || !c.alive) return false;
+    let check = this.openCache.get(b);
+    if (!check) {
+      check = openChecker(b.cells.filter((x) => x.alive));
+      this.openCache.set(b, check);
+    }
+    return check(c);
+  }
+
   // ---------------------------------------------------------------- bodies & cells
 
   private newBody(kind: SimBody["kind"], owner: PlayerId | null, x: number, y: number, a: number, vx: number, vy: number, w: number): SimBody {
@@ -361,6 +376,7 @@ export class Arena {
     c.body = body;
     body.cells.push(c);
     body.dirty = true;
+    this.openCache.delete(body);
     this.cellByCollider.set(col.handle, c);
   }
 
@@ -371,6 +387,7 @@ export class Arena {
       c.collider = null;
     }
     if (c.body) {
+      this.openCache.delete(c.body);
       c.body.cells = c.body.cells.filter((x) => x !== c);
       c.body.dirty = true;
       c.body = null;
@@ -496,7 +513,7 @@ export class Arena {
     const ramp = DT / SIM.engineRampSeconds;
     for (const c of ship.body.cells) {
       if (!c.alive || c.type !== "engine") continue;
-      c.thrust = fired[c.dir] ? Math.min(1, c.thrust + ramp) : Math.max(0, c.thrust - ramp * 2);
+      c.thrust = fired[c.dir] && this.isOpen(c) ? Math.min(1, c.thrust + ramp) : Math.max(0, c.thrust - ramp * 2);
       if (c.thrust <= 0) continue;
       const d = DIR_VECTORS[c.dir];
       const f = SIM.engineForce * c.thrust * DT;
@@ -511,7 +528,7 @@ export class Arena {
     for (const c of ship.body.cells) {
       if (!c.alive || c.type !== "laser") continue;
       c.cooldown -= DT;
-      if (!input.laser) {
+      if (!input.laser || !this.isOpen(c)) {
         c.charge = 0;
         continue;
       }
@@ -543,7 +560,7 @@ export class Arena {
       if (!target?.body?.rb) return;
 
       // A mirror reflects beams that strike its protected edge, taking no damage.
-      if (target.type === "mirror") {
+      if (target.type === "mirror" && this.isOpen(target)) {
         const edge = this.cellWorldDir(target);
         if (-(d.x * edge.x + d.y * edge.y) > SIM.edgeFacingDot) {
           const n = hit.normal;
@@ -571,7 +588,7 @@ export class Arena {
     }
     const rb = ship.body.rb!;
     for (const c of ship.body.cells) {
-      if (!c.alive || c.type !== "grapple") continue;
+      if (!c.alive || c.type !== "grapple" || !this.isOpen(c)) continue;
       const o = this.cellWorld(c)!;
       const d = this.cellWorldDir(c);
       const start = { x: o.x + d.x * 0.5, y: o.y + d.y * 0.5 };
@@ -644,11 +661,11 @@ export class Arena {
 
     const base = (speed - SIM.impactThreshold) * SIM.impactDamagePerSpeed;
     const m = p1.mass + p2.mass;
-    const ram1 = c1.type === "ram";
-    const ram2 = c2.type === "ram";
+    const ram1 = c1.type === "ram" && this.isOpen(c1);
+    const ram2 = c2.type === "ram" && this.isOpen(c2);
     // Armor deflects hits on its protected edge: neither cell takes damage, and the armor's bounciness does the rest.
     const armored = (a: SimCell, wa: { x: number; y: number }, wb: { x: number; y: number }) => {
-      if (a.type !== "armor") return false;
+      if (a.type !== "armor" || !this.isOpen(a)) return false;
       const edge = this.cellWorldDir(a);
       const dx = wb.x - wa.x;
       const dy = wb.y - wa.y;
