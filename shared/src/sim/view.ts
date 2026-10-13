@@ -5,6 +5,8 @@ import type { CellType, Dir, PlayerId } from "../types.js";
 export const TICK_HZ = 60;
 /** The server broadcasts a snapshot every this many ticks. */
 export const SNAPSHOT_EVERY = 3;
+/** After the fight is decided the arena keeps running (frozen ring, no damage) this long before results. */
+export const CELEBRATE_SECONDS = 4;
 
 export interface InitCell {
   /** Unique across the whole arena. Debris keeps the cid of the cell it came from. */
@@ -80,7 +82,9 @@ export type ArenaEvent =
   | { e: "died"; playerId: PlayerId; killerId: PlayerId | null }
   /** A ship bounced off the rubber ring. */
   | { e: "bounce"; x: number; y: number; power: number }
-  | { e: "pickup"; playerId: PlayerId };
+  | { e: "pickup"; playerId: PlayerId }
+  /** The fight is decided. null winner = nobody left. */
+  | { e: "over"; winner: PlayerId | null };
 
 /** Periodic state broadcast. */
 export interface ArenaSnapshot {

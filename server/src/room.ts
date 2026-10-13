@@ -18,7 +18,7 @@ import {
   type ServerMsg,
 } from "@ja/shared";
 import { Draft, draftBotAction } from "@ja/shared/draft";
-import { Arena, FightRecorder, SIM, SNAPSHOT_EVERY, TICK_HZ, arenaBotInput, type ArenaSetup } from "@ja/shared/sim";
+import { Arena, CELEBRATE_SECONDS, FightRecorder, SIM, SNAPSHOT_EVERY, TICK_HZ, arenaBotInput, type ArenaSetup } from "@ja/shared/sim";
 import { saveRecording } from "./recordings.js";
 
 const CHAT_HISTORY = 100;
@@ -62,6 +62,7 @@ export class Room {
   private lastLoopAt = 0;
   private tickAccumulator = 0;
   private arenaTick = 0;
+  private overTick: number | null = null;
 
   /** Wall-clock time when the last human left, for cleanup. */
   emptySince: number | null = Date.now();
@@ -237,6 +238,7 @@ export class Room {
     this.arena = new Arena(this.arenaSetup);
     this.arenaInputs = {};
     this.arenaTick = 0;
+    this.overTick = null;
     this.tickAccumulator = 0;
     this.setPhase("arena", null);
     this.broadcastRoom();
@@ -334,7 +336,9 @@ export class Room {
     arena.step(inputs);
     this.arenaTick++;
     if (this.arenaTick % SNAPSHOT_EVERY === 0) this.broadcast({ t: "arenaSnap", snap: arena.snapshot() });
-    if (arena.over) this.finishArena();
+    // Once decided, keep the arena running a few seconds so everyone sees who won.
+    if (arena.over && this.overTick === null) this.overTick = this.arenaTick;
+    if (this.overTick !== null && this.arenaTick - this.overTick >= CELEBRATE_SECONDS * TICK_HZ) this.finishArena();
   }
 
   // -------------------------------------------------------------- outbound

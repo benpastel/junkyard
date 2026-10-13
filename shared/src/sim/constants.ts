@@ -24,7 +24,7 @@ export const SIM = {
   linearDamping: 0.4,
   angularDamping: 1.2,
 
-  engineForce: 40,
+  engineForce: 65,
   engineRampSeconds: 0.15,
 
   laserChargeSeconds: 0.25,

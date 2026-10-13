@@ -117,6 +117,9 @@ export class Arena {
   private hooks: Hook[] = [];
   /** Tick at which the power-up orb next appears, or null while it is sitting at the centre. */
   private powerupTaken = false;
+  /** Set on the tick the fight is decided; from then on the ring stops and nothing takes damage. */
+  private endedAt: number | null = null;
+  private finalResults: RoundResultRow[] | null = null;
   /** Optional debug log of everything that breaks and why. Unset in normal play (zero cost). */
   onLog: ((line: string) => void) | null = null;
   private readonly bounceCooldown = new Map<SimBody, number>();
@@ -219,7 +222,12 @@ export class Arena {
     return this.ships.filter((s) => s.alive);
   }
 
+  /** True once the fight is decided (latched: stays true through the celebration). */
   get over(): boolean {
+    return this.endedAt !== null || this.decided;
+  }
+
+  private get decided(): boolean {
     const alive = this.aliveShips.length;
     if (this.tickCount >= SIM.maxSeconds * TICK_HZ) return true;
     if (this.startedShips >= 2) return alive <= 1;
@@ -274,6 +282,14 @@ export class Arena {
     this.eventQueue.drainContactForceEvents((e) => this.onPressure(e.collider1(), e.collider2(), e.totalForceMagnitude(), touched));
 
     this.updatePowerup();
+    if (this.endedAt === null && this.decided) {
+      this.endedAt = this.tickCount;
+      this.finalResults = this.computeResults();
+      const winners = this.finalResults.filter((r) => r.place === 1 && this.ship(r.playerId)?.alive);
+      const winner = winners.length === 1 ? winners[0]!.playerId : null;
+      this.events.push({ e: "over", winner });
+      this.log(`fight over: ${winner ?? "nobody"} wins`);
+    }
     if (this.tickCount % 10 === 0) this.crushOutside(touched);
 
     for (const b of touched) this.splitBody(b);
@@ -332,7 +348,12 @@ export class Arena {
     return { tick: this.tickCount, ring: r3(this.ringRadius), powerup: this.powerupActive, bodies, hooks, events };
   }
 
+  /** Standings as of the moment the fight was decided (or now, if it isn't yet). */
   results(): RoundResultRow[] {
+    return this.finalResults ?? this.computeResults();
+  }
+
+  private computeResults(): RoundResultRow[] {
     const alive = this.ships.filter((s) => s.alive);
     const dead = this.ships.filter((s) => !s.alive);
     alive.sort((a, b) => aliveCells(b) - aliveCells(a));
@@ -477,7 +498,7 @@ export class Arena {
   }
 
   private damageCell(c: SimCell, amount: number, attacker: PlayerId | null, touched: Set<SimBody>, cause: string) {
-    if (!c.alive || amount <= 0) return;
+    if (!c.alive || amount <= 0 || this.endedAt !== null) return;
     const body = c.body;
     const ship = this.shipOf(body);
     if (ship && attacker && attacker !== ship.playerId) ship.lastDamager = attacker;
@@ -752,6 +773,7 @@ export class Arena {
   }
 
   private updateRing() {
+    if (this.endedAt !== null) return;
     const t = this.tickCount / TICK_HZ - SIM.ringDelaySeconds;
     const f = Math.min(1, Math.max(0, t / SIM.ringShrinkSeconds));
     this.ringRadius = this.ringStart + (SIM.ringMinRadius - this.ringStart) * f;

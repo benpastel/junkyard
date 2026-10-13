@@ -164,6 +164,55 @@ export class ArenaRenderer {
     this.drawBeams(ctx, S, toScreen);
     this.drawParticles(ctx, S, toScreen);
     this.drawNames(ctx, bodies, S, toScreen);
+    if (this.celebration) this.drawCelebration(ctx, width, height, nowMs, dt);
+  }
+
+  /** Winner banner, flashing in their colour, over a rain of screws, bolts and nuts. */
+  private drawCelebration(ctx: CanvasRenderingContext2D, w: number, h: number, nowMs: number, dt: number) {
+    const cel = this.celebration!;
+    if (!cel.confetti) {
+      cel.confetti = [];
+      for (let i = 0; i < 140; i++) {
+        cel.confetti.push({
+          kind: (["nut", "bolt", "screw"] as const)[i % 3]!,
+          x: this.fx() * w,
+          // Spread far above the screen so it keeps raining for the whole celebration.
+          y: -this.fx() * h * 2.2 - 20,
+          vx: (this.fx() - 0.5) * 100,
+          vy: 60 + this.fx() * 120,
+          rot: this.fx() * Math.PI * 2,
+          vr: (this.fx() - 0.5) * 8,
+          size: 6 + this.fx() * 7,
+          color: CONFETTI_COLORS[i % CONFETTI_COLORS.length]!,
+        });
+      }
+    }
+    for (const c of cel.confetti) {
+      c.vy += 140 * dt;
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      c.rot += c.vr * dt;
+      if (c.y > h + 30) continue;
+      drawHardware(ctx, c);
+    }
+
+    const info = cel.winner ? this.shipInfo.get(cel.winner) : null;
+    const text = info ? `${info.name} wins` : "Draw";
+    const age = (nowMs - cel.start) / 1000;
+    const pop = Math.min(1, age / 0.25);
+    const flash = 0.8 + 0.2 * Math.sin(age * 9);
+    ctx.save();
+    ctx.translate(w / 2, h * 0.32);
+    ctx.scale(0.6 + 0.4 * pop, 0.6 + 0.4 * pop);
+    ctx.font = `700 ${Math.round(Math.min(72, w / 12))}px ui-monospace, "SF Mono", Menlo, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillText(text.toUpperCase(), 3, 4);
+    ctx.globalAlpha = flash;
+    ctx.fillStyle = info?.color ?? "#d8d4cc";
+    ctx.fillText(text.toUpperCase(), 0, 0);
+    ctx.restore();
   }
 
   // ---------------------------------------------------------------- timing
@@ -304,6 +353,9 @@ export class ArenaRenderer {
         this.wobbles.push({ a: Math.atan2(e.y, e.x), power: e.power, life: 1 });
         this.burst(e.x, e.y, 3 + e.power, "#c9ced4", 3 + e.power * 0.5, 0.25);
         break;
+      case "over":
+        this.celebration = { winner: e.winner, start: performance.now(), confetti: null };
+        break;
       case "pickup":
         this.particles.push({ kind: "ring", x: 0, y: 0, vx: 0, vy: 0, life: 0.5, max: 0.5, size: 4, color: "#8cf0ff", rot: 0, vr: 0 });
         this.burst(0, 0, 24, "#bff6ff", 8, 0.5);
@@ -406,6 +458,9 @@ export class ArenaRenderer {
       }
     }
   }
+
+  /** Set when the fight is decided: who won, and confetti falling in screen space. */
+  private celebration: { winner: PlayerId | null; start: number; confetti: Confetti[] | null } | null = null;
 
   /** Bounce dents travelling round the rubber ring: angle, strength, seconds left. */
   private wobbles: { a: number; power: number; life: number }[] = [];
@@ -785,4 +840,79 @@ function withAlpha(color: string, alpha: number): string {
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
   }
   return color;
+}
+
+interface Confetti {
+  kind: "nut" | "bolt" | "screw";
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rot: number;
+  vr: number;
+  size: number;
+  color: string;
+}
+
+const CONFETTI_COLORS = ["#c9ced4", "#9aa0a6", "#b8913a", "#7d838b", "#d8b45a"];
+
+function hexagon(ctx: CanvasRenderingContext2D, r: number) {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  ctx.closePath();
+}
+
+/** One falling screw, bolt or nut, in screen pixels. */
+function drawHardware(ctx: CanvasRenderingContext2D, c: Confetti) {
+  const r = c.size;
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  ctx.rotate(c.rot);
+  ctx.fillStyle = c.color;
+  ctx.strokeStyle = "rgba(0,0,0,0.45)";
+  ctx.lineWidth = 1;
+  if (c.kind === "nut") {
+    hexagon(ctx, r);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#14161a";
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (c.kind === "bolt") {
+    ctx.fillRect(-r * 0.32, 0, r * 0.64, r * 2.2);
+    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    for (let y = r * 0.5; y < r * 2.1; y += r * 0.4) {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.32, y);
+      ctx.lineTo(r * 0.32, y + r * 0.15);
+      ctx.stroke();
+    }
+    ctx.fillStyle = c.color;
+    hexagon(ctx, r * 0.7);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.28, 0);
+    ctx.lineTo(r * 0.28, 0);
+    ctx.lineTo(0, r * 2.2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = "#14161a";
+    ctx.lineWidth = Math.max(1, r * 0.18);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.4, 0);
+    ctx.lineTo(r * 0.4, 0);
+    ctx.stroke();
+  }
+  ctx.restore();
 }

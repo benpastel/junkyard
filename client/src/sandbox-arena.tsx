@@ -2,7 +2,7 @@
 // ?sandbox=arena[&bots=N][&me=0][&seed=N]
 import { useEffect, useMemo, useState } from "react";
 import { NO_INPUT, PLAYER_COLORS, type InputState, type ShipBlueprint } from "@ja/shared";
-import { Arena, SIM, SNAPSHOT_EVERY, TICK_HZ, arenaBotInput, initPhysics, type ArenaInit, type ArenaSnapshot } from "@ja/shared/sim";
+import { Arena, CELEBRATE_SECONDS, SIM, SNAPSHOT_EVERY, TICK_HZ, arenaBotInput, initPhysics, type ArenaInit, type ArenaSnapshot } from "@ja/shared/sim";
 import { SANDBOX_SHIPS, parseShip } from "@ja/shared/sim/testShips";
 import { ArenaScreen } from "./arena/ArenaScreen";
 
@@ -57,6 +57,7 @@ export function SandboxArena() {
       // Fixed-timestep loop driven by wall clock, like the server.
       let last = performance.now();
       let acc = 0;
+      let overAt: number | null = null;
       timer = window.setInterval(() => {
         const now = performance.now();
         acc = Math.min(acc + (now - last) / 1000, 0.25);
@@ -71,10 +72,11 @@ export function SandboxArena() {
             for (const cb of hub.subs) cb(snap);
           }
         }
-        if (a.over) {
+        if (a.over && overAt === null) overAt = a.tickCount;
+        if (overAt !== null && a.tickCount - overAt >= CELEBRATE_SECONDS * TICK_HZ) {
           window.clearInterval(timer);
           console.log("fight over", JSON.stringify(a.results()));
-          window.setTimeout(() => setRound((r) => r + 1), 2500);
+          window.setTimeout(() => setRound((r) => r + 1), 500);
         }
       }, 1000 / TICK_HZ);
     });
