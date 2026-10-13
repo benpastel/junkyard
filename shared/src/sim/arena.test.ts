@@ -129,13 +129,45 @@ describe("arena", () => {
 
   it("the centre power-up makes its taker invulnerable", () => {
     const a = new Arena({ ships: [bp("a", ["i", "C", "^"]), bp("b", ["#", "C"])], seed: 1 });
-    run(a, Math.round(SIM.powerupFirstSeconds * TICK_HZ) + 1, {});
     expect(a.powerupActive).toBe(true);
     // Fly a through the centre.
     for (let i = 0; i < TICK_HZ * 4 && a.powerupActive; i++) a.step({ a: { ...NO_INPUT, up: true } });
     expect(a.powerupActive).toBe(false);
     expect(a.ship("a")!.invulnerableUntil).toBeGreaterThan(a.tickCount);
     a.dispose();
+  });
+
+  /** Squeezes two ships nose to nose with a fast-closing ring; returns each ship's first crush tick. */
+  function squeeze(rowsA: string[], rowsB: string[]) {
+    const saved = { ...SIM };
+    Object.assign(SIM, { ringDelaySeconds: 0, ringShrinkSeconds: 12 });
+    try {
+      const a = new Arena({ ships: [bp("a", rowsA), bp("b", rowsB)], seed: 1 });
+      const first: Record<string, number> = {};
+      const crush = (a as any).crush.bind(a);
+      (a as any).crush = (c: any, t: any) => {
+        const owner = c.body?.owner;
+        if (owner && first[owner] === undefined) first[owner] = a.tickCount;
+        crush(c, t);
+      };
+      for (let i = 0; i < TICK_HZ * 14 && (first.a === undefined || first.b === undefined); i++) a.step({});
+      a.dispose();
+      return { first };
+    } finally {
+      Object.assign(SIM, saved);
+    }
+  }
+
+  it("the closing ring crushes touching cells on both ships at once", () => {
+    const { first } = squeeze(["###", "#C#", "###"], ["###", "#C#", "###"]);
+    expect(first.a).toBeDefined();
+    expect(first.a).toBe(first.b);
+  });
+
+  it("armor facing the squeeze holds out while the other side gives", () => {
+    const { first } = squeeze(["AAA", "#C#", "###"], ["###", "#C#", "###"]);
+    expect(first.b).toBeDefined();
+    expect(first.a === undefined || first.a > first.b!).toBe(true);
   });
 
   it("is deterministic", () => {

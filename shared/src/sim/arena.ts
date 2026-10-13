@@ -58,6 +58,11 @@ export interface SimBody {
   sent: boolean;
   /** Debris: tick at which it disappears. */
   despawnTick: number;
+  /**
+   * Until this tick the body is jammed (squeezed by the ring with other bodies). The solver
+   * shoves jammed bodies apart hard, so impacts on them deal no damage; crushing decides instead.
+   */
+  jammedUntil: number;
 }
 
 export interface ShipRecord {
@@ -109,8 +114,13 @@ export class Arena {
   private readonly pairCooldown = new Map<string, number>();
   private hooks: Hook[] = [];
   /** Tick at which the power-up orb next appears, or null while it is sitting at the centre. */
-  private powerupAt: number | null = Math.round(SIM.powerupFirstSeconds * TICK_HZ);
+  private powerupTaken = false;
   private readonly bounceCooldown = new Map<SimBody, number>();
+  /** Kinematic segments forming the rubber ring, and their collider handles. */
+  private readonly walls: { rb: RigidBody; angle: number }[] = [];
+  private readonly wallColliders = new Set<number>();
+  /** Sustained-pressure bookkeeping per touching collider pair: consecutive crushing ticks. */
+  private readonly pressure = new Map<string, { ticks: number; lastTick: number }>();
   /** Per-body "is this part's line clear?" checkers, rebuilt whenever a body's cells change. */
   private openCache = new Map<SimBody, (c: SimCell) => boolean>();
   private events: ArenaEvent[] = [];
@@ -124,6 +134,8 @@ export class Arena {
     this.rng = new Rng(setup.seed);
     this.world = new RAPIER.World({ x: 0, y: 0 });
     this.world.timestep = DT;
+    // Extra solver iterations keep jammed-together ships stable when the ring squeezes them.
+    this.world.integrationParameters.numSolverIterations = SIM.solverIterations;
     this.eventQueue = new RAPIER.EventQueue(true);
 
     const n = setup.ships.length;
@@ -185,6 +197,7 @@ export class Arena {
       });
     });
     this.startedShips = this.ships.length;
+    this.buildWalls();
     this.initInfo = { ships: initShips, ring: { startRadius: this.ringStart, minRadius: SIM.ringMinRadius } };
   }
 
@@ -242,8 +255,8 @@ export class Arena {
     this.eventQueue.drainCollisionEvents((h1, h2, started) => {
       if (started) this.onCollision(h1, h2, pre, touched);
     });
+    this.eventQueue.drainContactForceEvents((e) => this.onPressure(e.collider1(), e.collider2(), e.totalForceMagnitude(), touched));
 
-    this.ringBounce();
     this.updatePowerup();
 
     for (const b of touched) this.splitBody(b);
@@ -358,7 +371,8 @@ export class Arena {
       .setLinvel(vx, vy)
       .setAngvel(w)
       .setLinearDamping(SIM.linearDamping)
-      .setAngularDamping(kind === "ship" ? SIM.angularDamping : SIM.angularDamping * 0.3);
+      .setAngularDamping(kind === "ship" ? SIM.angularDamping : SIM.angularDamping * 0.3)
+      .setCcdEnabled(true);
     const body: SimBody = {
       id: this.nextBodyId++,
       kind,
@@ -368,6 +382,7 @@ export class Arena {
       dirty: true,
       sent: false,
       despawnTick: kind === "debris" ? this.tickCount + SIM.debrisLifetimeSeconds * TICK_HZ : Infinity,
+      jammedUntil: 0,
     };
     this.bodies.push(body);
     return body;
@@ -379,7 +394,8 @@ export class Arena {
       .setDensity(SIM.cellDensity)
       .setFriction(0.4)
       .setRestitution(c.type === "armor" ? SIM.armorRestitution : 0.2)
-      .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+      .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS | RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
+      .setContactForceEventThreshold(SIM.crushForce);
     const col = this.world.createCollider(desc, body.rb!);
     c.collider = col;
     c.body = body;
@@ -651,6 +667,10 @@ export class Arena {
   }
 
   private onCollision(h1: number, h2: number, pre: Map<SimBody, PreVel>, touched: Set<SimBody>) {
+    if (this.wallColliders.has(h1) || this.wallColliders.has(h2)) {
+      this.onWallHit(this.cellByCollider.get(this.wallColliders.has(h1) ? h2 : h1), pre);
+      return;
+    }
     const c1 = this.cellByCollider.get(h1);
     const c2 = this.cellByCollider.get(h2);
     const b1 = c1?.body;
@@ -667,10 +687,10 @@ export class Arena {
     const v2 = pointVel(p2, w2);
     const speed = Math.hypot(v1.x - v2.x, v1.y - v2.y);
     if (speed < SIM.impactThreshold) return;
+    if (b1.jammedUntil > this.tickCount || b2.jammedUntil > this.tickCount) return;
     this.pairCooldown.set(key, this.tickCount + Math.round(SIM.impactPairCooldownSeconds * TICK_HZ));
 
-    const base = (speed - SIM.impactThreshold) * SIM.impactDamagePerSpeed;
-    const m = p1.mass + p2.mass;
+    const base = speed - SIM.impactThreshold;
     const ram1 = c1.type === "ram" && this.isOpen(c1);
     const ram2 = c2.type === "ram" && this.isOpen(c2);
     // Armor deflects hits on its protected edge: neither cell takes damage, and the armor's bounciness does the rest.
@@ -683,8 +703,9 @@ export class Arena {
       return (dx * edge.x + dy * edge.y) / len > SIM.edgeFacingDot;
     };
     const deflected = armored(c1, w1, w2) || armored(c2, w2, w1);
-    const to1 = deflected ? 0 : base * ((2 * p2.mass) / m) * (ram1 ? SIM.ramTakeMultiplier : 1) * (ram2 ? SIM.ramDealMultiplier : 1);
-    const to2 = deflected ? 0 : base * ((2 * p1.mass) / m) * (ram2 ? SIM.ramTakeMultiplier : 1) * (ram1 ? SIM.ramDealMultiplier : 1);
+    // One hit each; an open ram takes none and deals extra.
+    const to1 = deflected || ram1 ? 0 : ram2 ? SIM.ramDealHits : 1;
+    const to2 = deflected || ram2 ? 0 : ram1 ? SIM.ramDealHits : 1;
     const mid = { x: (w1.x + w2.x) / 2, y: (w1.y + w2.y) / 2 };
     this.events.push({ e: "spark", x: r3(mid.x), y: r3(mid.y), power: Math.round(Math.min(9, base)) });
     const owner1 = b1.kind === "ship" ? b1.owner : null;
@@ -697,59 +718,125 @@ export class Arena {
     const t = this.tickCount / TICK_HZ - SIM.ringDelaySeconds;
     const f = Math.min(1, Math.max(0, t / SIM.ringShrinkSeconds));
     this.ringRadius = this.ringStart + (SIM.ringMinRadius - this.ringStart) * f;
+    this.moveWalls();
   }
 
   get powerupActive(): boolean {
-    return this.powerupAt === null;
+    return !this.powerupTaken;
   }
 
-  /** The ring is a rubber wall: push any body poking through it back inside and bounce it off. */
-  private ringBounce() {
-    const R = this.ringRadius;
-    // The wall moves inward while shrinking, so it also shoves whatever it touches.
-    const wallSpeed = this.ringShrinking() ? (this.ringStart - SIM.ringMinRadius) / SIM.ringShrinkSeconds : 0;
-    for (const b of this.bodies) {
-      const rb = b.rb;
-      if (!rb) continue;
-      let deepest: { p: { x: number; y: number }; pen: number } | null = null;
-      for (const c of b.cells) {
-        if (!c.alive) continue;
-        const p = this.cellWorld(c)!;
-        const pen = Math.hypot(p.x, p.y) + 0.5 - R;
-        if (pen > 0 && (!deepest || pen > deepest.pen)) deepest = { p, pen };
-      }
-      if (!deepest) continue;
-      const { p, pen } = deepest;
-      const d = Math.hypot(p.x, p.y) || 1;
-      const n = { x: p.x / d, y: p.y / d };
-      const t = rb.translation();
-      rb.setTranslation({ x: t.x - n.x * pen, y: t.y - n.y * pen }, true);
-
-      const v = rb.velocityAtPoint(p);
-      const vn = v.x * n.x + v.y * n.y + wallSpeed;
-      if (vn <= 0) continue;
-      const com = rb.worldCom();
-      const cross = (p.x - com.x) * n.y - (p.y - com.y) * n.x;
-      const meff = 1 / (1 / Math.max(1e-3, rb.mass()) + (cross * cross) / Math.max(1e-3, rb.principalInertia()));
-      const j = (1 + SIM.ringRestitution) * vn * meff;
-      rb.applyImpulseAtPoint({ x: -n.x * j, y: -n.y * j }, p, true);
-      if (vn > 2 && (this.bounceCooldown.get(b) ?? -1) <= this.tickCount) {
-        this.bounceCooldown.set(b, this.tickCount + 15);
-        this.events.push({ e: "bounce", x: r3(p.x + n.x * 0.5), y: r3(p.y + n.y * 0.5), power: Math.min(9, Math.round(vn)) });
-      }
+  /** The rubber ring: kinematic wall segments the physics engine pushes ships against. */
+  private buildWalls() {
+    const n = SIM.ringSegments;
+    // Long enough to overlap neighbours at the starting radius; they only overlap more as it shrinks.
+    const halfLen = ((Math.PI * (this.ringStart + SIM.ringThickness)) / n) * 1.2;
+    for (let i = 0; i < n; i++) {
+      const angle = (i / n) * Math.PI * 2;
+      const r = this.ringStart + SIM.ringThickness / 2;
+      const rb = this.world.createRigidBody(
+        RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(Math.cos(angle) * r, Math.sin(angle) * r).setRotation(angle),
+      );
+      const col = this.world.createCollider(
+        RAPIER.ColliderDesc.cuboid(SIM.ringThickness / 2, halfLen)
+          .setRestitution(SIM.ringRestitution)
+          .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Max)
+          .setFriction(0.1)
+          .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS | RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
+          .setContactForceEventThreshold(SIM.crushForce),
+        rb,
+      );
+      this.walls.push({ rb, angle });
+      this.wallColliders.add(col.handle);
     }
   }
 
-  private ringShrinking(): boolean {
-    const t = this.tickCount / TICK_HZ - SIM.ringDelaySeconds;
-    return t > 0 && t < SIM.ringShrinkSeconds;
+  private moveWalls() {
+    const r = this.ringRadius + SIM.ringThickness / 2;
+    for (const w of this.walls) w.rb.setNextKinematicTranslation({ x: Math.cos(w.angle) * r, y: Math.sin(w.angle) * r });
+  }
+
+  private onWallHit(c: SimCell | undefined, pre: Map<SimBody, PreVel>) {
+    const b = c?.body;
+    const p = b && pre.get(b);
+    const at = c && this.cellWorld(c);
+    if (!b || !p || !at) return;
+    const d = Math.hypot(at.x, at.y) || 1;
+    const v = pointVel(p, at);
+    const vn = (v.x * at.x + v.y * at.y) / d;
+    if (vn > 2 && (this.bounceCooldown.get(b) ?? -1) <= this.tickCount) {
+      this.bounceCooldown.set(b, this.tickCount + 15);
+      this.events.push({ e: "bounce", x: r3((at.x / d) * this.ringRadius), y: r3((at.y / d) * this.ringRadius), power: Math.min(9, Math.round(vn)) });
+    }
+  }
+
+  /**
+   * Called for every contact pushing harder than SIM.crushForce this tick. A pair that stays
+   * that hard for SIM.crushSeconds is being crushed (the ring has no slack left), and the
+   * touching cells break together. Armor and rams facing the contact hold out, unless both do.
+   */
+  private onPressure(h1: number, h2: number, force: number, touched: Set<SimBody>) {
+    if (force < SIM.crushForce) return;
+    const jam = this.tickCount + Math.round(SIM.jamSeconds * TICK_HZ);
+    for (const h of [h1, h2]) {
+      const b = this.cellByCollider.get(h)?.body;
+      if (b) b.jammedUntil = jam;
+    }
+    const key = h1 < h2 ? `${h1}:${h2}` : `${h2}:${h1}`;
+    const prev = this.pressure.get(key);
+    // The force flickers around the threshold while jammed, so tolerate short gaps.
+    const ticks = prev && this.tickCount - prev.lastTick <= SIM.crushGapTicks ? prev.ticks + 1 : 1;
+    this.pressure.set(key, { ticks, lastTick: this.tickCount });
+    const needed = Math.round(SIM.crushSeconds * TICK_HZ);
+    if (ticks < needed) return;
+
+    const c1 = this.cellByCollider.get(h1);
+    const c2 = this.cellByCollider.get(h2);
+    if (!c1 && !c2) return;
+    if (!c1 || !c2) {
+      // Pressed into the wall itself. Ship-on-ship contacts give way first; this is the
+      // fallback for a ship with nothing left to crush against.
+      if (ticks < needed * SIM.crushWallFactor) return;
+      const c = (c1 ?? c2)!;
+      this.pressure.delete(key);
+      this.crush(c, touched);
+      return;
+    }
+    if (c1.body === c2.body) return;
+    const proof1 = this.crushProof(c1, c2);
+    const proof2 = this.crushProof(c2, c1);
+    if (proof1 && proof2 && ticks < needed * SIM.crushProofFactor) return;
+    this.pressure.delete(key);
+    const both = proof1 === proof2;
+    if (both || !proof1) this.crush(c1, touched);
+    if (both || !proof2) this.crush(c2, touched);
+  }
+
+  /** An open armor edge or ram pointing at the other cell holds out against crushing. */
+  private crushProof(c: SimCell, other: SimCell): boolean {
+    if ((c.type !== "armor" && c.type !== "ram") || !this.isOpen(c)) return false;
+    const a = this.cellWorld(c);
+    const b = this.cellWorld(other);
+    if (!a || !b) return false;
+    const edge = this.cellWorldDir(c);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    return (dx * edge.x + dy * edge.y) / (Math.hypot(dx, dy) || 1) > SIM.edgeFacingDot;
+  }
+
+  private crush(c: SimCell, touched: Set<SimBody>) {
+    if (!c.alive) return;
+    const pos = this.cellWorld(c);
+    if (pos) this.events.push({ e: "spark", x: r3(pos.x), y: r3(pos.y), power: 5 });
+    // Crushing ignores invulnerability: the ring always wins.
+    const ship = this.shipOf(c.body);
+    const inv = ship?.invulnerableUntil ?? 0;
+    if (ship) ship.invulnerableUntil = 0;
+    this.damageCell(c, c.hp, null, touched);
+    if (ship) ship.invulnerableUntil = inv;
   }
 
   private updatePowerup() {
-    if (this.powerupAt !== null) {
-      if (this.tickCount >= this.powerupAt) this.powerupAt = null;
-      return;
-    }
+    if (this.powerupTaken) return;
     const r2 = SIM.powerupPickupRadius * SIM.powerupPickupRadius;
     for (const ship of this.ships) {
       if (!ship.alive) continue;
@@ -759,7 +846,7 @@ export class Arena {
       });
       if (!near) continue;
       ship.invulnerableUntil = this.tickCount + Math.round(SIM.invulnerableSeconds * TICK_HZ);
-      this.powerupAt = this.tickCount + Math.round(SIM.powerupRespawnSeconds * TICK_HZ);
+      this.powerupTaken = true;
       this.events.push({ e: "pickup", playerId: ship.playerId });
       return;
     }

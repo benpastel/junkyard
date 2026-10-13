@@ -7,7 +7,7 @@ Working name: **Junkyard Armada** (no existing game by that name found; junkyard
 Online multiplayer, fast-paced, round-based game:
 
 1. **Draft / build.** Players place pentomino pieces (Blokus-style 5-cell shapes) onto their own ship grid against a timer.
-2. **Arena combat.** When the timer ends, all ships are dumped into one arena and fight to last ship standing. The arena edge is a **rubber ring** that slowly tightens; ships bounce off it unharmed. A **power-up orb** sits at the centre (first after 10s, then every 20s); grabbing it gives 5s of invulnerability.
+2. **Arena combat.** When the timer ends, all ships are dumped into one arena and fight to last ship standing. The arena edge is a **rubber ring** that slowly tightens all the way to nothing; ships bounce off it unharmed. When ships are jammed together with no slack left, sustained pressure **crushes the touching cells on both ships at once** (an open armor edge or ram facing the contact holds out, unless both sides have one). Cells pressed into the ring itself give way only as a slower fallback. A **power-up orb** sits at the centre at the start, once per fight; grabbing it gives 5s of invulnerability (crushing ignores it).
 3. **Stats / chat page**, then a new round. Every round starts from scratch; nothing carries over.
 
 ### Inspirations
@@ -54,6 +54,7 @@ Online multiplayer, fast-paced, round-based game:
   - ramming (damage scales with impact)
   - grappling hook (attaches two ships, applies force as it retracts)
   - maybe knockback / recoil
+- **Damage:** parts break after `HITS_TO_BREAK` hits (currently 1: the first hit breaks them; 2 would give one warning crack). A laser shot or an impact above a speed threshold is one hit; an open ram takes none and deals two.
 - Players pilot in real time. Not an autobattler.
 
 ## Bots
