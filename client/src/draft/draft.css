@@ -1,0 +1,219 @@
+.draft {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 272px;
+  gap: 20px;
+  height: 100vh;
+  padding: 20px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.draft-side {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+}
+
+.draft-side h3 {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.draft-side section {
+  min-height: 0;
+}
+
+.draft-pool-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  max-height: 60%;
+}
+
+.draft-offers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.piece-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 128px;
+  padding: 0;
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.015) 0 6px, transparent 6px 12px),
+    var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: grab;
+  touch-action: none;
+  transition:
+    border-color 0.12s,
+    transform 0.12s,
+    background-color 0.12s;
+  animation: piece-in 0.22s ease-out;
+}
+
+.piece-card:hover:not(:disabled) {
+  border-color: var(--rust);
+  transform: translateY(-1px);
+}
+
+.piece-card.active {
+  border-color: var(--hazard);
+  opacity: 0.35;
+}
+
+.piece-card.small {
+  width: 78px;
+  height: 78px;
+}
+
+.piece-card canvas {
+  display: block;
+  pointer-events: none;
+}
+
+@keyframes piece-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.draft-hand {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.piece-card.held {
+  height: 150px;
+  cursor: default;
+  border-color: var(--hazard);
+  box-shadow: inset 0 0 0 1px rgba(224, 178, 58, 0.25);
+  animation: none;
+}
+
+.piece-card.held:hover {
+  transform: none;
+}
+
+.draft-discard {
+  height: 44px;
+  border-style: dashed;
+  color: var(--text-dim);
+}
+
+.draft-pool {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  flex: 1 1 auto;
+  min-height: 98px;
+}
+
+.draft-rivals {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 12px;
+}
+
+.rival {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.rival canvas {
+  display: block;
+}
+
+.rival figcaption {
+  font-family: var(--mono);
+  font-size: 11px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  min-height: 0;
+}
+
+.draft-timer {
+  font-family: var(--mono);
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  margin-bottom: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.draft-timer.urgent {
+  color: var(--hazard);
+  animation: urgent 1s steps(2, start) infinite;
+}
+
+@keyframes urgent {
+  50% {
+    color: var(--danger);
+  }
+}
+
+.draft-board {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.draft-board canvas {
+  display: block;
+  filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.55));
+}
+
+.draft-board canvas.holding {
+  cursor: none;
+}
+
+.draft-floating {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.92;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.6));
+}
+
+.draft-floating canvas {
+  display: block;
+}

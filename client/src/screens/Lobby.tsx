@@ -1,0 +1,88 @@
+import { useState } from "react";
+import { BUILD_SECONDS_OPTIONS, HULL_IDS, MAX_PLAYERS, type ChatMessage, type RoomView } from "@ja/shared";
+import { HULLS } from "@ja/shared/draft";
+import { net } from "../net";
+import { Chat } from "./Chat";
+import { PlayerList } from "./PlayerList";
+import { Segmented, formatSeconds } from "./ui";
+
+export function Lobby({ room, me, chat }: { room: RoomView; me: string | null; chat: ChatMessage[] }) {
+  const isHost = room.hostId === me;
+  const [copied, setCopied] = useState(false);
+  const { settings } = room;
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard blocked; the code is visible anyway.
+    }
+  };
+
+  return (
+    <div className="two-col">
+      <div className="col-main">
+        <div className="room-code-row">
+          <h1 className="room-code mono">{room.id}</h1>
+          <button onClick={copyLink}>{copied ? "Copied" : "Copy link"}</button>
+        </div>
+
+        <section className="panel section">
+          <h3>Crew</h3>
+          <PlayerList players={room.players} hostId={room.hostId} me={me} canKick={isHost} />
+          {isHost && room.players.length < MAX_PLAYERS && <button onClick={() => net.send({ t: "addBot" })}>Add bot</button>}
+        </section>
+
+        <section className="panel section">
+          <h3>Build time</h3>
+          <Segmented
+            options={BUILD_SECONDS_OPTIONS.map((s) => ({ value: s, label: formatSeconds(s) }))}
+            value={settings.buildSeconds}
+            disabled={!isHost}
+            onChange={(buildSeconds) => net.send({ t: "settings", settings: { ...settings, buildSeconds } })}
+          />
+          <h3>Hull</h3>
+          <div className="hull-picker">
+            {HULL_IDS.map((h) => (
+              <button
+                key={h}
+                className={h === settings.hull ? "on" : ""}
+                disabled={!isHost && h !== settings.hull}
+                onClick={() => net.send({ t: "settings", settings: { ...settings, hull: h } })}
+              >
+                <HullOutline rows={HULLS[h].rows} />
+                {HULLS[h].name}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {isHost && (
+          <button className="primary big" disabled={room.players.length < 2} onClick={() => net.send({ t: "start" })}>
+            Launch
+          </button>
+        )}
+      </div>
+      <Chat messages={chat} players={room.players} />
+    </div>
+  );
+}
+
+function HullOutline({ rows }: { rows: string[] }) {
+  const cell = 7;
+  return (
+    <svg width={11 * cell} height={11 * cell} viewBox={`0 0 ${11 * cell} ${11 * cell}`} aria-hidden>
+      <g transform={`translate(${((11 - rows[0]!.length) * cell) / 2} ${((11 - rows.length) * cell) / 2})`}>
+        {rows.flatMap((row, y) =>
+          [...row].map((ch, x) =>
+            ch === "." ? null : (
+              <rect key={`${x},${y}`} x={x * cell} y={y * cell} width={cell - 1} height={cell - 1} fill={ch === "C" ? "var(--rust)" : "currentColor"} />
+            ),
+          ),
+        )}
+      </g>
+    </svg>
+  );
+}

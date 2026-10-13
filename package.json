@@ -8,11 +8,11 @@
     "client"
   ],
   "scripts": {
-    "dev": "npm run dev -w client",
-    "dev:server": "npm run dev -w server",
+    "dev": "npm run dev -w server & npm run dev -w client",
     "build": "npm run build -w client",
     "typecheck": "tsc -p shared && tsc -p server && tsc -p client",
-    "test": "vitest run"
+    "test": "vitest run",
+    "start": "npm run build && tsx server/src/index.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

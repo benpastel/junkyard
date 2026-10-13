@@ -5,7 +5,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./draft": "./src/draft/index.ts",
-    "./sim": "./src/sim/index.ts"
+    "./sim": "./src/sim/index.ts",
+    "./sim/view": "./src/sim/view.ts",
+    "./sim/testShips": "./src/sim/testShips.ts"
   },
   "dependencies": {
     "@dimforge/rapier2d-deterministic-compat": "^0.21.0"

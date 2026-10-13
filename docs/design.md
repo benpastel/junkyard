@@ -25,12 +25,18 @@ Online multiplayer, fast-paced, round-based game:
 
 ## Pieces and cells
 
-- A piece is a pentomino of 5 **cells**. Most cells are plain hull; a piece may carry one (or more) special cells: engine, laser, grappling hook, shield, ram, etc.
+- A piece is a pentomino of 5 **cells**. Most cells are plain hull; a piece may carry one (or more) special cells: engine, laser, grappling hook, ram, mirror, armor.
+- **Edge pieces** protect one edge (their `dir`):
+  - **Mirror**: neon edge that reflects lasers striking it (beams can bounce back at the shooter).
+  - **Armor**: silver plate that deflects collisions on that edge with no damage and a strong bounce.
 - Special cells have a facing that rotates with the piece.
 - **Damage is per cell**: single cells get destroyed / fall off. A piece is only a placement unit; after placement the ship is just a grid of cells.
 - One **core / cockpit** cell per ship. If destroying cells disconnects part of the ship from the core, that part breaks off as debris. Ship dies when the core dies.
 
 ## Art
+
+- **Material families:** physical parts (ram, grapple, armor) share bare silver metal; energy parts (laser, mirror) share neon yellow. Engines are hot orange; the core and small trim use the player colour.
+- Each cell looks independent for now; long-term each placed piece should look like one cohesive salvaged chunk.
 
 - Theme: junkyard / scrapyard salvage. Crisp pentomino shapes that snap satisfyingly to the grid, with grimy mismatched salvage art.
 - Prototype with flat programmer art. The renderer draws per-cell sprites keyed by cell type, so real art can drop in later without architecture changes.
@@ -40,7 +46,7 @@ Online multiplayer, fast-paced, round-based game:
 - **Movement:** arrow keys. Each direction fires all engines facing the matching way (up fires back-facing engines), in the ship's frame.
 - **Physics:** thrust is applied at each engine's actual position, so a lopsided engine layout spins the ship. Ships are only sensible to pilot with weight-symmetric engines, and get weirder as cells fly off. That's intended.
 - **Rotation** will be hard with this scheme; dedicated rotation pieces (gyros) are a likely addition.
-- **Weapons:** fixed-direction, one key per weapon type (e.g. L fires all lasers).
+- **Weapons:** fixed-direction, one key per weapon type. Currently Z = lasers, X = grapple (toggle).
   - lasers (ranged, raycasts)
   - ramming (damage scales with impact)
   - grappling hook (attaches two ships, applies force as it retracts)

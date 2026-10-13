@@ -1,0 +1,100 @@
+import { beforeAll, describe, expect, it } from "vitest";
+import { NO_INPUT, type InputState, type ShipBlueprint } from "../types.js";
+import { Arena, arenaBotInput, initPhysics, TICK_HZ } from "./index.js";
+import { SANDBOX_SHIPS, parseShip } from "./testShips.js";
+
+beforeAll(async () => {
+  await initPhysics();
+});
+
+function bp(id: string, rows: string[]): ShipBlueprint {
+  return { playerId: id, name: id, color: "#fff", cells: parseShip(rows) };
+}
+
+function run(arena: Arena, ticks: number, inputs: Record<string, InputState> = {}) {
+  for (let i = 0; i < ticks; i++) arena.step(inputs);
+}
+
+describe("arena", () => {
+  it("thrust moves a symmetric ship without spinning it", () => {
+    const a = new Arena({ ships: [bp("a", ["#C#", "^#^"]), bp("b", ["C"])], seed: 1 });
+    const rb = a.ship("a")!.body.rb!;
+    const start = rb.translation();
+    run(a, 60, { a: { ...NO_INPUT, up: true } });
+    const end = rb.translation();
+    expect(Math.hypot(end.x - start.x, end.y - start.y)).toBeGreaterThan(0.5);
+    expect(Math.abs(rb.angvel())).toBeLessThan(0.01);
+    a.dispose();
+  });
+
+  it("a lopsided engine layout spins the ship", () => {
+    const a = new Arena({ ships: [bp("a", ["#C#", "^##"]), bp("b", ["C"])], seed: 1 });
+    run(a, 60, { a: { ...NO_INPUT, up: true } });
+    expect(Math.abs(a.ship("a")!.body.rb!.angvel())).toBeGreaterThan(0.1);
+    a.dispose();
+  });
+
+  it("lasers destroy cells and kill the target", () => {
+    // Two ships spawn facing each other across the origin, out of laser range. Close in, then fire.
+    const a = new Arena({ ships: [bp("a", ["i", "C", "^"]), bp("b", ["#", "C"])], seed: 1 });
+    run(a, 40, { a: { ...NO_INPUT, up: true } });
+    run(a, TICK_HZ * 8, { a: { ...NO_INPUT, laser: true } });
+    const b = a.ship("b")!;
+    expect(b.cellsLost).toBeGreaterThan(0);
+    expect(a.ship("a")!.cellsDestroyed).toBeGreaterThan(0);
+    expect(b.alive).toBe(false);
+    expect(a.ship("a")!.kills).toBe(1);
+    expect(a.over).toBe(true);
+    expect(a.results()[0]!.playerId).toBe("a");
+    a.dispose();
+  });
+
+  it("destroying a bridge cell splits off debris", () => {
+    // b faces a. The beam hits the hull cell above b's core, which is the only link to the armor.
+    const a = new Arena({ ships: [bp("a", ["i", "C", "^"]), bp("b", ["A#", ".C"])], seed: 1 });
+    run(a, 40, { a: { ...NO_INPUT, up: true } });
+    let split = false;
+    for (let i = 0; i < TICK_HZ * 10 && !split; i++) {
+      a.step({ a: { ...NO_INPUT, laser: true } });
+      split = a.bodies.some((b) => b.kind === "debris");
+    }
+    expect(split).toBe(true);
+    expect(a.ship("b")!.alive).toBe(true);
+    expect(a.ship("b")!.body.cells.filter((c) => c.alive).map((c) => c.type)).toEqual(["core"]);
+    a.dispose();
+  });
+
+  it("is deterministic", () => {
+    const mk = () =>
+      new Arena({ ships: SANDBOX_SHIPS.map((s, i) => bp(`p${i}`, s.rows)), seed: 42 });
+    const x = mk();
+    const y = mk();
+    for (let t = 0; t < 600; t++) {
+      const ix: Record<string, InputState> = {};
+      const iy: Record<string, InputState> = {};
+      for (const s of x.ships) ix[s.playerId] = arenaBotInput(x, s.playerId);
+      for (const s of y.ships) iy[s.playerId] = arenaBotInput(y, s.playerId);
+      x.step(ix);
+      y.step(iy);
+    }
+    expect(JSON.stringify(x.snapshot())).toBe(JSON.stringify(y.snapshot()));
+    x.dispose();
+    y.dispose();
+  });
+
+  it("a bot-only fight ends", () => {
+    const a = new Arena({ ships: SANDBOX_SHIPS.map((s, i) => bp(`p${i}`, s.rows)), seed: 7 });
+    let ticks = 0;
+    while (!a.over) {
+      const inputs: Record<string, InputState> = {};
+      for (const s of a.ships) inputs[s.playerId] = arenaBotInput(a, s.playerId);
+      a.step(inputs);
+      ticks++;
+    }
+    const res = a.results();
+    expect(res).toHaveLength(4);
+    expect(res.map((r) => r.place)).toEqual([1, 2, 3, 4]);
+    expect(ticks).toBeLessThan(TICK_HZ * 151);
+    a.dispose();
+  });
+});

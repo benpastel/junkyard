@@ -6,6 +6,8 @@ export type PlayerId = string;
  *   0 = up (forward), 1 = right, 2 = down (backward), 3 = left
  * For an engine, `dir` is the direction it PUSHES the ship (the nozzle points the other way).
  * For a laser / grapple / ram, `dir` is the direction it fires or points.
+ * For a mirror / armor, `dir` is the protected edge: mirrors reflect lasers that hit
+ * that edge, armor deflects collisions on that edge.
  */
 export type Dir = 0 | 1 | 2 | 3;
 
@@ -16,7 +18,7 @@ export const DIR_VECTORS: Record<Dir, { x: number; y: number }> = {
   3: { x: -1, y: 0 },
 };
 
-export const CELL_TYPES = ["core", "hull", "engine", "laser", "grapple", "ram", "shield"] as const;
+export const CELL_TYPES = ["core", "hull", "engine", "laser", "grapple", "ram", "mirror", "armor"] as const;
 export type CellType = (typeof CELL_TYPES)[number];
 
 /** One grid cell of a ship, in integer grid coordinates. */

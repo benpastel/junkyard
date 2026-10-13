@@ -15,11 +15,18 @@ const PLATE: Record<CellType, string> = {
   core: "#3b3530",
   hull: "#4a4c4f",
   engine: "#3e4146",
-  laser: "#423a3a",
-  grapple: "#3d4239",
-  ram: "#504538",
-  shield: "#37424c",
+  laser: "#3a3a33",
+  grapple: "#45474b",
+  ram: "#45474b",
+  mirror: "#3a3a33",
+  armor: "#45474b",
 };
+
+// Material families: physical parts (ram, grapple, armor) share bare silver metal;
+// energy parts (laser, mirror) share neon yellow.
+export const METAL = "#c9ced4";
+export const METAL_DARK = "#7d838b";
+export const NEON = "#f2ea3c";
 
 /**
  * Draws one cell filling the square (0,0)-(size,size) of `ctx`'s current transform.
@@ -110,29 +117,59 @@ function drawFeature(ctx: CanvasRenderingContext2D, type: CellType, s: number, c
       ctx.fillStyle = "#1e1f22";
       ctx.fillRect(s * 0.4, 0, s * 0.2, s * 0.6);
       ctx.fillStyle = color;
-      ctx.fillRect(s * 0.28, s * 0.52, s * 0.44, s * 0.3);
-      ctx.fillStyle = "#ff5a4a";
-      ctx.fillRect(s * 0.44, s * 0.02, s * 0.12, s * 0.1);
+      ctx.fillRect(s * 0.28, s * 0.6, s * 0.44, s * 0.22);
+      neon(ctx, s, () => {
+        ctx.fillRect(s * 0.3, s * 0.5, s * 0.4, s * 0.07);
+        ctx.fillRect(s * 0.42, s * 0.02, s * 0.16, s * 0.12);
+      });
+      break;
+    }
+    case "mirror": {
+      // Reflective edge along the top.
+      ctx.fillStyle = color;
+      ctx.fillRect(s * 0.38, s * 0.55, s * 0.24, s * 0.24);
+      ctx.fillStyle = "#1e1f22";
+      ctx.fillRect(s * 0.08, s * 0.16, s * 0.84, s * 0.1);
+      neon(ctx, s, () => ctx.fillRect(0, 0, s, s * 0.16));
+      break;
+    }
+    case "armor": {
+      // Thick plate along the top.
+      metalRect(ctx, 0, 0, s, s * 0.26);
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      for (const px of [0.2, 0.5, 0.8]) {
+        ctx.beginPath();
+        ctx.arc(px * s, s * 0.13, s * 0.04, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = color;
+      ctx.fillRect(s * 0.38, s * 0.55, s * 0.24, s * 0.24);
       break;
     }
     case "grapple": {
-      ctx.strokeStyle = "#1e1f22";
+      ctx.strokeStyle = METAL_DARK;
       ctx.lineWidth = s * 0.1;
       ctx.beginPath();
       ctx.moveTo(s / 2, s * 0.85);
       ctx.lineTo(s / 2, s * 0.2);
       ctx.stroke();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = s * 0.08;
+      ctx.strokeStyle = METAL;
+      ctx.lineWidth = s * 0.09;
       ctx.beginPath();
       ctx.moveTo(s * 0.25, s * 0.38);
-      ctx.lineTo(s / 2, s * 0.12);
+      ctx.lineTo(s / 2, s * 0.1);
       ctx.lineTo(s * 0.75, s * 0.38);
       ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.fillRect(s * 0.36, s * 0.7, s * 0.28, s * 0.14);
       break;
     }
     case "ram": {
-      ctx.fillStyle = "#8d8c86";
+      const g = ctx.createLinearGradient(s * 0.1, 0, s * 0.9, 0);
+      g.addColorStop(0, METAL_DARK);
+      g.addColorStop(0.45, METAL);
+      g.addColorStop(1, METAL_DARK);
+      ctx.fillStyle = g;
       ctx.beginPath();
       ctx.moveTo(s * 0.1, s * 0.75);
       ctx.lineTo(s / 2, -s * 0.05);
@@ -143,17 +180,28 @@ function drawFeature(ctx: CanvasRenderingContext2D, type: CellType, s: number, c
       ctx.fillRect(s * 0.1, s * 0.75, s * 0.8, s * 0.12);
       break;
     }
-    case "shield": {
-      ctx.strokeStyle = "#6ec3e8";
-      ctx.lineWidth = s * 0.07;
-      ctx.beginPath();
-      ctx.arc(s / 2, s * 0.62, s * 0.36, Math.PI * 1.15, Math.PI * 1.85);
-      ctx.stroke();
-      ctx.fillStyle = color;
-      ctx.fillRect(s * 0.38, s * 0.55, s * 0.24, s * 0.24);
-      break;
-    }
   }
+}
+
+function neon(ctx: CanvasRenderingContext2D, s: number, paint: () => void) {
+  ctx.save();
+  ctx.fillStyle = NEON;
+  ctx.shadowColor = NEON;
+  ctx.shadowBlur = Math.max(2, s * 0.35);
+  paint();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "rgba(255,255,210,0.28)";
+  paint();
+  ctx.restore();
+}
+
+function metalRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const g = ctx.createLinearGradient(x, y, x, y + h);
+  g.addColorStop(0, "#eef1f4");
+  g.addColorStop(0.4, METAL);
+  g.addColorStop(1, METAL_DARK);
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
 }
 
 function drawDamage(ctx: CanvasRenderingContext2D, s: number, damage: number, v: number) {
