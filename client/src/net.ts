@@ -59,8 +59,7 @@ class Net {
     const session = readSession();
     const playerId = session && roomId && session.roomId === roomId ? session.playerId : undefined;
 
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${proto}//${location.host}/ws`);
+    const ws = new WebSocket(wsUrl());
     this.ws = ws;
     this.set({ status: "connecting", error: null });
 
@@ -154,6 +153,14 @@ export const net = new Net();
 /** Re-renders the calling component whenever net state changes. */
 export function useNet(): NetState {
   return useSyncExternalStore(net.subscribe, () => net.state);
+}
+
+/** Same origin unless built with VITE_WS_URL, which the GitHub Pages deploy sets to the Render origin. */
+function wsUrl(): string {
+  const configured = import.meta.env.VITE_WS_URL as string | undefined;
+  if (configured) return configured;
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${location.host}/ws`;
 }
 
 function readSession(): Session | null {

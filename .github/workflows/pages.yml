@@ -1,0 +1,68 @@
+# Publishes the static client to GitHub Pages, which serves it at
+# https://benpastel.com/junkyard/ (project sites inherit the custom domain from the
+# benpastel.github.io user site, and take their path from the repo name).
+#
+# The game server runs on Render and this client opens a websocket to it; VITE_WS_URL
+# below is the one thing the two halves must agree on. Render deploys itself from the
+# same push, so `git push origin main` updates both.
+
+name: Deploy client to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # The Render service's wss:// origin with the /ws path. If the service is renamed
+      # or recreated, its hostname changes and this must change with it.
+      VITE_WS_URL: wss://junkyard.onrender.com/ws
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the server is reachable at that URL
+        run: |
+          health="$(echo "$VITE_WS_URL" | sed -e 's|^wss://|https://|' -e 's|/ws$|/healthz|')"
+          echo "Building against $VITE_WS_URL"
+          if ! curl -fsS --max-time 60 "$health"; then
+            echo "::error file=.github/workflows/pages.yml::$health did not respond. Check the Render service is up before publishing a client that points at it."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: client/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

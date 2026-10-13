@@ -7,7 +7,8 @@ import type { ClientMsg } from "@ja/shared";
 import { initPhysics } from "@ja/shared/sim";
 import { Room } from "./room.js";
 
-const PORT = Number(process.env.SERVER_PORT ?? 4711);
+// Render sets PORT; SERVER_PORT is the local dev setting shared with the Vite proxy.
+const PORT = Number(process.env.PORT ?? process.env.SERVER_PORT ?? 4711);
 /** Built client, served in production. In development Vite serves it and proxies /ws here. */
 const STATIC_DIR = fileURLToPath(new URL("../../client/dist", import.meta.url));
 const ROOM_CODE_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -28,6 +29,13 @@ await initPhysics();
 const rooms = new Map<string, Room>();
 
 const http = createServer(async (req, res) => {
+  // Render's health check. Listening only starts once Rapier is initialised, so answering at all
+  // means fights can run; anything else would fall through to index.html and always look healthy.
+  if (req.url === "/healthz") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true, rooms: rooms.size }));
+    return;
+  }
   const path = normalize(decodeURIComponent((req.url ?? "/").split("?")[0]!)).replace(/^(\.\.[/\\])+/, "");
   for (const candidate of [join(STATIC_DIR, path), join(STATIC_DIR, "index.html")]) {
     try {

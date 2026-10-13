@@ -6,6 +6,8 @@ const serverPort = Number(process.env.SERVER_PORT ?? 4711);
 
 export default defineConfig({
   plugins: [react()],
+  // Path-relative, so the bundle works under benpastel.com/junkyard/ with no path baked in.
+  base: "./",
   server: {
     port,
     strictPort: true,
