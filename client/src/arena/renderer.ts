@@ -536,7 +536,8 @@ export class ArenaRenderer {
     ctx.translate(p.x, p.y);
     ctx.rotate(b.a + (this.camRot ?? 0));
     const debris = !b.owner;
-    if (debris) ctx.globalAlpha = 0.85;
+    // Wreckage (dead ships, broken-off chunks) is dark and see-through so it never reads as a live, damaged ship.
+    if (debris) ctx.globalAlpha = 0.45;
     // Drop shadow so ships read against the backdrop.
     ctx.fillStyle = "rgba(0,0,0,0.45)";
     for (const cid of cells.cells) {
@@ -551,10 +552,10 @@ export class ArenaRenderer {
       ctx.translate((c.x - 0.5) * S, (c.y - 0.5) * S);
       const damage = (cells.dmg[i] ?? 0) / 9;
       drawCell(ctx, c.type, c.dir, S, {
-        color: debris ? "#5c564f" : c.color,
-        damage: debris ? Math.max(0.6, damage) : damage,
+        color: debris ? "#3a3836" : c.color,
+        damage: debris ? 0 : damage,
         variant: cid,
-        inactive: !debris && !isOpen(c),
+        inactive: debris || !isOpen(c),
       });
       ctx.restore();
     });

@@ -18,7 +18,8 @@ import {
   type ServerMsg,
 } from "@ja/shared";
 import { Draft, draftBotAction } from "@ja/shared/draft";
-import { Arena, SNAPSHOT_EVERY, TICK_HZ, arenaBotInput } from "@ja/shared/sim";
+import { Arena, FightRecorder, SIM, SNAPSHOT_EVERY, TICK_HZ, arenaBotInput, type ArenaSetup } from "@ja/shared/sim";
+import { saveRecording } from "./recordings.js";
 
 const CHAT_HISTORY = 100;
 const BOT_NAMES = ["Rustbucket", "Scrapjaw", "Tinpot", "Clunker", "Bolt", "Dentz", "Gearmouth", "Hubcap"];
@@ -53,6 +54,8 @@ export class Room {
   private draft: Draft | null = null;
   private arena: Arena | null = null;
   private arenaInputs: Record<PlayerId, InputState> = {};
+  private arenaSetup: ArenaSetup | null = null;
+  private recorder: FightRecorder | null = null;
   private lastResults: RoundResults | null = null;
 
   private loop: ReturnType<typeof setInterval> | null = null;
@@ -229,7 +232,9 @@ export class Room {
       .filter((p) => p.inRound)
       .map((p) => ({ playerId: p.id, name: p.name, color: p.color, cells: draft.blueprintCells(p.id) }));
     this.draft = null;
-    this.arena = new Arena({ ships, seed: this.rng.int(2 ** 31) });
+    this.arenaSetup = { ships, seed: this.rng.int(2 ** 31) };
+    this.recorder = new FightRecorder();
+    this.arena = new Arena(this.arenaSetup);
     this.arenaInputs = {};
     this.arenaTick = 0;
     this.tickAccumulator = 0;
@@ -241,7 +246,15 @@ export class Room {
   private finishArena() {
     const arena = this.arena!;
     const rows = arena.results();
+    const seconds = arena.tickCount / TICK_HZ;
     arena.dispose();
+    if (this.recorder && this.arenaSetup) {
+      const rec = this.recorder.finish(this.id, this.round, this.arenaSetup, { ...SIM }, rows);
+      const name = (id: string) => this.players.get(id)?.name ?? id;
+      const summary = rows.map((r) => `${r.place}. ${name(r.playerId)}`).join(", ");
+      void saveRecording(rec).then((file) => console.log(`[${this.id}] round ${this.round} over after ${seconds.toFixed(0)}s: ${summary} -> ${file}`));
+    }
+    this.recorder = null;
     this.arena = null;
     const winner = rows.find((r) => r.place === 1);
     const winnerId = winner && rows.filter((r) => r.place === 1).length === 1 ? winner.playerId : null;
@@ -317,6 +330,7 @@ export class Room {
       if (!p.inRound) continue;
       inputs[p.id] = p.isBot ? arenaBotInput(arena, p.id) : (this.arenaInputs[p.id] ?? NO_INPUT);
     }
+    this.recorder?.record(inputs);
     arena.step(inputs);
     this.arenaTick++;
     if (this.arenaTick % SNAPSHOT_EVERY === 0) this.broadcast({ t: "arenaSnap", snap: arena.snapshot() });

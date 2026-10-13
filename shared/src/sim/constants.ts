@@ -81,6 +81,8 @@ export const SIM = {
   solverIterations: 8,
   /** After crushing-level pressure, a body ignores impact damage for this long (see SimBody.jammedUntil). */
   jamSeconds: 0.5,
+  /** Cells further than this beyond the ring's outer face are crushed. */
+  outsideMargin: 1,
 
   /** Power-up orb at the arena centre from the start, once per fight: grab it for a few seconds of invulnerability. */
   /** Picked up when any cell centre comes this close to the orb. */
@@ -89,5 +91,6 @@ export const SIM = {
 
   debrisLifetimeSeconds: 15,
   debrisScatterImpulse: 0.6,
-  maxSeconds: 150,
+  /** Safety net only: the ring closes to nothing well before this, crushing whatever is left. */
+  maxSeconds: 300,
 };

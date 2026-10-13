@@ -29,7 +29,8 @@ Online multiplayer, fast-paced, round-based game:
 - **Edge pieces** protect one edge (their `dir`):
   - **Mirror**: neon edge that reflects lasers striking it (beams can bounce back at the shooter).
   - **Armor**: silver plate that deflects collisions on that edge with no damage and a strong bounce.
-  - A shield piece shields the same edge on **all five** of its cells (a single shielded square was too weak).
+  - A shield piece shields the whole face it shows in its direction: every cell with nothing of the piece beyond it that way (a T facing up shields its top bar).
+- Every piece carries exactly one kind of part; there are no plain-hull pieces.
 - Special cells have a facing that rotates with the piece.
 - **Damage is per cell**: single cells get destroyed / fall off. A piece is only a placement unit; after placement the ship is just a grid of cells.
 - **Covered parts do nothing.** A directional part (engine exhaust, laser, grapple, ram, mirror/armor edge) works only while the straight line from it in that direction has none of its own ship's cells. Shooting away the cover switches it on. Covered parts are drawn dimmed.
@@ -94,6 +95,12 @@ Expect ~50–100ms of input lag. Hide it with game feel:
 - Sim code has **no rendering, networking, or wall-clock dependencies** and lives in `shared/`.
 - No unseeded randomness in the sim. Pass a seeded RNG through state.
 - No full rollback or client prediction yet.
+
+## Debugging fights
+
+- The server records every fight to `replays/` (setup + input changes; the sim is deterministic).
+- `npx tsx scripts/replay.ts [file | room code] [--quiet]` re-runs one and prints every broken cell with its cause, deaths, and whether the result matches.
+- `npx tsx scripts/simulate.ts [rounds] [players] [hull|random] [idle=0|1|mixed]` plays headless bot rounds for tuning.
 
 ## Milestones
 

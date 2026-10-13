@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { NO_INPUT, type InputState, type ShipBlueprint } from "../types.js";
-import { Arena, arenaBotInput, initPhysics, SIM, TICK_HZ } from "./index.js";
+import { Arena, arenaBotInput, FightRecorder, initPhysics, replayFight, SIM, TICK_HZ } from "./index.js";
 import { SANDBOX_SHIPS, parseShip } from "./testShips.js";
 
 beforeAll(async () => {
@@ -168,6 +168,25 @@ describe("arena", () => {
     const { first } = squeeze(["AAA", "#C#", "###"], ["###", "#C#", "###"]);
     expect(first.b).toBeDefined();
     expect(first.a === undefined || first.a > first.b!).toBe(true);
+  });
+
+  it("a recorded fight replays to the same result", () => {
+    const setup = { ships: SANDBOX_SHIPS.map((s, i) => bp(`p${i}`, s.rows)), seed: 7 };
+    const a = new Arena(setup);
+    const rec = new FightRecorder();
+    while (!a.over) {
+      const inputs: Record<string, InputState> = {};
+      for (const s of a.ships) inputs[s.playerId] = arenaBotInput(a, s.playerId);
+      rec.record(inputs);
+      a.step(inputs);
+    }
+    const recording = rec.finish("TEST", 1, setup, { ...SIM }, a.results());
+    a.dispose();
+    const lines: string[] = [];
+    const b = replayFight(JSON.parse(JSON.stringify(recording)), (l) => lines.push(l));
+    expect(b.results()).toEqual(recording.results);
+    expect(lines.some((l) => l.includes("DIED"))).toBe(true);
+    b.dispose();
   });
 
   it("is deterministic", () => {

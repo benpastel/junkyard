@@ -115,6 +115,8 @@ export class Arena {
   private hooks: Hook[] = [];
   /** Tick at which the power-up orb next appears, or null while it is sitting at the centre. */
   private powerupTaken = false;
+  /** Optional debug log of everything that breaks and why. Unset in normal play (zero cost). */
+  onLog: ((line: string) => void) | null = null;
   private readonly bounceCooldown = new Map<SimBody, number>();
   /** Kinematic segments forming the rubber ring, and their collider handles. */
   private readonly walls: { rb: RigidBody; angle: number }[] = [];
@@ -258,6 +260,7 @@ export class Arena {
     this.eventQueue.drainContactForceEvents((e) => this.onPressure(e.collider1(), e.collider2(), e.totalForceMagnitude(), touched));
 
     this.updatePowerup();
+    if (this.tickCount % 10 === 0) this.crushOutside(touched);
 
     for (const b of touched) this.splitBody(b);
     this.despawnDebris();
@@ -435,7 +438,11 @@ export class Arena {
     return this.shipByPlayer.get(b.owner);
   }
 
-  private damageCell(c: SimCell, amount: number, attacker: PlayerId | null, touched: Set<SimBody>) {
+  private log(msg: string) {
+    this.onLog?.(`[${(this.tickCount / TICK_HZ).toFixed(2)}s t${this.tickCount}] ${msg}`);
+  }
+
+  private damageCell(c: SimCell, amount: number, attacker: PlayerId | null, touched: Set<SimBody>, cause: string) {
     if (!c.alive || amount <= 0) return;
     const body = c.body;
     const ship = this.shipOf(body);
@@ -447,6 +454,10 @@ export class Arena {
 
     const pos = this.cellWorld(c);
     if (pos) this.events.push({ e: "boom", cid: c.cid, x: r3(pos.x), y: r3(pos.y), type: c.type });
+    if (this.onLog) {
+      const who = ship ? ship.playerId : `debris#${body?.id}`;
+      this.log(`${who} lost ${c.type} (${c.x},${c.y}) to ${cause}${attacker ? ` from ${attacker}` : ""}`);
+    }
     if (ship) {
       ship.cellsLost++;
       if (attacker && attacker !== ship.playerId) {
@@ -474,6 +485,7 @@ export class Arena {
         if (k) k.kills++;
       }
       this.events.push({ e: "died", playerId: ship.playerId, killerId: killer });
+      this.log(`${ship.playerId} DIED (core gone; credited to ${killer ?? "nobody"}); ${alive.length} cells become wreckage`);
       for (const group of components(alive)) this.spawnDebris(b, group);
       this.removeBody(b);
       return;
@@ -601,7 +613,7 @@ export class Arena {
       }
 
       target.body.rb.applyImpulseAtPoint({ x: d.x * SIM.laserKnockback, y: d.y * SIM.laserKnockback }, end, true);
-      this.damageCell(target, SIM.laserDamage, ship.playerId, touched);
+      this.damageCell(target, SIM.laserDamage, ship.playerId, touched, "laser");
       return;
     }
   }
@@ -710,8 +722,8 @@ export class Arena {
     this.events.push({ e: "spark", x: r3(mid.x), y: r3(mid.y), power: Math.round(Math.min(9, base)) });
     const owner1 = b1.kind === "ship" ? b1.owner : null;
     const owner2 = b2.kind === "ship" ? b2.owner : null;
-    this.damageCell(c1, to1, owner2, touched);
-    this.damageCell(c2, to2, owner1, touched);
+    this.damageCell(c1, to1, owner2, touched, `impact at ${speed.toFixed(1)}/s`);
+    this.damageCell(c2, to2, owner1, touched, `impact at ${speed.toFixed(1)}/s`);
   }
 
   private updateRing() {
@@ -798,7 +810,7 @@ export class Arena {
       if (ticks < needed * SIM.crushWallFactor) return;
       const c = (c1 ?? c2)!;
       this.pressure.delete(key);
-      this.crush(c, touched);
+      this.crush(c, touched, "crushed against the ring");
       return;
     }
     if (c1.body === c2.body) return;
@@ -807,8 +819,22 @@ export class Arena {
     if (proof1 && proof2 && ticks < needed * SIM.crushProofFactor) return;
     this.pressure.delete(key);
     const both = proof1 === proof2;
-    if (both || !proof1) this.crush(c1, touched);
-    if (both || !proof2) this.crush(c2, touched);
+    if (both || !proof1) this.crush(c1, touched, `crushed against ${c2.body?.owner ?? "debris"}`);
+    if (both || !proof2) this.crush(c2, touched, `crushed against ${c1.body?.owner ?? "debris"}`);
+  }
+
+  /**
+   * Anything that has squeezed out past the ring is crushed, so nothing can wait out the
+   * squeeze outside it and every fight ends with one ship or none.
+   */
+  private crushOutside(touched: Set<SimBody>) {
+    const limit = this.ringRadius + SIM.ringThickness + SIM.outsideMargin;
+    for (const b of [...this.bodies]) {
+      for (const c of [...b.cells]) {
+        const p = c.alive ? this.cellWorld(c) : null;
+        if (p && p.x * p.x + p.y * p.y > limit * limit) this.crush(c, touched, "outside the ring");
+      }
+    }
   }
 
   /** An open armor edge or ram pointing at the other cell holds out against crushing. */
@@ -823,7 +849,7 @@ export class Arena {
     return (dx * edge.x + dy * edge.y) / (Math.hypot(dx, dy) || 1) > SIM.edgeFacingDot;
   }
 
-  private crush(c: SimCell, touched: Set<SimBody>) {
+  private crush(c: SimCell, touched: Set<SimBody>, cause: string) {
     if (!c.alive) return;
     const pos = this.cellWorld(c);
     if (pos) this.events.push({ e: "spark", x: r3(pos.x), y: r3(pos.y), power: 5 });
@@ -831,7 +857,7 @@ export class Arena {
     const ship = this.shipOf(c.body);
     const inv = ship?.invulnerableUntil ?? 0;
     if (ship) ship.invulnerableUntil = 0;
-    this.damageCell(c, c.hp, null, touched);
+    this.damageCell(c, c.hp, null, touched, cause);
     if (ship) ship.invulnerableUntil = inv;
   }
 
@@ -848,6 +874,7 @@ export class Arena {
       ship.invulnerableUntil = this.tickCount + Math.round(SIM.invulnerableSeconds * TICK_HZ);
       this.powerupTaken = true;
       this.events.push({ e: "pickup", playerId: ship.playerId });
+      this.log(`${ship.playerId} took the power-up`);
       return;
     }
   }

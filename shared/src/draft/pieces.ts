@@ -52,24 +52,24 @@ export function placedCells(piece: Piece, x: number, y: number, rot: Dir, flip: 
   return transformCells(piece.cells, rot, flip).map((c) => ({ ...c, x: c.x + x, y: c.y + y }));
 }
 
-const SPECIAL_WEIGHTS: [CellType | null, number][] = [
+/** Every piece carries exactly one kind of part. */
+const SPECIAL_WEIGHTS: [CellType, number][] = [
   ["engine", 32],
   ["laser", 24],
   ["mirror", 7],
   ["armor", 7],
   ["ram", 10],
   ["grapple", 8],
-  [null, 12],
 ];
 
-function pickSpecial(rng: Rng): CellType | null {
+function pickSpecial(rng: Rng): CellType {
   const total = SPECIAL_WEIGHTS.reduce((s, [, w]) => s + w, 0);
   let r = rng.next() * total;
   for (const [type, w] of SPECIAL_WEIGHTS) {
     r -= w;
     if (r < 0) return type;
   }
-  return null;
+  return SPECIAL_WEIGHTS[0]![0];
 }
 
 const DIRS: Dir[] = [0, 1, 2, 3];
@@ -80,14 +80,15 @@ export function generatePiece(rng: Rng, id: string): Piece {
   const cells: Cell[] = coords.map(([x, y]) => ({ x, y, type: "hull", dir: 0 }));
   const special = pickSpecial(rng);
   if (special === "mirror" || special === "armor") {
-    // Shield pieces protect the same edge on every cell, so a whole side of the piece is covered.
+    // Shield pieces protect the whole face the piece shows in one direction: every cell
+    // with nothing of the piece beyond it that way (a T facing up shields its top bar).
     const dir = rng.pick(DIRS);
-    return { id, shape, cells: cells.map((c) => ({ ...c, type: special, dir })) };
+    const v = DIR_VECTORS[dir];
+    const beyond = (c: Cell) => cells.some((o) => o !== c && (v.x !== 0 ? o.y === c.y && (o.x - c.x) * v.x > 0 : o.x === c.x && (o.y - c.y) * v.y > 0));
+    return { id, shape, cells: cells.map((c) => (beyond(c) ? c : { ...c, type: special, dir })) };
   }
-  if (special) {
-    const [index, dir] = pickSpecialSlot(cells, special, rng);
-    cells[index] = { ...cells[index]!, type: special, dir };
-  }
+  const [index, dir] = pickSpecialSlot(cells, special, rng);
+  cells[index] = { ...cells[index]!, type: special, dir };
   return { id, shape, cells };
 }
 

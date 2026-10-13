@@ -73,19 +73,23 @@ describe("hulls", () => {
 });
 
 describe("generatePiece", () => {
-  it("makes 5-cell pieces: one special part, or a whole shield piece facing one way", () => {
+  it("makes 5-cell pieces with exactly one kind of part; shields cover the face in their direction", () => {
     const rng = new Rng(7);
     let shields = 0;
     for (let i = 0; i < 300; i++) {
       const p = generatePiece(rng, `p${i}`);
       expect(p.cells).toHaveLength(5);
       const special = p.cells.filter((c) => c.type !== "hull");
+      expect(special.length).toBeGreaterThan(0);
       if (special.some((c) => c.type === "mirror" || c.type === "armor")) {
         shields++;
-        expect(special).toHaveLength(5);
         expect(new Set(special.map((c) => `${c.type}${c.dir}`)).size).toBe(1);
+        // Exactly the cells on the piece's face in that direction: one per row or column it spans.
+        const d = special[0]!.dir;
+        const lines = new Set(p.cells.map((c) => (d === 0 || d === 2 ? c.x : c.y)));
+        expect(special).toHaveLength(lines.size);
       } else {
-        expect(special.length).toBeLessThanOrEqual(1);
+        expect(special).toHaveLength(1);
       }
       for (const c of p.cells) expect(c.type).not.toBe("core");
     }
