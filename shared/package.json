@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./draft": "./src/draft/index.ts",
+    "./sim": "./src/sim/index.ts"
   },
   "dependencies": {
     "@dimforge/rapier2d-deterministic-compat": "^0.21.0"
