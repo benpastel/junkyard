@@ -63,8 +63,10 @@ export const SIM = {
   /** A hit counts as on a protected edge when the incoming direction lines up this well with the edge normal. */
   edgeFacingDot: 0.5,
 
-  spawnMinRadius: 14,
-  spawnRadiusPerShip: 4.5,
+  spawnMinRadius: 22,
+  spawnRadiusPerShip: 7.2,
+  /** Ships sit frozen this long at the start (a 3-2-1 countdown shows over them). */
+  countdownSeconds: 3,
   ringStartPadding: 14,
   /** The ring starts this many times wider than the spawn circle plus padding. */
   ringStartScale: 2,

@@ -5,6 +5,11 @@ import { SANDBOX_SHIPS, parseShip } from "./testShips.js";
 
 beforeAll(async () => {
   await initPhysics();
+  // These tests drive the sim from tick 1 (the start-of-fight countdown has its own test), and
+  // their geometry assumes two ships spawn 14 units from the centre.
+  SIM.countdownSeconds = 0;
+  SIM.spawnMinRadius = 14;
+  SIM.spawnRadiusPerShip = 4.5;
 });
 
 function bp(id: string, rows: string[]): ShipBlueprint {
@@ -252,6 +257,24 @@ describe("arena", () => {
     expect(lasered).toHaveLength(1);
     expect(a.ship("b")!.body.cells.filter((c) => c.type === "mirror" && c.alive)).toHaveLength(3);
     a.dispose();
+  });
+
+  it("holds everything still during the start-of-fight countdown", () => {
+    const saved = SIM.countdownSeconds;
+    SIM.countdownSeconds = 3;
+    try {
+      const a = new Arena({ ships: [bp("a", ["#C#", "^#^"]), bp("b", ["C"])], seed: 1 });
+      expect(a.init().countdownTicks).toBe(3 * TICK_HZ);
+      const rb = a.ship("a")!.body.rb!;
+      const start = rb.translation();
+      run(a, 3 * TICK_HZ, { a: { ...NO_INPUT, up: true } });
+      expect(rb.translation()).toEqual(start);
+      run(a, 30, { a: { ...NO_INPUT, up: true } });
+      expect(Math.hypot(rb.translation().x - start.x, rb.translation().y - start.y)).toBeGreaterThan(0.05);
+      a.dispose();
+    } finally {
+      SIM.countdownSeconds = saved;
+    }
   });
 
   it("is deterministic", () => {

@@ -119,6 +119,7 @@ export class Arena {
   private hooks: Hook[] = [];
   /** Tick at which the power-up orb next appears, or null while it is sitting at the centre. */
   private powerupTaken = false;
+  private readonly countdownTicks = Math.round(SIM.countdownSeconds * TICK_HZ);
   private disposed = false;
   /** Set on the tick the fight is decided; from then on the ring stops and nothing takes damage. */
   private endedAt: number | null = null;
@@ -215,7 +216,11 @@ export class Arena {
     });
     this.startedShips = this.ships.length;
     this.buildWalls();
-    this.initInfo = { ships: initShips, ring: { startRadius: this.ringStart, minRadius: SIM.ringMinRadius } };
+    this.initInfo = {
+      ships: initShips,
+      ring: { startRadius: this.ringStart, minRadius: SIM.ringMinRadius },
+      countdownTicks: this.countdownTicks,
+    };
   }
 
   // ---------------------------------------------------------------- public API
@@ -228,6 +233,11 @@ export class Arena {
     return this.ships.filter((s) => s.alive);
   }
 
+  /** Seconds of actual fighting so far (after the countdown). */
+  get fightSeconds(): number {
+    return Math.max(0, this.tickCount - this.countdownTicks) / TICK_HZ;
+  }
+
   /** True once the fight is decided (latched: stays true through the celebration). */
   get over(): boolean {
     return this.endedAt !== null || this.decided;
@@ -235,7 +245,7 @@ export class Arena {
 
   private get decided(): boolean {
     const alive = this.aliveShips.length;
-    if (this.tickCount >= SIM.maxSeconds * TICK_HZ) return true;
+    if (this.fightSeconds >= SIM.maxSeconds) return true;
     if (this.startedShips >= 2) return alive <= 1;
     return alive === 0;
   }
@@ -252,6 +262,8 @@ export class Arena {
     // Touching a freed Rapier world corrupts WASM memory; a stray late step must be a no-op.
     if (this.disposed) return;
     this.tickCount++;
+    // Countdown: everything holds still (inputs ignored) until it runs out.
+    if (this.tickCount <= this.countdownTicks) return;
     this.updateRing();
 
     const touched = new Set<SimBody>();
@@ -374,7 +386,7 @@ export class Arena {
       kills: s.kills,
       cellsDestroyed: s.cellsDestroyed,
       cellsLost: s.cellsLost,
-      survivedSeconds: Math.round(((s.deathTick ?? this.tickCount) / TICK_HZ) * 10) / 10,
+      survivedSeconds: Math.round((Math.max(0, (s.deathTick ?? this.tickCount) - this.countdownTicks) / TICK_HZ) * 10) / 10,
     }));
   }
 
@@ -784,7 +796,7 @@ export class Arena {
 
   private updateRing() {
     if (this.endedAt !== null) return;
-    const t = this.tickCount / TICK_HZ - SIM.ringDelaySeconds;
+    const t = this.fightSeconds - SIM.ringDelaySeconds;
     const f = Math.min(1, Math.max(0, t / SIM.ringShrinkSeconds));
     this.ringRadius = this.ringStart + (SIM.ringMinRadius - this.ringStart) * f;
     this.moveWalls();

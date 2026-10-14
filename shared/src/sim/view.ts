@@ -41,6 +41,8 @@ export interface RingParams {
 export interface ArenaInit {
   ships: InitShip[];
   ring: RingParams;
+  /** Ticks at the start during which everything is frozen while a countdown shows. */
+  countdownTicks: number;
 }
 
 export interface BodySnap {

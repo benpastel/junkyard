@@ -26,6 +26,8 @@ const VIEW_CELLS = 38;
 /** Free-camera pan speed, and how far past the ring's edge it may wander. */
 const PAN_CELLS_PER_SECOND = 24;
 const PAN_LEASH_CELLS = 6;
+/** How long "GO" hangs over the ships once the countdown ends. */
+const GO_SECONDS = 0.6;
 
 interface CellInfo extends InitCell {
   color: string;
@@ -163,7 +165,44 @@ export class ArenaRenderer {
     this.drawBeams(ctx, S, toScreen);
     this.drawParticles(ctx, S, toScreen);
     this.drawNames(ctx, bodies, S, toScreen);
+    this.drawCountdown(ctx, bodies, S, toScreen, renderTick);
     if (this.celebration) this.drawCelebration(ctx, width, height, nowMs, dt);
+  }
+
+  /** 3-2-1 over every ship while the fight's frozen at the start, then a quick GO. */
+  private drawCountdown(
+    ctx: CanvasRenderingContext2D,
+    bodies: BodyView[],
+    S: number,
+    toScreen: (x: number, y: number) => { x: number; y: number },
+    renderTick: number,
+  ) {
+    const left = (this.init.countdownTicks - renderTick) / TICK_HZ;
+    if (left <= -GO_SECONDS || !this.current) return;
+    const text = left > 0 ? String(Math.ceil(left)) : "GO";
+    // Each number pops in big and settles over its second.
+    const phase = left > 0 ? left - Math.floor(left) : (left + GO_SECONDS) / GO_SECONDS;
+    const scale = 1 + 0.5 * phase;
+    ctx.save();
+    ctx.font = `700 ${Math.round(S * 2.2)}px ui-monospace, "SF Mono", Menlo, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const b of bodies) {
+      if (!b.owner) continue;
+      const p = toScreen(b.x, b.y);
+      const color = this.shipInfo.get(b.owner)?.color ?? "#fff";
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.scale(scale, scale);
+      ctx.globalAlpha = left > 0 ? 0.95 : phase;
+      ctx.lineWidth = Math.max(2, S * 0.18);
+      ctx.strokeStyle = "rgba(0,0,0,0.75)";
+      ctx.strokeText(text, 0, 0);
+      ctx.fillStyle = color;
+      ctx.fillText(text, 0, 0);
+      ctx.restore();
+    }
+    ctx.restore();
   }
 
   /** Winner banner, flashing in their colour, over a rain of screws, bolts and nuts. */
