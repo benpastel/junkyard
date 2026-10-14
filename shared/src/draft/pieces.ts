@@ -1,5 +1,6 @@
 import { DIR_VECTORS, type Cell, type CellType, type Dir } from "../types.js";
 import type { Rng } from "../rng.js";
+import { overhangSquares, partOffset } from "../cells.js";
 
 /** The 12 pentominoes, as (x, y) cells with y pointing down. */
 export const PENTOMINOES = {
@@ -60,7 +61,8 @@ const SPECIAL_WEIGHTS: [CellType, number][] = [
   // Armor is switched off for now (its share moved to mirrors); the part still works if it shows up.
   ["armor", 0],
   ["saw", 10],
-  ["grapple", 8],
+  // Grapple is switched off for now: harder to use and weaker than lasers. The part still works.
+  ["grapple", 0],
 ];
 
 function pickSpecial(rng: Rng): CellType {
@@ -105,8 +107,13 @@ function pickSpecialSlot(cells: Cell[], type: CellType, rng: Rng): [number, Dir]
     const isTip = openDirs.length === 3;
     for (const d of DIRS) {
       if (type === "laser" || type === "saw" || type === "grapple") {
-        // Point outward along an arm: a tip cell, facing away from its one neighbour.
-        if (isTip && open(c, d) && !open(c, opposite(d))) slots.push([i, d]);
+        // Point outward along an arm: a tip cell, facing away from its one neighbour,
+        // with nothing of the piece under the rest of its overhang (the saw's wide blade).
+        const clear = overhangSquares(type).every(([f, sd]) => {
+          const o = partOffset(d, f, sd);
+          return !has(c.x + o.x, c.y + o.y);
+        });
+        if (isTip && open(c, d) && !open(c, opposite(d)) && clear) slots.push([i, d]);
       } else if (type === "engine") {
         // The nozzle (opposite of the push direction) must not be buried in the piece.
         if (!open(c, opposite(d))) continue;

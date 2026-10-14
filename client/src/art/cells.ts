@@ -165,9 +165,12 @@ const PARTS: Partial<Record<CellType, (d: Pen, s: CellStyle) => void>> = {
   // Hub and reach match the sim's blade hitbox (SIM.sawReach / sawRadius).
   saw(d, s) {
     d.rect(0.3, 0.55, 0.4, 0.38, DARK);
+    // arm out to the hub
+    d.rect(0.4, -0.55, 0.2, 1.15, "#2a2d33");
     const ctx = d.ctx;
     ctx.save();
-    ctx.translate(0.5, 0.05);
+    ctx.translate(0.5, -0.55);
+    ctx.scale(1.55, 1.55);
     ctx.rotate(s.time === undefined || s.inactive ? 0 : s.time * 12);
     const n = 8;
     const pts: [number, number][] = [];

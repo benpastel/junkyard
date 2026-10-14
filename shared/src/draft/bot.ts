@@ -1,5 +1,5 @@
 import { DIR_VECTORS, type Cell, type CellType, type Dir, type PlayerId } from "../types.js";
-import { openChecker, workingDir } from "../cells.js";
+import { openChecker, overhangSquares, partOffset, workingDir } from "../cells.js";
 import type { Rng } from "../rng.js";
 import type { Draft, DraftAction, DraftView } from "./index.js";
 import { hullCore } from "./hulls.js";
@@ -124,6 +124,11 @@ function scorePlacement(p: Placement, ctx: ShipContext): number {
     const v = DIR_VECTORS[w];
     for (let x = c.x + v.x, y = c.y + v.y, i = 0; i < LINE_LIMIT; x += v.x, y += v.y, i++) {
       const k = cellKey(x, y);
+      if (occupied.has(k) || mine.has(k)) return false;
+    }
+    for (const [f, sd] of overhangSquares(c.type)) {
+      const o = partOffset(w, f, sd);
+      const k = cellKey(c.x + o.x, c.y + o.y);
       if (occupied.has(k) || mine.has(k)) return false;
     }
     return true;

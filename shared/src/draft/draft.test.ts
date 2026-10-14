@@ -204,6 +204,29 @@ function findValidSpot(d: Draft, id: string) {
 }
 
 describe("openChecker", () => {
+  it("needs a saw's front-diagonal squares empty too", () => {
+    const saw: Cell = { x: 1, y: 1, type: "saw", dir: 0 };
+    const hull = (x: number, y: number): Cell => ({ x, y, type: "hull", dir: 0 });
+    expect(openChecker([saw, hull(1, 2)])(saw)).toBe(true);
+    expect(openChecker([saw, hull(0, 0)])(saw)).toBe(false);
+    expect(openChecker([saw, hull(2, 0)])(saw)).toBe(false);
+    // Side neighbours are fine: the blade sits out in front of them.
+    expect(openChecker([saw, hull(0, 1), hull(2, 1)])(saw)).toBe(true);
+  });
+
+  it("never generates a saw piece that blocks its own blade", () => {
+    const rng = new Rng(3);
+    let saws = 0;
+    for (let i = 0; i < 400; i++) {
+      const p = generatePiece(rng, `p${i}`);
+      const saw = p.cells.find((c) => c.type === "saw");
+      if (!saw) continue;
+      saws++;
+      expect(openChecker(p.cells)(saw)).toBe(true);
+    }
+    expect(saws).toBeGreaterThan(0);
+  });
+
   it("needs the whole line clear, not just the neighbour", () => {
     const cells: Cell[] = [
       { x: 0, y: 0, type: "laser", dir: 1 },

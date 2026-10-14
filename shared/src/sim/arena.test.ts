@@ -198,6 +198,20 @@ describe("arena", () => {
     a.dispose();
   });
 
+  it("the saw blade is wide enough to cut the tiles diagonally in front of it", () => {
+    // b's nose has a gap straight in front of a's saw, with hull either side of it.
+    const a = new Arena({ ships: [bp("a", ["R", "C", "^"]), bp("b", ["#.#", "###", "#C#"])], seed: 1 });
+    const cuts: string[] = [];
+    a.onLog = (l) => {
+      if (l.includes("to saw")) cuts.push(l);
+    };
+    for (let i = 0; i < TICK_HZ * 5 && cuts.length === 0; i++) a.step({ a: { ...NO_INPUT, up: true } });
+    expect(cuts.length).toBeGreaterThan(0);
+    // The first thing the blade bites is one of the two flanking nose cells.
+    expect(cuts[0]).toMatch(/b lost hull \((-1|1),-2\)/);
+    a.dispose();
+  });
+
   it("is deterministic", () => {
     const mk = () =>
       new Arena({ ships: SANDBOX_SHIPS.map((s, i) => bp(`p${i}`, s.rows)), seed: 42 });

@@ -47,8 +47,9 @@ export const SIM = {
   /** Relative speed at the contact below which collisions do no damage; above it, each side takes one hit. */
   impactThreshold: 4,
   /** Saw blade: a ball this big, centred this far out from the saw cell's centre toward its dir. */
-  sawRadius: 0.45,
-  sawReach: 0.45,
+  /** Wide enough to bite the tile in front and both tiles diagonally in front. */
+  sawRadius: 0.8,
+  sawReach: 1.05,
   /** A blade in contact with something cuts it (one hit) this often. */
   sawCutSeconds: 0.2,
   impactPairCooldownSeconds: 0.25,
