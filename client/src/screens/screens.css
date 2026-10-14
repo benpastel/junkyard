@@ -85,9 +85,32 @@
 }
 
 .room-code {
-  font-size: 44px;
+  font-size: 13px;
   letter-spacing: 0.2em;
-  color: var(--hazard);
+  color: var(--text-dim);
+}
+
+.share-row {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.share-url {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--text-dim);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: all;
 }
 
 .phase-tag {

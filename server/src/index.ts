@@ -13,6 +13,8 @@ const PORT = Number(process.env.PORT ?? process.env.SERVER_PORT ?? 4711);
 const STATIC_DIR = fileURLToPath(new URL("../../client/dist", import.meta.url));
 const ROOM_CODE_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZ";
 const EMPTY_ROOM_TTL_MS = 5 * 60 * 1000;
+/** Bots a new room starts with, so there's someone to fight straight away. */
+const DEFAULT_BOTS = 3;
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -99,7 +101,7 @@ function createRoom(code?: string): Room {
   while (!code || rooms.has(code)) {
     code = Array.from({ length: 4 }, () => ROOM_CODE_LETTERS[Math.floor(Math.random() * ROOM_CODE_LETTERS.length)]).join("");
   }
-  const room = new Room(code);
+  const room = new Room(code, DEFAULT_BOTS);
   rooms.set(code, room);
   return room;
 }

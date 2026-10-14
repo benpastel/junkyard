@@ -67,8 +67,12 @@ export class Room {
   /** Wall-clock time when the last human left, for cleanup. */
   emptySince: number | null = Date.now();
 
-  constructor(id: string) {
+  /** Bots still to add once the room's first player has joined (so the creator is listed first). */
+  private pendingBots: number;
+
+  constructor(id: string, defaultBots = 0) {
     this.id = id;
+    this.pendingBots = defaultBots;
   }
 
   // ---------------------------------------------------------------- joining
@@ -96,6 +100,7 @@ export class Room {
       };
       this.players.set(player.id, player);
       this.system(`${player.name} joined`);
+      for (; this.pendingBots > 0; this.pendingBots--) this.addBot();
     }
     if (!this.hostId || !this.players.get(this.hostId)?.socket) this.hostId = player.id;
     this.emptySince = null;
@@ -129,6 +134,23 @@ export class Room {
     return [...this.players.values()].some((p) => !p.isBot && p.socket);
   }
 
+  addBot() {
+    if (this.players.size >= MAX_PLAYERS) return;
+    const used = new Set([...this.players.values()].map((p) => p.name));
+    const name = BOT_NAMES.find((n) => !used.has(n)) ?? `Bot ${this.nextPlayerNum}`;
+    const bot: Player = {
+      id: this.newPlayerId(),
+      name,
+      color: this.freeColor(),
+      isBot: true,
+      socket: null,
+      wins: 0,
+      inRound: false,
+      botNextActAt: 0,
+    };
+    this.players.set(bot.id, bot);
+  }
+
   // --------------------------------------------------------------- messages
 
   handle(playerId: PlayerId, msg: ClientMsg) {
@@ -152,20 +174,8 @@ export class Room {
         return;
       }
       case "addBot": {
-        if (!isHost || this.phase !== "lobby" || this.players.size >= MAX_PLAYERS) return;
-        const used = new Set([...this.players.values()].map((p) => p.name));
-        const name = BOT_NAMES.find((n) => !used.has(n)) ?? `Bot ${this.nextPlayerNum}`;
-        const bot: Player = {
-          id: this.newPlayerId(),
-          name,
-          color: this.freeColor(),
-          isBot: true,
-          socket: null,
-          wins: 0,
-          inRound: false,
-          botNextActAt: 0,
-        };
-        this.players.set(bot.id, bot);
+        if (!isHost || this.phase !== "lobby") return;
+        this.addBot();
         this.broadcastRoom();
         return;
       }

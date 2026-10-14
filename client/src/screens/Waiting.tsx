@@ -10,7 +10,7 @@ export function Waiting({ room, me, chat, endsAt }: { room: RoomView; me: string
     <div className="two-col">
       <div className="col-main">
         <div className="room-code-row">
-          <h1 className="room-code mono">{room.id}</h1>
+          <div className="room-code mono">{room.id}</div>
           <span className="phase-tag mono">
             {room.phase}
             {left !== null && ` ${formatSeconds(left)}`}

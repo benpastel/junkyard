@@ -17,17 +17,14 @@ export function Lobby({ room, me, chat }: { room: RoomView; me: string | null; c
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // Clipboard blocked; the code is visible anyway.
+      // Clipboard blocked; the link is visible to copy by hand.
     }
   };
 
   return (
     <div className="two-col">
       <div className="col-main">
-        <div className="room-code-row">
-          <h1 className="room-code mono">{room.id}</h1>
-          <button onClick={copyLink}>{copied ? "Copied" : "Copy link"}</button>
-        </div>
+        <div className="room-code mono">{room.id}</div>
 
         <section className="panel section">
           <h3>Crew</h3>
@@ -64,6 +61,11 @@ export function Lobby({ room, me, chat }: { room: RoomView; me: string | null; c
             Launch
           </button>
         )}
+
+        <div className="share-row">
+          <span className="share-url mono">{location.href}</span>
+          <button onClick={copyLink}>{copied ? "Copied" : "Copy"}</button>
+        </div>
       </div>
       <Chat messages={chat} players={room.players} />
     </div>
