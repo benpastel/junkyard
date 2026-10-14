@@ -88,12 +88,39 @@ describe("generatePiece", () => {
         const d = special[0]!.dir;
         const lines = new Set(p.cells.map((c) => (d === 0 || d === 2 ? c.x : c.y)));
         expect(special).toHaveLength(lines.size);
+      } else if (special[0]!.type === "engine") {
+        // One or two engines, never pushing in opposite directions.
+        expect(special.every((c) => c.type === "engine")).toBe(true);
+        expect(special.length).toBeGreaterThanOrEqual(1);
+        expect(special.length).toBeLessThanOrEqual(2);
+        if (special.length === 2) expect((special[0]!.dir - special[1]!.dir + 4) % 4).not.toBe(2);
       } else {
         expect(special).toHaveLength(1);
       }
+      // No part is blocked by its own piece.
+      const isOpen = openChecker(p.cells);
+      for (const c of special) if (c.type !== "mirror" && c.type !== "armor") expect(isOpen(c)).toBe(true);
       for (const c of p.cells) expect(c.type).not.toBe("core");
     }
     expect(shields).toBeGreaterThan(0);
+  });
+
+  it("gives most engine pieces a second engine, mostly at right angles", () => {
+    const rng = new Rng(21);
+    let pieces = 0;
+    let doubles = 0;
+    let rightAngles = 0;
+    for (let i = 0; i < 2000; i++) {
+      const engines = generatePiece(rng, `p${i}`).cells.filter((c) => c.type === "engine");
+      if (!engines.length) continue;
+      pieces++;
+      if (engines.length === 2) {
+        doubles++;
+        if ((engines[0]!.dir - engines[1]!.dir + 4) % 2 === 1) rightAngles++;
+      }
+    }
+    expect(doubles / pieces).toBeGreaterThan(0.9);
+    expect(rightAngles / doubles).toBeGreaterThan(0.6);
   });
 });
 

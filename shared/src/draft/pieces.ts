@@ -1,6 +1,6 @@
 import { DIR_VECTORS, type Cell, type CellType, type Dir } from "../types.js";
 import type { Rng } from "../rng.js";
-import { overhangSquares, partOffset } from "../cells.js";
+import { openChecker } from "../cells.js";
 
 /** The 12 pentominoes, as (x, y) cells with y pointing down. */
 export const PENTOMINOES = {
@@ -76,6 +76,8 @@ function pickSpecial(rng: Rng): CellType {
 }
 
 const DIRS: Dir[] = [0, 1, 2, 3];
+/** Chance an engine piece's second engine faces the same way as the first (otherwise a right angle). */
+const SAME_DIR_SECOND_ENGINE = 0.25;
 
 export function generatePiece(rng: Rng, id: string): Piece {
   const shape = rng.pick(PENTOMINO_NAMES);
@@ -90,39 +92,47 @@ export function generatePiece(rng: Rng, id: string): Piece {
     const beyond = (c: Cell) => cells.some((o) => o !== c && (v.x !== 0 ? o.y === c.y && (o.x - c.x) * v.x > 0 : o.x === c.x && (o.y - c.y) * v.y > 0));
     return { id, shape, cells: cells.map((c) => (beyond(c) ? c : { ...c, type: special, dir })) };
   }
-  const [index, dir] = pickSpecialSlot(cells, special, rng);
-  cells[index] = { ...cells[index]!, type: special, dir };
+  const first = pickSpecialSlot(cells, special, rng, () => true);
+  if (!first) return { id, shape, cells };
+  cells[first[0]] = { ...cells[first[0]]!, type: special, dir: first[1] };
+  if (special === "engine") {
+    // A second engine: usually at right angles to the first, sometimes the same way, never opposed.
+    const d1 = first[1];
+    const same = rng.chance(SAME_DIR_SECOND_ENGINE);
+    const allowed = (d: Dir) => (same ? d === d1 : d !== d1 && d !== (((d1 + 2) % 4) as Dir));
+    const second = pickSpecialSlot(cells, "engine", rng, allowed) ?? pickSpecialSlot(cells, "engine", rng, (d) => d !== (((d1 + 2) % 4) as Dir));
+    if (second) cells[second[0]] = { ...cells[second[0]]!, type: "engine", dir: second[1] };
+  }
   return { id, shape, cells };
 }
 
 /** Chooses which cell carries the special part and which way it faces. */
-function pickSpecialSlot(cells: Cell[], type: CellType, rng: Rng): [number, Dir] {
+/**
+ * Chooses a hull cell of the piece to carry the part and which way it faces, among dirs that
+ * `allowed` accepts. The part must work on the piece as it stands: its whole working line
+ * (and any extra overhang squares) clear of the piece's own cells, the same rule as in play.
+ */
+function pickSpecialSlot(cells: Cell[], type: CellType, rng: Rng, allowed: (d: Dir) => boolean): [number, Dir] | null {
   const has = (x: number, y: number) => cells.some((c) => c.x === x && c.y === y);
   const open = (c: Cell, d: Dir) => !has(c.x + DIR_VECTORS[d].x, c.y + DIR_VECTORS[d].y);
   const opposite = (d: Dir) => ((d + 2) % 4) as Dir;
 
   const slots: [number, Dir][] = [];
   cells.forEach((c, i) => {
-    const openDirs = DIRS.filter((d) => open(c, d));
-    const isTip = openDirs.length === 3;
+    if (c.type !== "hull") return;
+    const isTip = DIRS.filter((d) => open(c, d)).length === 3;
     for (const d of DIRS) {
+      if (!allowed(d)) continue;
+      const trial = cells.map((o, k) => (k === i ? { ...o, type, dir: d } : o));
+      if (!openChecker(trial)(trial[i]!)) continue;
       if (type === "laser" || type === "saw" || type === "grapple") {
-        // Point outward along an arm: a tip cell, facing away from its one neighbour,
-        // with nothing of the piece under the rest of its overhang (the saw's wide blade).
-        const clear = overhangSquares(type).every(([f, sd]) => {
-          const o = partOffset(d, f, sd);
-          return !has(c.x + o.x, c.y + o.y);
-        });
-        if (isTip && open(c, d) && !open(c, opposite(d)) && clear) slots.push([i, d]);
-      } else if (type === "engine") {
-        // The nozzle (opposite of the push direction) must not be buried in the piece.
-        if (!open(c, opposite(d))) continue;
+        // Point outward along an arm: a tip cell, facing away from its one neighbour.
+        if (isTip && !open(c, opposite(d))) slots.push([i, d]);
+      } else {
         slots.push([i, d]);
         if (isTip) slots.push([i, d]);
-      } else if (open(c, d)) {
-        slots.push([i, d]);
       }
     }
   });
-  return slots.length > 0 ? rng.pick(slots) : [0, 0];
+  return slots.length > 0 ? rng.pick(slots) : null;
 }
