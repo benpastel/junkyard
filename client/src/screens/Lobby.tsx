@@ -24,7 +24,6 @@ export function Lobby({ room, me, chat }: { room: RoomView; me: string | null; c
   return (
     <div className="two-col">
       <div className="col-main">
-        <div className="room-code mono">{room.id}</div>
 
         <section className="panel section">
           <h3>Crew</h3>
@@ -56,16 +55,16 @@ export function Lobby({ room, me, chat }: { room: RoomView; me: string | null; c
           </div>
         </section>
 
+        <div className="share-row">
+          <span className="share-url mono">{location.href}</span>
+          <button onClick={copyLink}>{copied ? "Copied" : "Copy"}</button>
+        </div>
+
         {isHost && (
           <button className="primary big" disabled={room.players.length < 2} onClick={() => net.send({ t: "start" })}>
             Launch
           </button>
         )}
-
-        <div className="share-row">
-          <span className="share-url mono">{location.href}</span>
-          <button onClick={copyLink}>{copied ? "Copied" : "Copy"}</button>
-        </div>
       </div>
       <Chat messages={chat} players={room.players} />
     </div>

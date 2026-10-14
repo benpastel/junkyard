@@ -22,7 +22,7 @@ await shot("01-landing");
 
 await page.getByLabel("Name").fill("Benji");
 await page.getByRole("button", { name: /create room/i }).click();
-await page.waitForSelector(".room-code");
+await page.waitForSelector(".share-row");
 // New rooms start with 3 bots.
 await page.getByRole("button", { name: "0:45" }).click();
 await page.getByLabel("Chat message").fill("ready to scrap");
@@ -36,7 +36,7 @@ const page2 = await (await browser.newContext({ viewport: { width: 1200, height:
 await page2.goto(roomUrl);
 await page2.getByLabel("Name").fill("Friend");
 await page2.getByRole("button", { name: /join/i }).click();
-await page2.waitForSelector(".room-code");
+await page2.waitForSelector(".share-row");
 await page.waitForTimeout(300);
 await shot("03-lobby-with-friend");
 
