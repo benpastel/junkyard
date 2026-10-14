@@ -85,6 +85,8 @@ export const SIM = {
   solverIterations: 8,
   /** After crushing-level pressure, a body ignores impact damage for this long (see SimBody.jammedUntil). */
   jamSeconds: 0.5,
+  /** Anti-stuck: cells of two ships touching for this long explode on both sides. */
+  stuckSeconds: 3,
   /** Cells further than this beyond the ring's outer face are crushed. */
   outsideMargin: 1,
 

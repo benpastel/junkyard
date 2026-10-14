@@ -128,6 +128,8 @@ export class Arena {
   /** Saw blades touching something: blade handle:other handle -> next tick it cuts. */
   private readonly sawContacts = new Map<string, { blade: number; other: number; next: number }>();
   private readonly bladeColliders = new Set<number>();
+  /** Cell-on-cell contacts between two ships: pair key -> the colliders and the tick they met. */
+  private readonly touching = new Map<string, { h1: number; h2: number; since: number }>();
   /** Kinematic segments forming the rubber ring, and their collider handles. */
   private readonly walls: { rb: RigidBody; angle: number }[] = [];
   private readonly wallColliders = new Set<number>();
@@ -280,9 +282,11 @@ export class Arena {
         else this.sawContacts.delete(key);
         return;
       }
+      this.trackTouching(h1, h2, started);
       if (started) this.onCollision(h1, h2, pre, touched);
     });
     this.updateSaws(touched);
+    this.breakStuck(touched);
     this.eventQueue.drainContactForceEvents((e) => this.onPressure(e.collider1(), e.collider2(), e.totalForceMagnitude(), touched));
 
     this.updatePowerup();
@@ -888,6 +892,34 @@ export class Arena {
         const p = c.alive ? this.cellWorld(c) : null;
         if (p && p.x * p.x + p.y * p.y > limit * limit) this.crush(c, touched, "outside the ring");
       }
+    }
+  }
+
+  private trackTouching(h1: number, h2: number, started: boolean) {
+    const key = h1 < h2 ? `${h1}:${h2}` : `${h2}:${h1}`;
+    if (!started) {
+      this.touching.delete(key);
+      return;
+    }
+    const b1 = this.cellByCollider.get(h1)?.body;
+    const b2 = this.cellByCollider.get(h2)?.body;
+    if (b1 && b2 && b1 !== b2 && b1.kind === "ship" && b2.kind === "ship") this.touching.set(key, { h1, h2, since: this.tickCount });
+  }
+
+  /**
+   * Anti-stuck: two ships whose cells have been touching for SIM.stuckSeconds blow up at
+   * every such point of contact, on both sides at once.
+   */
+  private breakStuck(touched: Set<SimBody>) {
+    const limit = Math.round(SIM.stuckSeconds * TICK_HZ);
+    for (const [key, t] of this.touching) {
+      if (this.tickCount - t.since < limit) continue;
+      this.touching.delete(key);
+      const c1 = this.cellByCollider.get(t.h1);
+      const c2 = this.cellByCollider.get(t.h2);
+      if (!c1?.alive || !c2?.alive || c1.body?.kind !== "ship" || c2.body?.kind !== "ship" || c1.body === c2.body) continue;
+      this.damageCell(c1, c1.hp, null, touched, `stuck to ${c2.body.owner}`);
+      this.damageCell(c2, c2.hp, null, touched, `stuck to ${c1.body?.owner ?? "a wreck"}`);
     }
   }
 

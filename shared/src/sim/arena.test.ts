@@ -221,6 +221,21 @@ describe("arena", () => {
     a.dispose();
   });
 
+  it("ships stuck together too long blow up at every point of contact, on both sides", () => {
+    // Start b resting against a's nose (a spawns at y=-14 facing +y), then a keeps pushing it:
+    // a slow shove, so no impact damage, just a long contact.
+    const a = new Arena({ ships: [bp("a", ["###", "#C#", "^^^"]), bp("b", ["###", "###", "#C#"])], seed: 1 });
+    a.ship("b")!.body.rb!.setTranslation({ x: 0, y: -10.02 }, true);
+    const stuck: string[] = [];
+    a.onLog = (l) => {
+      if (l.includes("stuck to")) stuck.push(l);
+    };
+    for (let i = 0; i < TICK_HZ * 12 && stuck.length === 0; i++) a.step({ a: { ...NO_INPUT, up: true } });
+    expect(stuck.some((l) => l.includes("] a lost"))).toBe(true);
+    expect(stuck.some((l) => l.includes("] b lost"))).toBe(true);
+    a.dispose();
+  });
+
   it("is deterministic", () => {
     const mk = () =>
       new Arena({ ships: SANDBOX_SHIPS.map((s, i) => bp(`p${i}`, s.rows)), seed: 42 });
