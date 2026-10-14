@@ -4,6 +4,7 @@ import { DIR_VECTORS, type CellType, type Dir } from "./types.js";
 /**
  * The direction a part needs a clear line in, or null if it works regardless.
  * Engines need their exhaust (opposite the push) clear; everything else needs its facing clear.
+ * Mirrors have no single facing: they reflect off whichever of their sides are exposed.
  */
 export function workingDir(type: CellType, dir: Dir): Dir | null {
   switch (type) {
@@ -12,7 +13,6 @@ export function workingDir(type: CellType, dir: Dir): Dir | null {
     case "laser":
     case "grapple":
     case "saw":
-    case "mirror":
     case "armor":
       return dir;
     default:

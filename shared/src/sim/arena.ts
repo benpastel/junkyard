@@ -662,21 +662,18 @@ export class Arena {
       const target = this.cellByCollider.get(hit.collider.handle);
       if (!target?.body?.rb) return;
 
-      // A mirror reflects beams that strike its protected edge, taking no damage; a ship with
-      // the power-up's mirror skin reflects them off any outer surface.
+      // Mirror cells reflect beams off any side they're struck on (a beam can only reach an
+      // exposed side), taking no damage; so does a ship wearing the power-up's mirror skin.
       const skin = (this.shipOf(target.body)?.mirroredUntil ?? 0) > this.tickCount;
-      if (skin || (target.type === "mirror" && this.isOpen(target))) {
-        const edge = this.cellWorldDir(target);
-        if (skin || -(d.x * edge.x + d.y * edge.y) > SIM.edgeFacingDot) {
-          const n = hit.normal;
-          const k = 2 * (d.x * n.x + d.y * n.y);
-          d = { x: d.x - k * n.x, y: d.y - k * n.y };
-          start = end;
-          range -= toi;
-          exclude = undefined;
-          excludeCollider = hit.collider;
-          continue;
-        }
+      if (skin || target.type === "mirror") {
+        const n = hit.normal;
+        const k = 2 * (d.x * n.x + d.y * n.y);
+        d = { x: d.x - k * n.x, y: d.y - k * n.y };
+        start = end;
+        range -= toi;
+        exclude = undefined;
+        excludeCollider = hit.collider;
+        continue;
       }
 
       target.body.rb.applyImpulseAtPoint({ x: d.x * SIM.laserKnockback, y: d.y * SIM.laserKnockback }, end, true);

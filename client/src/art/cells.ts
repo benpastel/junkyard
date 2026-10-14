@@ -20,6 +20,21 @@ export interface CellStyle {
   thrusting?: boolean;
   /** Seconds, for spinning saws and flickering flames. Omit for a still blade. */
   time?: number;
+  /**
+   * Mirrors: which sides have no cell of the same ship next to them, as a bitmask over ship-frame
+   * dirs (bit 0 = up, 1 = right, 2 = down, 3 = left). A strip is drawn on each. Omit for all four.
+   */
+  openSides?: number;
+}
+
+/** For each cell of a ship (or piece), the bitmask of its sides with no neighbour. */
+export function openSidesOf(cells: readonly { x: number; y: number }[]): (c: { x: number; y: number }) => number {
+  const at = new Set(cells.map((c) => `${c.x},${c.y}`));
+  return (c) =>
+    (at.has(`${c.x},${c.y - 1}`) ? 0 : 1) |
+    (at.has(`${c.x + 1},${c.y}`) ? 0 : 2) |
+    (at.has(`${c.x},${c.y + 1}`) ? 0 : 4) |
+    (at.has(`${c.x - 1},${c.y}`) ? 0 : 8);
 }
 
 const EDGE = "#24272c";
@@ -60,7 +75,7 @@ export function drawCellPart(ctx: CanvasRenderingContext2D, type: CellType, dir:
   ctx.translate(-size / 2, -size / 2);
   ctx.scale(size, size);
   if (style.inactive) ctx.globalAlpha = 0.35;
-  PARTS[type]?.(pen(ctx), style);
+  PARTS[type]?.(pen(ctx), style, dir);
   ctx.restore();
 }
 
@@ -121,7 +136,7 @@ function pen(ctx: CanvasRenderingContext2D) {
 
 const PI = Math.PI;
 
-const PARTS: Partial<Record<CellType, (d: Pen, s: CellStyle) => void>> = {
+const PARTS: Partial<Record<CellType, (d: Pen, s: CellStyle, dir: Dir) => void>> = {
   // bubble canopy with the pilot seen from above: shoulders, helmet, visor facing forward
   core(d, s) {
     d.ellipse(0.5, 0.5, 0.4, 0.42, "#16222e");
@@ -208,13 +223,25 @@ const PARTS: Partial<Record<CellType, (d: Pen, s: CellStyle) => void>> = {
   },
 
   // laser-yellow faceted strip: only reflects lasers, so it shares their colour
-  mirror(d, s) {
-    d.rect(0, -0.14, 1, 0.28, s.inactive ? "#6b6838" : NEON);
-    for (let i = 0; i < 3; i++) {
-      const o = i * 0.33;
-      d.poly([[0.08 + o, 0.14], [0.2 + o, -0.14], [0.27 + o, -0.14], [0.15 + o, 0.14]], "#fffbd0");
+  // one strip on every exposed side, so a mirror piece is edged all the way round
+  mirror(d, s, dir) {
+    const sides = s.openSides ?? 15;
+    for (let side = 0; side < 4; side++) {
+      if (!(sides & (1 << side))) continue;
+      // The pen is already turned to the cell's dir; turn on to this ship-frame side.
+      const ctx = d.ctx;
+      ctx.save();
+      ctx.translate(0.5, 0.5);
+      ctx.rotate((((side - dir + 4) % 4) * PI) / 2);
+      ctx.translate(-0.5, -0.5);
+      d.rect(0, -0.14, 1, 0.28, s.inactive ? "#6b6838" : NEON);
+      for (let i = 0; i < 3; i++) {
+        const o = i * 0.33;
+        d.poly([[0.08 + o, 0.14], [0.2 + o, -0.14], [0.27 + o, -0.14], [0.15 + o, 0.14]], "#fffbd0");
+      }
+      d.rect(0, 0.1, 1, 0.04, "#a89a1a");
+      ctx.restore();
     }
-    d.rect(0, 0.1, 1, 0.04, "#a89a1a");
   },
 };
 

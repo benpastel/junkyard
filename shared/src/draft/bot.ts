@@ -160,9 +160,16 @@ function scorePlacement(p: Placement, ctx: ShipContext): number {
         if (!isOpen(c)) score -= 5; // pointing into our own hull
         break;
       }
-      case "mirror":
+      case "mirror": {
+        // Mirrors earn their keep on the outside: a little for every exposed side.
+        for (const v of Object.values(DIR_VECTORS)) {
+          const k = cellKey(c.x + v.x, c.y + v.y);
+          if (!occupied.has(k) && !mine.has(k)) score += 0.3;
+        }
+        break;
+      }
       case "armor": {
-        // The protected edges belong on the outside, ideally facing forward.
+        // The protected edge belongs on the outside, ideally facing forward.
         if (isOpen(c)) score += c.dir === 0 ? 0.8 : c.dir === 2 ? 0.2 : 0.5;
         break;
       }

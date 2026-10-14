@@ -12,7 +12,7 @@ import {
   type InitCell,
 } from "@ja/shared/sim/view";
 import { openChecker } from "@ja/shared";
-import { NEON, drawCellPart, drawCellPlate, type CellStyle } from "../art/cells";
+import { NEON, drawCellPart, drawCellPlate, openSidesOf, type CellStyle } from "../art/cells";
 
 /** Where the engine bell ends and the laser barrel tip sits, in cells from the cell centre (see art/cells.ts). */
 const NOZZLE_END = 0.67;
@@ -609,6 +609,17 @@ export class ArenaRenderer {
   /** Open-line checkers per alive-cell list; a new list arrives whenever a body's cells change. */
   private openCheckers = new WeakMap<readonly number[], ReturnType<typeof openChecker>>();
 
+  private openSides = new WeakMap<readonly number[], ReturnType<typeof openSidesOf>>();
+
+  private openSidesFor(cids: readonly number[]) {
+    let sides = this.openSides.get(cids);
+    if (!sides) {
+      sides = openSidesOf(cids.flatMap((cid) => this.cellInfo.get(cid) ?? []));
+      this.openSides.set(cids, sides);
+    }
+    return sides;
+  }
+
   private openCheckerFor(cids: readonly number[]) {
     let check = this.openCheckers.get(cids);
     if (!check) {
@@ -635,7 +646,9 @@ export class ArenaRenderer {
       if (c) ctx.fillRect((c.x - 0.5) * S + S * 0.12, (c.y - 0.5) * S + S * 0.12, S, S);
     }
     const isOpen = this.openCheckerFor(cells.cells);
+    const sides = this.openSidesFor(cells.cells);
     const style = (c: CellInfo, i: number): CellStyle => ({
+      openSides: sides(c),
       color: debris ? "#3a3836" : c.color,
       damage: debris ? 0 : (cells.dmg[i] ?? 0) / 9,
       variant: c.cid,

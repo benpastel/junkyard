@@ -1,6 +1,6 @@
 import { memo, useLayoutEffect, useRef } from "react";
 import type { Cell } from "@ja/shared";
-import { drawCellPart, drawCellPlate, type CellStyle } from "../art/cells";
+import { drawCellPart, drawCellPlate, openSidesOf, type CellStyle } from "../art/cells";
 import { useClock } from "../art/useClock";
 
 /** Room around the piece, in cells, for parts that overhang their square. */
@@ -22,17 +22,19 @@ export function drawShipCells(
   style: (c: Cell) => CellStyle,
   overPlate?: (c: Cell) => void,
 ) {
+  const sides = openSidesOf(cells);
+  const styled = (c: Cell): CellStyle => ({ ...style(c), openSides: sides(c) });
   for (const c of cells) {
     ctx.save();
     ctx.translate(c.x * cell, c.y * cell);
-    drawCellPlate(ctx, cell, style(c));
+    drawCellPlate(ctx, cell, styled(c));
     overPlate?.(c);
     ctx.restore();
   }
   for (const c of cells) {
     ctx.save();
     ctx.translate(c.x * cell, c.y * cell);
-    drawCellPart(ctx, c.type, c.dir, cell, style(c));
+    drawCellPart(ctx, c.type, c.dir, cell, styled(c));
     ctx.restore();
   }
 }

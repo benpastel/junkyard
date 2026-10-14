@@ -84,9 +84,13 @@ export function generatePiece(rng: Rng, id: string): Piece {
   const coords = PENTOMINOES[shape];
   const cells: Cell[] = coords.map(([x, y]) => ({ x, y, type: "hull", dir: 0 }));
   const special = pickSpecial(rng);
-  if (special === "mirror" || special === "armor") {
-    // Shield pieces protect the whole face the piece shows in one direction: every cell
-    // with nothing of the piece beyond it that way (a T facing up shields its top bar).
+  if (special === "mirror") {
+    // Every cell a mirror, so the piece's whole outer edge reflects.
+    return { id, shape, cells: cells.map((c) => ({ ...c, type: "mirror" })) };
+  }
+  if (special === "armor") {
+    // Armor protects the face the piece shows in one direction: every cell with nothing of
+    // the piece beyond it that way (a T facing up armors its top bar).
     const dir = rng.pick(DIRS);
     const v = DIR_VECTORS[dir];
     const beyond = (c: Cell) => cells.some((o) => o !== c && (v.x !== 0 ? o.y === c.y && (o.x - c.x) * v.x > 0 : o.x === c.x && (o.y - c.y) * v.y > 0));
@@ -97,22 +101,33 @@ export function generatePiece(rng: Rng, id: string): Piece {
   cells[first[0]] = { ...cells[first[0]]!, type: special, dir: first[1] };
   if (special === "engine") {
     // A second engine: usually at right angles to the first, sometimes the same way, never opposed.
+    // Its exhaust must not empty into the same square as the first's, or the bells and flames pile up.
     const d1 = first[1];
+    const nozzle1 = exhaustSquare(cells[first[0]]!.x, cells[first[0]]!.y, d1);
+    const apart = (c: Cell, d: Dir) => exhaustSquare(c.x, c.y, d) !== nozzle1;
     const same = rng.chance(SAME_DIR_SECOND_ENGINE);
-    const allowed = (d: Dir) => (same ? d === d1 : d !== d1 && d !== (((d1 + 2) % 4) as Dir));
-    const second = pickSpecialSlot(cells, "engine", rng, allowed) ?? pickSpecialSlot(cells, "engine", rng, (d) => d !== (((d1 + 2) % 4) as Dir));
+    const allowed = (d: Dir, c: Cell) => apart(c, d) && (same ? d === d1 : d !== d1 && d !== (((d1 + 2) % 4) as Dir));
+    const second =
+      pickSpecialSlot(cells, "engine", rng, allowed) ??
+      pickSpecialSlot(cells, "engine", rng, (d, c) => apart(c, d) && d !== (((d1 + 2) % 4) as Dir));
     if (second) cells[second[0]] = { ...cells[second[0]]!, type: "engine", dir: second[1] };
   }
   return { id, shape, cells };
 }
 
 /** Chooses which cell carries the special part and which way it faces. */
+/** The square an engine at (x, y) pushing `dir` blows its exhaust into. */
+export function exhaustSquare(x: number, y: number, dir: Dir): string {
+  const v = DIR_VECTORS[((dir + 2) % 4) as Dir];
+  return `${x + v.x},${y + v.y}`;
+}
+
 /**
  * Chooses a hull cell of the piece to carry the part and which way it faces, among dirs that
  * `allowed` accepts. The part must work on the piece as it stands: its whole working line
  * (and any extra overhang squares) clear of the piece's own cells, the same rule as in play.
  */
-function pickSpecialSlot(cells: Cell[], type: CellType, rng: Rng, allowed: (d: Dir) => boolean): [number, Dir] | null {
+function pickSpecialSlot(cells: Cell[], type: CellType, rng: Rng, allowed: (d: Dir, c: Cell) => boolean): [number, Dir] | null {
   const has = (x: number, y: number) => cells.some((c) => c.x === x && c.y === y);
   const open = (c: Cell, d: Dir) => !has(c.x + DIR_VECTORS[d].x, c.y + DIR_VECTORS[d].y);
   const opposite = (d: Dir) => ((d + 2) % 4) as Dir;
@@ -122,7 +137,7 @@ function pickSpecialSlot(cells: Cell[], type: CellType, rng: Rng, allowed: (d: D
     if (c.type !== "hull") return;
     const isTip = DIRS.filter((d) => open(c, d)).length === 3;
     for (const d of DIRS) {
-      if (!allowed(d)) continue;
+      if (!allowed(d, c)) continue;
       const trial = cells.map((o, k) => (k === i ? { ...o, type, dir: d } : o));
       if (!openChecker(trial)(trial[i]!)) continue;
       if (type === "laser" || type === "saw" || type === "grapple") {

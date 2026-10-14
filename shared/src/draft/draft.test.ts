@@ -4,6 +4,7 @@ import { openChecker } from "../cells.js";
 import {
   Draft,
   draftBotAction,
+  exhaustSquare,
   generatePiece,
   hullBuildable,
   hullCore,
@@ -73,7 +74,7 @@ describe("hulls", () => {
 });
 
 describe("generatePiece", () => {
-  it("makes 5-cell pieces with exactly one kind of part; shields cover the face in their direction", () => {
+  it("makes 5-cell pieces with exactly one kind of part; mirrors cover the piece, armor its face", () => {
     const rng = new Rng(7);
     let shields = 0;
     for (let i = 0; i < 300; i++) {
@@ -81,7 +82,12 @@ describe("generatePiece", () => {
       expect(p.cells).toHaveLength(5);
       const special = p.cells.filter((c) => c.type !== "hull");
       expect(special.length).toBeGreaterThan(0);
-      if (special.some((c) => c.type === "mirror" || c.type === "armor")) {
+      if (special.some((c) => c.type === "mirror")) {
+        // Mirror pieces are mirror all over, so their whole outer edge reflects.
+        shields++;
+        expect(special).toHaveLength(5);
+        expect(special.every((c) => c.type === "mirror")).toBe(true);
+      } else if (special.some((c) => c.type === "armor")) {
         shields++;
         expect(new Set(special.map((c) => `${c.type}${c.dir}`)).size).toBe(1);
         // Exactly the cells on the piece's face in that direction: one per row or column it spans.
@@ -93,7 +99,12 @@ describe("generatePiece", () => {
         expect(special.every((c) => c.type === "engine")).toBe(true);
         expect(special.length).toBeGreaterThanOrEqual(1);
         expect(special.length).toBeLessThanOrEqual(2);
-        if (special.length === 2) expect((special[0]!.dir - special[1]!.dir + 4) % 4).not.toBe(2);
+        if (special.length === 2) {
+          expect((special[0]!.dir - special[1]!.dir + 4) % 4).not.toBe(2);
+          // Their exhausts never empty into the same square (bells and flames would pile up).
+          const [e1, e2] = special as [Cell, Cell];
+          expect(exhaustSquare(e1.x, e1.y, e1.dir)).not.toBe(exhaustSquare(e2.x, e2.y, e2.dir));
+        }
       } else {
         expect(special).toHaveLength(1);
       }
