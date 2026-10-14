@@ -17,7 +17,7 @@ import {
   type RoundResults,
   type ServerMsg,
 } from "@ja/shared";
-import { Draft, draftBotAction } from "@ja/shared/draft";
+import { Draft, REROLL_SECONDS, draftBotAction, type DraftAction } from "@ja/shared/draft";
 import { Arena, CELEBRATE_SECONDS, FAST_FORWARD_SPEED, FightRecorder, SIM, SNAPSHOT_EVERY, TICK_HZ, arenaBotInput, type ArenaSetup } from "@ja/shared/sim";
 import { saveRecording } from "./recordings.js";
 
@@ -205,7 +205,7 @@ export class Room {
       }
       case "draft": {
         if (this.phase !== "draft" || !this.draft || !player.inRound) return;
-        const err = this.draft.apply(playerId, msg.action);
+        const err = this.applyDraft(playerId, msg.action);
         if (err) this.send(player, { t: "error", message: err });
         this.broadcastDraft();
         return;
@@ -333,6 +333,21 @@ export class Room {
     }
   }
 
+  /** Applies a draft action; a reroll deals its new hand REROLL_SECONDS later. */
+  private applyDraft(playerId: PlayerId, action: DraftAction): string | null {
+    const draft = this.draft;
+    if (!draft) return "No draft";
+    const err = draft.apply(playerId, action);
+    if (!err && action.type === "reroll") {
+      setTimeout(() => {
+        if (this.draft !== draft) return;
+        draft.finishReroll(playerId);
+        this.broadcastDraft();
+      }, REROLL_SECONDS * 1000);
+    }
+    return err;
+  }
+
   private updateDraftBots() {
     const draft = this.draft;
     if (!draft) return;
@@ -342,7 +357,7 @@ export class Room {
       if (!p.isBot || !p.inRound || now < p.botNextActAt) continue;
       p.botNextActAt = now + 1500 + this.rng.int(1500);
       const action = draftBotAction(draft, p.id, this.rng);
-      if (action && draft.apply(p.id, action) === null) changed = true;
+      if (action && this.applyDraft(p.id, action) === null) changed = true;
     }
     if (changed) this.broadcastDraft();
   }

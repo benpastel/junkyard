@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Dir, PlayerId, PlayerInfo } from "@ja/shared";
-import { transformCells, type DraftAction, type DraftView, type Piece } from "@ja/shared/draft";
+import { POOL_ENABLED, transformCells, type DraftAction, type DraftView, type Piece } from "@ja/shared/draft";
 import { Board, type DragState } from "./Board";
 import { PieceCanvas } from "./PieceCanvas";
 import { RivalShip } from "./RivalShip";
@@ -20,7 +20,7 @@ export function DraftScreen(props: {
   const [rot, setRot] = useState<Dir>(0);
   const [flip, setFlip] = useState(false);
   const [overBoard, setOverBoard] = useState(false);
-  // Over the held card and its buttons the card already shows the piece, so don't float one there.
+  // Over the offers and their buttons the lit card already shows the piece, so don't float one there.
   const [overHand, setOverHand] = useState(false);
   // The piece we just asked to take, shown as held before the server confirms.
   const [pending, setPending] = useState<Piece | null>(null);
@@ -30,11 +30,10 @@ export function DraftScreen(props: {
 
   useEffect(() => setPlacing(null), [view]);
 
+  // The offers stay put while you hold one, so a pick is still valid while it's among them.
   const pendingStillValid =
-    pending !== null &&
-    !view.held &&
-    (view.offers.some((p) => p.id === pending.id) || view.pool.some((p) => p.id === pending.id));
-  const held0 = view.held ?? (pendingStillValid ? pending : null);
+    pending !== null && (view.offers.some((p) => p.id === pending.id) || view.pool.some((p) => p.id === pending.id));
+  const held0 = pendingStillValid ? pending : view.held;
   const held = held0 && held0.id === placing ? null : held0;
 
   // New piece in hand: start upright.
@@ -49,10 +48,17 @@ export function DraftScreen(props: {
 
   const take = (piece: Piece, from: "offer" | "pool") => {
     if (held?.id === piece.id) return;
-    if (held) act({ type: "discard" });
+    // Switching straight to another offer is fine; a pool piece has to be swapped back first.
+    if (held && from === "pool") act({ type: "discard" });
     act(from === "offer" ? { type: "takeOffer", pieceId: piece.id } : { type: "takePool", pieceId: piece.id });
     setPending(piece);
   };
+
+  const reroll = useCallback(() => {
+    if (view.dealing) return;
+    act({ type: "reroll" });
+    setPending(null);
+  }, [act, view.dealing]);
 
   const discard = useCallback(() => {
     if (!held) return;
@@ -77,20 +83,20 @@ export function DraftScreen(props: {
     setRot((r) => ((4 - r) % 4) as Dir);
   }, []);
 
-  // Keyboard: Q / E rotate (R is an alias for E), F flips, Esc discards.
+  // Keyboard: Q / E rotate, F flips, Esc puts the piece back, R rerolls the offers.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const k = e.key.toLowerCase();
       if (k === "q") rotate(-1);
       else if (k === "e") rotate(1);
-      else if (k === "r") rotate(e.shiftKey ? -1 : 1);
+      else if (k === "r") reroll();
       else if (k === "f") toggleFlip();
       else if (k === "escape") discard();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rotate, toggleFlip, discard]);
+  }, [rotate, toggleFlip, discard, reroll]);
 
   // Right-click rotates while holding; wheel rotates too.
   useEffect(() => {
@@ -125,30 +131,37 @@ export function DraftScreen(props: {
 
   return (
     <div className="draft">
-      <aside className="draft-side">
-        {heldShape && (
-          <section className="draft-hand" onPointerEnter={() => setOverHand(true)} onPointerLeave={() => setOverHand(false)}>
-            <div className="piece-card held">
-              <PieceCanvas cells={heldShape} cell={26} color={color} />
-            </div>
-            <div className="draft-tools">
-              <KeyButton title="Rotate counter-clockwise" keyLabel="Q" icon={<RotateIcon ccw />} onClick={() => rotate(-1)} />
-              <KeyButton title="Rotate clockwise" keyLabel="E" icon={<RotateIcon />} onClick={() => rotate(1)} />
-              <KeyButton title="Flip" keyLabel="F" icon={<FlipIcon />} onClick={toggleFlip} active={flip} />
-              <KeyButton title="Discard" keyLabel="Esc" icon={<DiscardIcon />} onClick={discard} />
-            </div>
-          </section>
-        )}
-        {view.offers.length > 0 && (
-          <section>
-            <h3>Offers</h3>
-            <div className="draft-offers">
-              {view.offers.map((p) => (
-                <PieceCard key={p.id} piece={p} cell={26} color={color} active={held?.id === p.id} onTake={() => take(p, "offer")} drag={drag} />
-              ))}
-            </div>
-          </section>
-        )}
+      <aside className="draft-side" onPointerEnter={() => setOverHand(true)} onPointerLeave={() => setOverHand(false)}>
+        <section className="draft-hand">
+          <div className="draft-offers">
+            {view.dealing ? (
+              <div className="draft-dealing">
+                <HourglassIcon />
+              </div>
+            ) : (
+              view.offers.map((p) => (
+                <PieceCard
+                  key={p.id}
+                  piece={p}
+                  // The lit card shows the piece the way it's turned.
+                  cells={held?.id === p.id && heldShape ? heldShape : p.cells}
+                  cell={18}
+                  color={color}
+                  active={held?.id === p.id}
+                  onTake={() => take(p, "offer")}
+                  drag={drag}
+                />
+              ))
+            )}
+          </div>
+          <div className="draft-tools">
+            <KeyButton title="Rotate counter-clockwise" keyLabel="Q" icon={<RotateIcon ccw />} onClick={() => rotate(-1)} disabled={!held} />
+            <KeyButton title="Rotate clockwise" keyLabel="E" icon={<RotateIcon />} onClick={() => rotate(1)} disabled={!held} />
+            <KeyButton title="Flip" keyLabel="F" icon={<FlipIcon />} onClick={toggleFlip} active={!!held && flip} disabled={!held} />
+            <KeyButton title="Put back" keyLabel="Esc" icon={<DiscardIcon />} onClick={discard} disabled={!held} />
+            <KeyButton title="New offers" keyLabel="R" icon={<HourglassIcon />} onClick={reroll} active={view.dealing} disabled={view.dealing} />
+          </div>
+        </section>
       </aside>
 
       <main className="draft-main">
@@ -167,14 +180,16 @@ export function DraftScreen(props: {
       </main>
 
       <aside className="draft-side">
-        <section className="draft-pool-section">
-          <h3>Pool</h3>
-          <div className="draft-pool">
-            {view.pool.map((p) => (
-              <PieceCard key={p.id} piece={p} cell={14} color={color} small active={held?.id === p.id} onTake={() => take(p, "pool")} drag={drag} />
-            ))}
-          </div>
-        </section>
+        {POOL_ENABLED && (
+          <section className="draft-pool-section">
+            <h3>Pool</h3>
+            <div className="draft-pool">
+              {view.pool.map((p) => (
+                <PieceCard key={p.id} piece={p} cell={14} color={color} small active={held?.id === p.id} onTake={() => take(p, "pool")} drag={drag} />
+              ))}
+            </div>
+          </section>
+        )}
         {rivals.length > 0 && (
           <section>
             <h3>Rivals</h3>
@@ -213,6 +228,16 @@ function FlipIcon() {
   );
 }
 
+function HourglassIcon() {
+  return (
+    <svg {...ICON} className="hourglass" aria-hidden>
+      <path d="M6 3h12M6 21h12" />
+      <path d="M7 3c0 5 10 5 10 9s-10 4-10 9" />
+      <path d="M17 3c0 5-10 5-10 9s10 4 10 9" />
+    </svg>
+  );
+}
+
 function DiscardIcon() {
   return (
     <svg {...ICON} aria-hidden>
@@ -223,6 +248,8 @@ function DiscardIcon() {
 
 function PieceCard(props: {
   piece: Piece;
+  /** Cells to draw, if not the piece's own (e.g. turned the way it's held). */
+  cells?: Piece["cells"];
   cell: number;
   color: string;
   small?: boolean;
@@ -231,6 +258,7 @@ function PieceCard(props: {
   drag: React.MutableRefObject<DragState>;
 }) {
   const { piece, cell, color, small, active, onTake, drag } = props;
+  const cells = props.cells ?? piece.cells;
   return (
     <button
       className={`piece-card${small ? " small" : ""}${active ? " active" : ""}`}
@@ -241,7 +269,7 @@ function PieceCard(props: {
         onTake();
       }}
     >
-      <PieceCanvas cells={piece.cells} cell={cell} color={color} />
+      <PieceCanvas cells={cells} cell={cell} color={color} />
     </button>
   );
 }

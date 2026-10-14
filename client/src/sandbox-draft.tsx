@@ -1,7 +1,7 @@
 // Local draft sandbox: me plus three bots, all in the browser. Open with ?sandbox=draft.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PLAYER_COLORS, Rng, type HullId, type PlayerInfo } from "@ja/shared";
-import { Draft, draftBotAction, type DraftAction } from "@ja/shared/draft";
+import { Draft, REROLL_SECONDS, draftBotAction, type DraftAction } from "@ja/shared/draft";
 import { DraftScreen } from "./draft/DraftScreen";
 
 const BUILD_SECONDS = 60;
@@ -31,10 +31,25 @@ export function SandboxDraft() {
     [],
   );
 
+  // Like the server: a reroll deals its new hand REROLL_SECONDS later.
+  const apply = useCallback(
+    (id: string, a: DraftAction) => {
+      const err = draft.apply(id, a);
+      if (!err && a.type === "reroll") {
+        setTimeout(() => {
+          draft.finishReroll(id);
+          setVersion((v) => v + 1);
+        }, REROLL_SECONDS * 1000);
+      }
+      return err;
+    },
+    [draft],
+  );
+
   const act = useCallback(
     (a: DraftAction) => {
       if (over()) return;
-      const err = draft.apply(ME, a);
+      const err = apply(ME, a);
       if (err) console.log("draft:", err);
       setVersion((v) => v + 1);
     },
@@ -48,7 +63,7 @@ export function SandboxDraft() {
       const loop = () => {
         if (over()) return;
         const a = draftBotAction(draft, id, rng);
-        if (a) draft.apply(id, a);
+        if (a) apply(id, a);
         setVersion((v) => v + 1);
         handle = setTimeout(loop, 1500 + rng.next() * 1500);
       };

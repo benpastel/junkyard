@@ -204,12 +204,16 @@ function bestPlacement(view: DraftView, piece: Piece, rng: Rng): { placement: Pl
 /** Next action for a bot, or null to wait. Called every couple of seconds. */
 export function draftBotAction(draft: Draft, playerId: PlayerId, rng: Rng): DraftAction | null {
   const view = draft.view(playerId);
+  if (view.dealing) return null;
 
   if (view.held) {
     const best = bestPlacement(view, view.held, rng);
-    if (!best) return { type: "discard" };
-    const { x, y, rot, flip } = best.placement;
-    return { type: "place", x, y, rot, flip };
+    if (best) {
+      const { x, y, rot, flip } = best.placement;
+      return { type: "place", x, y, rot, flip };
+    }
+    // Shouldn't happen (we only pick up pieces that fit), but never get stuck holding one.
+    return { type: "discard" };
   }
 
   const candidates: { piece: Piece; from: "offer" | "pool" }[] = [
@@ -224,11 +228,8 @@ export function draftBotAction(draft: Draft, playerId: PlayerId, rng: Rng): Draf
     const score = best.score + (special ? typeValue(special.type, view.cells) : 0) + rng.next() * 2;
     if (!choice || score > choice.score) choice = { piece, from, score };
   }
-  if (!choice) {
-    // Nothing fits: take an offer anyway; it gets discarded next turn, which brings fresh offers.
-    const first = view.offers[0];
-    return first ? { type: "takeOffer", pieceId: first.id } : null;
-  }
+  // Nothing fits: reroll for a fresh hand.
+  if (!choice) return { type: "reroll" };
   return choice.from === "offer"
     ? { type: "takeOffer", pieceId: choice.piece.id }
     : { type: "takePool", pieceId: choice.piece.id };

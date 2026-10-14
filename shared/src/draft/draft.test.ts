@@ -10,7 +10,8 @@ import {
   hullCore,
   HULLS,
   placedCells,
-  POOL_CAP,
+  OFFER_COUNT,
+  POOL_ENABLED,
   transformCells,
   type Piece,
 } from "./index.js";
@@ -138,44 +139,62 @@ describe("generatePiece", () => {
 describe("Draft", () => {
   const core = hullCore("hauler");
 
-  it("deals three offers and seeds the ship with a core", () => {
+  it("deals five offers and seeds the ship with a core", () => {
     const d = new Draft({ playerIds: ["a", "b"], hull: "hauler", seed: 1 });
     const v = d.view("a");
-    expect(v.offers).toHaveLength(3);
+    expect(v.offers).toHaveLength(OFFER_COUNT);
+    expect(OFFER_COUNT).toBe(5);
     expect(v.cells).toEqual([{ ...core, type: "core", dir: 0 }]);
     expect(v.rivals.map((r) => r.playerId)).toEqual(["b"]);
   });
 
-  it("taking an offer sends the rest to the pool; placing refills offers", () => {
+  it("keeps the hand while you hold a piece; placing deals a fresh hand", () => {
     const d = new Draft({ playerIds: ["a", "b"], hull: "hauler", seed: 2 });
-    const [first, ...rest] = d.view("a").offers;
-    expect(d.apply("a", { type: "takeOffer", pieceId: first!.id })).toBeNull();
-    let v = d.view("a");
-    expect(v.held?.id).toBe(first!.id);
-    expect(v.offers).toHaveLength(0);
-    expect(v.pool.map((p) => p.id)).toEqual(rest.map((p) => p.id));
-    expect(d.view("b").pool).toHaveLength(2);
-    expect(d.apply("a", { type: "takeOffer", pieceId: rest[0]!.id })).not.toBeNull();
+    const hand = d.view("a").offers.map((p) => p.id);
+    expect(d.apply("a", { type: "takeOffer", pieceId: hand[0]! })).toBeNull();
+    expect(d.view("a").held?.id).toBe(hand[0]);
+    expect(d.view("a").offers.map((p) => p.id)).toEqual(hand);
+    // Change your mind, and put it back.
+    expect(d.apply("a", { type: "takeOffer", pieceId: hand[1]! })).toBeNull();
+    expect(d.view("a").held?.id).toBe(hand[1]);
+    expect(d.apply("a", { type: "discard" })).toBeNull();
+    expect(d.view("a").held).toBeNull();
+    expect(d.view("a").offers.map((p) => p.id)).toEqual(hand);
 
-    // Place it somewhere valid.
+    d.apply("a", { type: "takeOffer", pieceId: hand[0]! });
     const spot = findValidSpot(d, "a");
     expect(d.apply("a", { type: "place", ...spot })).toBeNull();
-    v = d.view("a");
+    const v = d.view("a");
     expect(v.held).toBeNull();
     expect(v.cells).toHaveLength(6);
-    expect(v.offers).toHaveLength(3);
+    expect(v.offers).toHaveLength(OFFER_COUNT);
+    expect(v.offers.some((p) => hand.includes(p.id))).toBe(false);
   });
 
-  it("pool pieces are first come, first served", () => {
-    const d = new Draft({ playerIds: ["a", "b"], hull: "hauler", seed: 3 });
+  it("a reroll empties the hand until the new one is dealt", () => {
+    const d = new Draft({ playerIds: ["a"], hull: "hauler", seed: 3 });
+    const hand = d.view("a").offers.map((p) => p.id);
+    d.apply("a", { type: "takeOffer", pieceId: hand[0]! });
+    expect(d.apply("a", { type: "reroll" })).toBeNull();
+    let v = d.view("a");
+    expect(v.dealing).toBe(true);
+    expect(v.offers).toHaveLength(0);
+    expect(v.held).toBeNull();
+    expect(d.apply("a", { type: "reroll" })).not.toBeNull();
+    d.finishReroll("a");
+    v = d.view("a");
+    expect(v.dealing).toBe(false);
+    expect(v.offers).toHaveLength(OFFER_COUNT);
+    expect(v.offers.some((p) => hand.includes(p.id))).toBe(false);
+  });
+
+  it("has no shared pool while it's switched off", () => {
+    if (POOL_ENABLED) return;
+    const d = new Draft({ playerIds: ["a", "b"], hull: "hauler", seed: 4 });
     d.apply("a", { type: "takeOffer", pieceId: d.view("a").offers[0]!.id });
-    const poolId = d.view("b").pool[0]!.id;
-    expect(d.apply("b", { type: "takePool", pieceId: poolId })).toBeNull();
-    expect(d.view("b").held?.id).toBe(poolId);
-    // b still has its own offers, since it took from the pool.
-    expect(d.view("b").offers).toHaveLength(3);
-    expect(d.apply("a", { type: "discard" })).toBeNull();
-    expect(d.view("a").offers).toHaveLength(3);
+    d.apply("a", { type: "place", ...findValidSpot(d, "a") });
+    d.apply("a", { type: "reroll" });
+    expect(d.view("b").pool).toHaveLength(0);
   });
 
   it("rejects off-hull, overlapping and detached placements", () => {
@@ -186,15 +205,6 @@ describe("Draft", () => {
     // Bottom-left corner of the hull: on the hull but nowhere near the core.
     const far = findSpot(d, "a", (cells) => cells.every((c) => Math.abs(c.x - core.x) + Math.abs(c.y - core.y) > 2));
     if (far) expect(d.apply("a", { type: "place", ...far })).toBe("Not attached");
-  });
-
-  it("caps the pool", () => {
-    const d = new Draft({ playerIds: ["a"], hull: "barge", seed: 5 });
-    for (let i = 0; i < 20; i++) {
-      d.apply("a", { type: "takeOffer", pieceId: d.view("a").offers[0]!.id });
-      d.apply("a", { type: "discard" });
-    }
-    expect(d.view("a").pool).toHaveLength(POOL_CAP);
   });
 
   it("bots fill their ships without errors", { timeout: 30000 }, () => {

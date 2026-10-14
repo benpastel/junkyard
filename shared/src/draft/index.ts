@@ -10,10 +10,14 @@ export * from "./rules.js";
 export { draftBotAction } from "./bot.js";
 
 export type DraftAction =
+  /** Pick up one of my offers (the rest stay on offer until I place it). */
   | { type: "takeOffer"; pieceId: string }
   | { type: "takePool"; pieceId: string }
   | { type: "place"; x: number; y: number; rot: Dir; flip: boolean }
-  | { type: "discard" };
+  /** Put the held piece back among my offers. */
+  | { type: "discard" }
+  /** Throw away all my offers; fresh ones arrive after REROLL_SECONDS (see finishReroll). */
+  | { type: "reroll" };
 
 /** Everything one player's draft screen needs. Personalised per player. */
 export interface DraftView {
@@ -22,21 +26,31 @@ export interface DraftView {
   hullRows: string[];
   /** My placed cells, including the core, in hull grid coordinates. */
   cells: Cell[];
-  /** My private offers. Empty while I hold a piece taken from them. */
+  /** My private offers, including the one I'm holding. Empty while a reroll is dealing. */
   offers: Piece[];
   held: Piece | null;
-  /** The shared pool, oldest first. */
+  /** A reroll is under way: new offers are on their way. */
+  dealing: boolean;
+  /** The shared pool, oldest first (always empty while POOL_ENABLED is off). */
   pool: Piece[];
   rivals: { playerId: PlayerId; cells: Cell[] }[];
 }
 
-export const OFFER_COUNT = 3;
+export const OFFER_COUNT = 5;
 export const POOL_CAP = 18;
+/**
+ * The shared pool (unused offers go to a tray anyone can take from). Switched off for now;
+ * with it off, pieces you don't use just disappear.
+ */
+export const POOL_ENABLED = false;
+/** How long a reroll takes to deal new offers, so you can't cycle through them for free. */
+export const REROLL_SECONDS = 1;
 
 interface PlayerDraft {
   offers: Piece[];
   held: Piece | null;
   cells: Cell[];
+  dealing: boolean;
 }
 
 export class Draft {
@@ -53,7 +67,7 @@ export class Draft {
     this.buildable = new Set(hullBuildable(opts.hull).map((p) => key(p.x, p.y)));
     const core = hullCore(opts.hull);
     for (const id of opts.playerIds) {
-      this.players.set(id, { offers: this.dealOffers(), held: null, cells: [{ ...core, type: "core", dir: 0 }] });
+      this.players.set(id, { offers: this.dealOffers(), held: null, cells: [{ ...core, type: "core", dir: 0 }], dealing: false });
     }
   }
 
@@ -63,15 +77,14 @@ export class Draft {
     if (!p) return "Not in this draft";
     switch (action.type) {
       case "takeOffer": {
-        if (p.held) return "Already holding a piece";
         const piece = p.offers.find((o) => o.id === action.pieceId);
         if (!piece) return "Offer gone";
-        this.addToPool(p.offers.filter((o) => o !== piece));
-        p.offers = [];
+        // Switching pieces is fine: the offers stay put until one is placed.
         p.held = piece;
         return null;
       }
       case "takePool": {
+        if (!POOL_ENABLED) return "No pool";
         if (p.held) return "Already holding a piece";
         const i = this.pool.findIndex((o) => o.id === action.pieceId);
         if (i < 0) return "Someone else took it";
@@ -87,15 +100,26 @@ export class Draft {
         // Tag the cells with this placement so the art knows which neighbours share a piece.
         const piece = p.cells.length;
         p.cells.push(...cells.map((c) => ({ ...c, piece })));
+        // The rest of this hand goes (to the pool, if it's on) and a fresh hand is dealt.
+        const placed = p.held;
+        this.addToPool(p.offers.filter((o) => o !== placed));
         p.held = null;
-        this.refill(p);
+        p.offers = this.dealOffers();
         return null;
       }
       case "discard": {
         if (!p.held) return "Not holding a piece";
-        this.addToPool([p.held]);
+        // A piece taken from the pool goes back there; one from my offers is still in them.
+        if (!p.offers.includes(p.held)) this.addToPool([p.held]);
         p.held = null;
-        this.refill(p);
+        return null;
+      }
+      case "reroll": {
+        if (p.dealing) return "Already dealing";
+        this.addToPool(p.offers);
+        p.offers = [];
+        p.held = null;
+        p.dealing = true;
         return null;
       }
       default:
@@ -115,6 +139,7 @@ export class Draft {
       cells: p ? p.cells.slice() : [],
       offers: p ? p.offers.slice() : [],
       held: p?.held ?? null,
+      dealing: p?.dealing ?? false,
       pool: this.pool.slice(),
       rivals,
     };
@@ -125,8 +150,12 @@ export class Draft {
     return this.players.get(playerId)?.cells.map((c) => ({ ...c })) ?? [];
   }
 
-  private refill(p: PlayerDraft) {
-    if (p.offers.length === 0) p.offers = this.dealOffers();
+  /** Deals the new hand a reroll is waiting on. The caller runs this REROLL_SECONDS after the reroll. */
+  finishReroll(playerId: PlayerId) {
+    const p = this.players.get(playerId);
+    if (!p?.dealing) return;
+    p.dealing = false;
+    p.offers = this.dealOffers();
   }
 
   private dealOffers(): Piece[] {
@@ -134,6 +163,7 @@ export class Draft {
   }
 
   private addToPool(pieces: Piece[]) {
+    if (!POOL_ENABLED) return;
     this.pool.push(...pieces);
     if (this.pool.length > POOL_CAP) this.pool.splice(0, this.pool.length - POOL_CAP);
   }
