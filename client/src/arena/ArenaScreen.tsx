@@ -27,6 +27,7 @@ export function ArenaScreen(props: {
   const [pips, setPips] = useState<{ color: string; alive: boolean }[]>([]);
   const [held, setHeld] = useState<InputState>(NO_KEYS);
   const pressRef = useRef<(k: keyof InputState, down: boolean) => void>(() => {});
+  const rendererRef = useRef<ArenaRenderer | null>(null);
   const flying = !!me && init.ships.some((s) => s.playerId === me);
 
   // Latest sendInput without re-running the effects when the parent re-renders.
@@ -35,6 +36,7 @@ export function ArenaScreen(props: {
 
   useEffect(() => {
     const renderer = new ArenaRenderer(init, me);
+    rendererRef.current = renderer;
     const unsub = subscribe((s) => renderer.push(s));
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
@@ -73,6 +75,7 @@ export function ArenaScreen(props: {
       if (keys[k] === down) return;
       keys[k] = down;
       setHeld({ ...keys });
+      rendererRef.current?.setPan(keys);
       send();
     };
     pressRef.current = press;
@@ -87,6 +90,7 @@ export function ArenaScreen(props: {
     const onBlur = () => {
       for (const k of Object.keys(keys) as (keyof InputState)[]) keys[k] = false;
       setHeld({ ...keys });
+      rendererRef.current?.setPan(keys);
       send();
     };
     window.addEventListener("keydown", onDown);

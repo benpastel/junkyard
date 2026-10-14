@@ -22,6 +22,9 @@ const BARREL_TIP = 0.97;
 const RENDER_DELAY = 0.1;
 /** Visible width of the world at the default zoom, in cells. */
 const VIEW_CELLS = 38;
+/** Free-camera pan speed, and how far past the ring's edge it may wander. */
+const PAN_CELLS_PER_SECOND = 24;
+const PAN_LEASH_CELLS = 6;
 
 interface CellInfo extends InitCell {
   color: string;
@@ -133,7 +136,7 @@ export class ArenaRenderer {
     const bodies = this.interpolate(renderTick);
     const ring = this.ringAt(renderTick);
 
-    this.updateCamera(bodies, width, height, dt);
+    this.updateCamera(bodies, width, height, dt, ring);
     this.tickEffects(dt);
 
     const S = (Math.min(width, height * 1.4) / VIEW_CELLS) * this.camera.zoom;
@@ -270,37 +273,50 @@ export class ArenaRenderer {
 
   // ---------------------------------------------------------------- camera
 
-  private updateCamera(bodies: BodyView[], width: number, height: number, dt: number) {
-    let focus: BodyView | undefined;
-    if (this.me && !this.dead.has(this.me)) focus = bodies.find((b) => b.owner === this.me);
-    if (!focus) {
-      // Spectate the ship with the most cells.
-      let best = -1;
-      for (const b of bodies) {
-        if (!b.owner) continue;
-        const n = this.bodyCells.get(b.snap.id)?.cells.length ?? 0;
-        if (n > best) {
-          best = n;
-          focus = b;
-        }
-      }
+  /** Arrow keys held, for panning the free camera once you have no ship. */
+  private pan = { up: false, down: false, left: false, right: false };
+
+  setPan(keys: { up: boolean; down: boolean; left: boolean; right: boolean }) {
+    this.pan = { up: keys.up, down: keys.down, left: keys.left, right: keys.right };
+  }
+
+  /**
+   * While you fly, the camera is locked to your ship and turns with it, so your ship sits still
+   * in the middle pointing up and the world moves round it. Once dead (or just watching), the
+   * camera stays put, the arrow keys pan it, and it's leashed so the ring stays on screen.
+   */
+  private updateCamera(bodies: BodyView[], width: number, height: number, dt: number, ring: number) {
+    const mine = this.me && !this.dead.has(this.me) ? bodies.find((b) => b.owner === this.me) : undefined;
+    if (mine) {
+      this.camera = { x: mine.x, y: mine.y, zoom: 1 };
+      this.camRot = -mine.a;
+      this.cameraReady = true;
+      return;
     }
-    if (this.camRot === null && this.current) {
-      const mine = this.me ? bodies.find((b) => b.owner === this.me) : undefined;
-      this.camRot = mine ? -mine.a : 0;
-    }
-    const target = focus ? { x: focus.x, y: focus.y } : { x: 0, y: 0 };
-    // No live ship to follow (spectating with nothing left): frame the whole ring.
-    const targetZoom = focus ? 1 : Math.min(1, VIEW_CELLS / (this.init.ring.startRadius * 2.2) / Math.min(1, width / (height * 1.4)));
-    if (!this.cameraReady && (focus || this.current)) {
-      this.camera = { x: target.x, y: target.y, zoom: targetZoom };
+    if (!this.cameraReady && this.current) {
+      // A spectator from the start: open on the whole ring.
+      const fit = Math.min(1, VIEW_CELLS / (this.init.ring.startRadius * 2.2) / Math.min(1, width / (height * 1.4)));
+      this.camera = { x: 0, y: 0, zoom: fit };
+      this.camRot = 0;
       this.cameraReady = true;
     }
-    const k = 1 - Math.exp(-dt * 6);
-    this.camera.x += (target.x - this.camera.x) * k;
-    this.camera.y += (target.y - this.camera.y) * k;
-    this.camera.zoom += (targetZoom - this.camera.zoom) * (1 - Math.exp(-dt * 2));
+    const sx = (this.pan.right ? 1 : 0) - (this.pan.left ? 1 : 0);
+    const sy = (this.pan.down ? 1 : 0) - (this.pan.up ? 1 : 0);
+    if (sx || sy) {
+      // Screen directions back into world directions (undo the camera's rotation).
+      const rot = -(this.camRot ?? 0);
+      const speed = (PAN_CELLS_PER_SECOND / this.camera.zoom) * dt;
+      this.camera.x += (sx * Math.cos(rot) - sy * Math.sin(rot)) * speed;
+      this.camera.y += (sx * Math.sin(rot) + sy * Math.cos(rot)) * speed;
+    }
+    const leash = ring + PAN_LEASH_CELLS;
+    const d = Math.hypot(this.camera.x, this.camera.y);
+    if (d > leash) {
+      this.camera.x *= leash / d;
+      this.camera.y *= leash / d;
+    }
   }
+
 
   // ---------------------------------------------------------------- events & effects
 
