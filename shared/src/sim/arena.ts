@@ -154,7 +154,7 @@ export class Arena {
 
     const n = setup.ships.length;
     const spawnR = Math.max(SIM.spawnMinRadius, n * SIM.spawnRadiusPerShip);
-    this.ringStart = spawnR + SIM.ringStartPadding;
+    this.ringStart = (spawnR + SIM.ringStartPadding) * SIM.ringStartScale;
     this.ringRadius = this.ringStart;
 
     let cid = 1;

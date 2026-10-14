@@ -7,7 +7,7 @@ Working name: **Junkyard Armada** (no existing game by that name found; junkyard
 Online multiplayer, fast-paced, round-based game:
 
 1. **Draft / build.** Players place pentomino pieces (Blokus-style 5-cell shapes) onto their own ship grid against a timer.
-2. **Arena combat.** When the timer ends, all ships are dumped into one arena and fight to last ship standing. The arena edge is a **rubber ring** that slowly tightens all the way to nothing; ships bounce off it unharmed. When ships are jammed together with no slack left, sustained pressure **crushes the touching cells on both ships at once** (an open armor edge or ram facing the contact holds out, unless both sides have one). Cells pressed into the ring itself give way only as a slower fallback. A **power-up orb** sits at the centre at the start, once per fight; grabbing it gives 5s of **mirror skin**: every outer surface of the ship reflects lasers and glows bright yellow (saws, impacts and crushing still hurt).
+2. **Arena combat.** When the timer ends, all ships are dumped into one arena and fight to last ship standing. The arena edge is a **rubber ring** that starts at twice the spawn circle (+ padding) and tightens all the way to nothing over 90s; ships bounce off it unharmed. When ships are jammed together with no slack left, sustained pressure **crushes the touching cells on both ships at once** (an open armor edge or ram facing the contact holds out, unless both sides have one). Cells pressed into the ring itself give way only as a slower fallback. A **power-up orb** sits at the centre at the start, once per fight; grabbing it gives 5s of **mirror skin**: every outer surface of the ship reflects lasers and glows bright yellow (saws, impacts and crushing still hurt).
 3. When the fight is decided, the arena keeps running for a few seconds (ring frozen, no damage) while the winner's name flashes over a rain of screws, bolts and nuts.
 4. **Stats / chat page**, then a new round. Every round starts from scratch; nothing carries over.
 
@@ -56,7 +56,7 @@ Online multiplayer, fast-paced, round-based game:
 - **Weapons:** fixed-direction, one key per weapon type. Lasers fire automatically whenever their line is clear; X = grapple (toggle).
 - **Fast-forward:** an F button in the arena; once every connected human in the fight (dead ones too) has voted, the fight runs at 4× until it is decided. Snapshots stay at 20/s, and the client playback clock follows the sim speed.
 - **Controls bar:** the arena shows each key as a clickable button that lights while held; the draft uses the same buttons for rotate (Q/E), flip (F) and discard (Esc).
-  - lasers (ranged, raycasts; auto-firing, one shot every 2.4s, light knockback)
+  - lasers (ranged, raycasts; auto-firing, one shot every 2.4s, light knockback; range 12 cells, just short of the window edge on a laptop screen)
   - collisions above a speed threshold break one cell on each side
   - **anti-stuck:** cells of two ships that stay touching for 3s explode, on both sides at once
   - **saw**: a spinning blade with its own round hitbox past the cell, wide enough to reach the tile in front and both tiles diagonally in front; it cuts whatever it touches (one hit every 0.2s, at any speed) and takes no harm from it. Armor facing the blade turns it. It only works with its line and both front diagonals clear.

@@ -30,7 +30,11 @@ export const SIM = {
 
   laserChargeSeconds: 0.25,
   laserCooldownSeconds: 2.4,
-  laserRange: 25,
+  /**
+   * Just short of the nearest window edge from your ship: the arena view always shows at least
+   * VIEW_CELLS / 1.4 / 2 ≈ 13.6 cells each way (client/src/arena/renderer.ts). Keep them in step.
+   */
+  laserRange: 12,
   /** Hits dealt per laser shot. */
   laserDamage: 1,
   laserKnockback: 0.4,
@@ -62,6 +66,8 @@ export const SIM = {
   spawnMinRadius: 14,
   spawnRadiusPerShip: 4.5,
   ringStartPadding: 14,
+  /** The ring starts this many times wider than the spawn circle plus padding. */
+  ringStartScale: 2,
   ringMinRadius: 0,
   ringDelaySeconds: 8,
   ringShrinkSeconds: 90,

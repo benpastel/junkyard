@@ -73,7 +73,7 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
     const ux = dx / dist;
     const uy = dy / dist;
     desiredAngle = Math.atan2(uy, ux) - aimLocal + st.aimNoise;
-    const preferred = lasers.length ? 11 : 0;
+    const preferred = lasers.length ? Math.min(11, SIM.laserRange - 4) : 0;
     const speed = dist > preferred + 3 ? 7 : dist < preferred - 3 ? -3 : 0;
     desiredVel = { x: ux * speed, y: uy * speed };
   }
