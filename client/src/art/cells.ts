@@ -28,17 +28,31 @@ export interface CellStyle {
 }
 
 /**
- * For each cell of a ship (or piece), the sides a mirror strip is drawn on: every side except
- * those shared with another mirror cell. Sides buried against hull or other parts still show,
- * since they start reflecting the moment whatever covers them breaks off.
+ * For each cell of a ship (or piece), the sides a mirror strip is drawn on. Sides buried against
+ * hull or other parts still show, since they start reflecting the moment whatever covers them
+ * breaks off. Inside one mirror piece the shared edges are left plain; where two different mirror
+ * pieces meet, the shared edge is drawn once (on the cell to its left or above it).
  */
-export function mirrorSidesOf(cells: readonly { x: number; y: number; type: CellType }[]): (c: { x: number; y: number }) => number {
-  const at = new Set(cells.filter((c) => c.type === "mirror").map((c) => `${c.x},${c.y}`));
-  return (c) =>
-    (at.has(`${c.x},${c.y - 1}`) ? 0 : 1) |
-    (at.has(`${c.x + 1},${c.y}`) ? 0 : 2) |
-    (at.has(`${c.x},${c.y + 1}`) ? 0 : 4) |
-    (at.has(`${c.x - 1},${c.y}`) ? 0 : 8);
+export function mirrorSidesOf(
+  cells: readonly { x: number; y: number; type: CellType; piece?: number }[],
+): (c: { x: number; y: number; piece?: number }) => number {
+  const mirrors = new Map<string, number | undefined>();
+  for (const c of cells) if (c.type === "mirror") mirrors.set(`${c.x},${c.y}`, c.piece);
+  const NEIGHBOURS = [
+    [0, -1],
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+  ] as const;
+  return (c) => {
+    let sides = 0;
+    NEIGHBOURS.forEach(([dx, dy], side) => {
+      const key = `${c.x + dx},${c.y + dy}`;
+      const draw = !mirrors.has(key) || (mirrors.get(key) !== c.piece && (side === 1 || side === 2));
+      if (draw) sides |= 1 << side;
+    });
+    return sides;
+  };
 }
 
 const EDGE = "#24272c";

@@ -20,6 +20,8 @@ export interface InitCell {
   y: number;
   type: CellType;
   dir: Dir;
+  /** Which placed piece the cell came from, if any (see Cell.piece). */
+  piece?: number;
 }
 
 export interface InitShip {

@@ -27,6 +27,8 @@ export interface Cell {
   y: number;
   type: CellType;
   dir: Dir;
+  /** Which placed piece the cell came from (cells of one piece share it). Absent on loose pieces and the core. */
+  piece?: number;
 }
 
 /** A finished ship as it leaves the draft. Contains exactly one core cell. */

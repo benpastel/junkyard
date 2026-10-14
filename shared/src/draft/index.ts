@@ -84,7 +84,9 @@ export class Draft {
         const cells = placedCells(p.held, action.x, action.y, action.rot, !!action.flip);
         const err = placementError(this.buildable, p.cells, cells);
         if (err) return err;
-        p.cells.push(...cells);
+        // Tag the cells with this placement so the art knows which neighbours share a piece.
+        const piece = p.cells.length;
+        p.cells.push(...cells.map((c) => ({ ...c, piece })));
         p.held = null;
         this.refill(p);
         return null;

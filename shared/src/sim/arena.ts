@@ -34,6 +34,7 @@ export interface SimCell {
   y: number;
   type: CellType;
   dir: Dir;
+  piece: number | undefined;
   hp: number;
   maxHp: number;
   alive: boolean;
@@ -176,6 +177,7 @@ export class Arena {
         y: c.y - oy,
         type: c.type,
         dir: c.dir,
+        piece: c.piece,
         hp: CELL_HP[c.type],
         maxHp: CELL_HP[c.type],
         alive: true,
@@ -208,7 +210,7 @@ export class Arena {
         playerId: bp.playerId,
         name: bp.name,
         color: bp.color,
-        cells: cells.map((c) => ({ cid: c.cid, x: c.x, y: c.y, type: c.type, dir: c.dir })),
+        cells: cells.map((c) => ({ cid: c.cid, x: c.x, y: c.y, type: c.type, dir: c.dir, piece: c.piece })),
       });
     });
     this.startedShips = this.ships.length;
