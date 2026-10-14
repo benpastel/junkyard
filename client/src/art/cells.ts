@@ -21,15 +21,19 @@ export interface CellStyle {
   /** Seconds, for spinning saws and flickering flames. Omit for a still blade. */
   time?: number;
   /**
-   * Mirrors: which sides have no cell of the same ship next to them, as a bitmask over ship-frame
-   * dirs (bit 0 = up, 1 = right, 2 = down, 3 = left). A strip is drawn on each. Omit for all four.
+   * Mirrors: which sides get a reflective strip, as a bitmask over ship-frame dirs (bit 0 = up,
+   * 1 = right, 2 = down, 3 = left). Omit for all four. See mirrorSidesOf.
    */
   openSides?: number;
 }
 
-/** For each cell of a ship (or piece), the bitmask of its sides with no neighbour. */
-export function openSidesOf(cells: readonly { x: number; y: number }[]): (c: { x: number; y: number }) => number {
-  const at = new Set(cells.map((c) => `${c.x},${c.y}`));
+/**
+ * For each cell of a ship (or piece), the sides a mirror strip is drawn on: every side except
+ * those shared with another mirror cell. Sides buried against hull or other parts still show,
+ * since they start reflecting the moment whatever covers them breaks off.
+ */
+export function mirrorSidesOf(cells: readonly { x: number; y: number; type: CellType }[]): (c: { x: number; y: number }) => number {
+  const at = new Set(cells.filter((c) => c.type === "mirror").map((c) => `${c.x},${c.y}`));
   return (c) =>
     (at.has(`${c.x},${c.y - 1}`) ? 0 : 1) |
     (at.has(`${c.x + 1},${c.y}`) ? 0 : 2) |

@@ -28,7 +28,7 @@ Online multiplayer, fast-paced, round-based game:
 
 - A piece is a pentomino of 5 **cells**. Most cells are plain hull; a piece may carry one (or more) special cells: engine, laser, grappling hook, saw, mirror, armor.
 - **Edge pieces** protect one edge (their `dir`):
-  - **Mirror**: a mirror piece is mirror all over, so its whole outer edge reflects lasers (beams can bounce back at the shooter). A mirror cell reflects off any side that is still exposed once placed.
+  - **Mirror**: a mirror piece is mirror all over, so its whole outer edge reflects lasers (beams can bounce back at the shooter). A mirror cell reflects off any side a beam can reach; its strips are drawn on every side not shared with another mirror cell, so buried edges stay visible and start working once uncovered.
   - **Armor**: silver plate that deflects collisions on that edge with no damage and a strong bounce.
   - A shield piece shields the whole face it shows in its direction: every cell with nothing of the piece beyond it that way (a T facing up shields its top bar).
 - Every piece carries exactly one kind of part; there are no plain-hull pieces. Engine pieces carry two engines (usually at right angles, sometimes the same way, never opposed, and never blowing into the same square).

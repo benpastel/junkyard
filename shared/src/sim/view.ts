@@ -9,6 +9,8 @@ export const SNAPSHOT_EVERY = 3;
 export const CELEBRATE_SECONDS = 4;
 /** Sim speed while every human has voted to fast-forward. */
 export const FAST_FORWARD_SPEED = 4;
+/** Debris (broken-off chunks and wrecks) disappears this long after it forms. */
+export const DEBRIS_LIFETIME_SECONDS = 5;
 
 export interface InitCell {
   /** Unique across the whole arena. Debris keeps the cid of the cell it came from. */

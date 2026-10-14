@@ -1,4 +1,5 @@
 import type { CellType } from "../types.js";
+import { DEBRIS_LIFETIME_SECONDS } from "./view.js";
 
 /**
  * How many hits a part takes before it breaks off. 1 = breaks on the first hit;
@@ -95,7 +96,7 @@ export const SIM = {
   powerupPickupRadius: 1.4,
   mirrorSkinSeconds: 5,
 
-  debrisLifetimeSeconds: 15,
+  debrisLifetimeSeconds: DEBRIS_LIFETIME_SECONDS,
   debrisScatterImpulse: 0.6,
   /** Safety net only: the ring closes to nothing well before this, crushing whatever is left. */
   maxSeconds: 300,

@@ -2,6 +2,7 @@
 // newest one, and draws ships, effects, the rubber ring and the power-up. No React in here.
 import type { PlayerId } from "@ja/shared";
 import {
+  DEBRIS_LIFETIME_SECONDS,
   TICK_HZ,
   lerpAngle,
   localToWorld,
@@ -12,7 +13,7 @@ import {
   type InitCell,
 } from "@ja/shared/sim/view";
 import { openChecker } from "@ja/shared";
-import { NEON, drawCellPart, drawCellPlate, openSidesOf, type CellStyle } from "../art/cells";
+import { NEON, drawCellPart, drawCellPlate, mirrorSidesOf, type CellStyle } from "../art/cells";
 
 /** Where the engine bell ends and the laser barrel tip sits, in cells from the cell centre (see art/cells.ts). */
 const NOZZLE_END = 0.67;
@@ -154,7 +155,7 @@ export class ArenaRenderer {
 
     // Debris under ships.
     const sorted = [...bodies].sort((a, b) => (a.owner ? 1 : 0) - (b.owner ? 1 : 0));
-    for (const b of sorted) this.drawBody(ctx, b, S, toScreen, nowMs);
+    for (const b of sorted) this.drawBody(ctx, b, S, toScreen, nowMs, renderTick);
     for (const b of bodies) if (b.owner) this.drawEngines(ctx, b, S, toScreen, nowMs);
     this.drawHooks(ctx, bodies, S, toScreen);
     for (const b of bodies) if (b.owner) this.drawCharge(ctx, b, S, toScreen, nowMs);
@@ -609,12 +610,12 @@ export class ArenaRenderer {
   /** Open-line checkers per alive-cell list; a new list arrives whenever a body's cells change. */
   private openCheckers = new WeakMap<readonly number[], ReturnType<typeof openChecker>>();
 
-  private openSides = new WeakMap<readonly number[], ReturnType<typeof openSidesOf>>();
+  private openSides = new WeakMap<readonly number[], ReturnType<typeof mirrorSidesOf>>();
 
   private openSidesFor(cids: readonly number[]) {
     let sides = this.openSides.get(cids);
     if (!sides) {
-      sides = openSidesOf(cids.flatMap((cid) => this.cellInfo.get(cid) ?? []));
+      sides = mirrorSidesOf(cids.flatMap((cid) => this.cellInfo.get(cid) ?? []));
       this.openSides.set(cids, sides);
     }
     return sides;
@@ -629,7 +630,17 @@ export class ArenaRenderer {
     return check;
   }
 
-  private drawBody(ctx: CanvasRenderingContext2D, b: BodyView, S: number, toScreen: (x: number, y: number) => { x: number; y: number }, nowMs: number) {
+  /** Render tick at which each debris body was first drawn, for fading it out. */
+  private readonly debrisBorn = new Map<number, number>();
+
+  private drawBody(
+    ctx: CanvasRenderingContext2D,
+    b: BodyView,
+    S: number,
+    toScreen: (x: number, y: number) => { x: number; y: number },
+    nowMs: number,
+    renderTick: number,
+  ) {
     const cells = this.bodyCells.get(b.snap.id);
     if (!cells) return;
     const p = toScreen(b.x, b.y);
@@ -637,8 +648,14 @@ export class ArenaRenderer {
     ctx.translate(p.x, p.y);
     ctx.rotate(b.a);
     const debris = !b.owner;
-    // Wreckage (dead ships, broken-off chunks) is dark and see-through so it never reads as a live, damaged ship.
-    if (debris) ctx.globalAlpha = 0.45;
+    // Wreckage (dead ships, broken-off chunks) is dark and see-through so it never reads as a live,
+    // damaged ship, and fades out over its last second.
+    if (debris) {
+      const born = this.debrisBorn.get(b.snap.id) ?? renderTick;
+      this.debrisBorn.set(b.snap.id, born);
+      const left = DEBRIS_LIFETIME_SECONDS - (renderTick - born) / TICK_HZ;
+      ctx.globalAlpha = 0.45 * Math.max(0, Math.min(1, left));
+    }
     // Drop shadow so ships read against the backdrop.
     ctx.fillStyle = "rgba(0,0,0,0.45)";
     for (const cid of cells.cells) {

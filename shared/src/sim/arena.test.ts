@@ -236,6 +236,20 @@ describe("arena", () => {
     a.dispose();
   });
 
+  it("a mirror edge buried behind hull starts reflecting once the hull is shot away", () => {
+    // b's mirror row sits behind a row of hull: the first shot breaks the hull, later ones bounce.
+    const a = new Arena({ ships: [bp("a", ["i", "C", "^"]), bp("b", ["###", "MMM", "#C#"])], seed: 1 });
+    const lasered: string[] = [];
+    a.onLog = (l) => {
+      if (l.includes("] b lost") && l.includes("to laser")) lasered.push(l);
+    };
+    run(a, 40, { a: { ...NO_INPUT, up: true } });
+    run(a, TICK_HZ * 8, {});
+    expect(lasered).toHaveLength(1);
+    expect(a.ship("b")!.body.cells.filter((c) => c.type === "mirror" && c.alive)).toHaveLength(3);
+    a.dispose();
+  });
+
   it("is deterministic", () => {
     const mk = () =>
       new Arena({ ships: SANDBOX_SHIPS.map((s, i) => bp(`p${i}`, s.rows)), seed: 42 });
