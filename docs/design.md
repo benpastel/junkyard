@@ -22,7 +22,7 @@ Online multiplayer, fast-paced, round-based game:
 - Each player privately sees **3 piece offers** at a time and takes one.
 - The two unused offers go into a **common pool** anyone can claim.
 - Timed. Default **1 minute**; 0:30, 0:45, 1:00, 1:30 selectable in the lobby.
-- Ship space: **pre-made hull layouts**, Galaxy Trucker style. Hauler is the smallest (50 squares); the rest are bigger and odder, borrowing from real planes and sci-fi: Barge, Flying Wing, Panels, Strike, Wedge, Saucer.
+- Ship space: **pre-made hull layouts**, Galaxy Trucker style. 15 hulls, from Hauler (50 squares, the smallest) up to Dreadnought (138), borrowing from real planes, animals and sci-fi: Hauler, Hammerhead, Starfish, Barge, Catamaran, Crab, Trident, Flying Wing, Strike, Panels, Wedge, Manta, Station, Saucer, Dreadnought. Every arm is at least 2 squares wide so pentominoes can reach it.
 
 ## Pieces and cells
 
