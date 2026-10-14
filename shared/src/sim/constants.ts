@@ -88,10 +88,10 @@ export const SIM = {
   /** Cells further than this beyond the ring's outer face are crushed. */
   outsideMargin: 1,
 
-  /** Power-up orb at the arena centre from the start, once per fight: grab it for a few seconds of invulnerability. */
+  /** Power-up orb at the arena centre from the start, once per fight: grab it and your whole hull reflects lasers for a while. */
   /** Picked up when any cell centre comes this close to the orb. */
   powerupPickupRadius: 1.4,
-  invulnerableSeconds: 5,
+  mirrorSkinSeconds: 5,
 
   debrisLifetimeSeconds: 15,
   debrisScatterImpulse: 0.6,

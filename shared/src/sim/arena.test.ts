@@ -127,13 +127,13 @@ describe("arena", () => {
     a.dispose();
   });
 
-  it("the centre power-up makes its taker invulnerable", () => {
+  it("the centre power-up gives its taker a laser-reflecting skin", () => {
     const a = new Arena({ ships: [bp("a", ["i", "C", "^"]), bp("b", ["#", "C"])], seed: 1 });
     expect(a.powerupActive).toBe(true);
     // Fly a through the centre.
     for (let i = 0; i < TICK_HZ * 4 && a.powerupActive; i++) a.step({ a: { ...NO_INPUT, up: true } });
     expect(a.powerupActive).toBe(false);
-    expect(a.ship("a")!.invulnerableUntil).toBeGreaterThan(a.tickCount);
+    expect(a.ship("a")!.mirroredUntil).toBeGreaterThan(a.tickCount);
     a.dispose();
   });
 
@@ -209,6 +209,15 @@ describe("arena", () => {
     expect(cuts.length).toBeGreaterThan(0);
     // The first thing the blade bites is one of the two flanking nose cells.
     expect(cuts[0]).toMatch(/b lost hull \((-1|1),-2\)/);
+    a.dispose();
+  });
+
+  it("the mirror skin bounces lasers off any outer surface", () => {
+    const a = new Arena({ ships: [bp("a", ["i", "C", "^"]), bp("b", ["###", "#C#"])], seed: 1 });
+    a.ship("b")!.mirroredUntil = Infinity;
+    run(a, 40, { a: { ...NO_INPUT, up: true } });
+    run(a, TICK_HZ * 3, {});
+    expect(a.ship("b")!.cellsLost).toBe(0);
     a.dispose();
   });
 

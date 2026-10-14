@@ -59,6 +59,7 @@ export function SandboxArena() {
       let acc = 0;
       let overAt: number | null = null;
       timer = window.setInterval(() => {
+        if (cancelled) return;
         const now = performance.now();
         acc = Math.min(acc + (now - last) / 1000, 0.25);
         last = now;

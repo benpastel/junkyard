@@ -79,7 +79,8 @@ export interface ShipRecord {
   cellsLost: number;
   cellCount: number;
   /** Tick until which the ship takes no damage. */
-  invulnerableUntil: number;
+  /** Power-up: until this tick the whole outer surface reflects lasers like a mirror. */
+  mirroredUntil: number;
 }
 
 interface Hook {
@@ -117,6 +118,7 @@ export class Arena {
   private hooks: Hook[] = [];
   /** Tick at which the power-up orb next appears, or null while it is sitting at the centre. */
   private powerupTaken = false;
+  private disposed = false;
   /** Set on the tick the fight is decided; from then on the ring stops and nothing takes damage. */
   private endedAt: number | null = null;
   private finalResults: RoundResultRow[] | null = null;
@@ -195,7 +197,7 @@ export class Arena {
         cellsDestroyed: 0,
         cellsLost: 0,
         cellCount: cells.length,
-        invulnerableUntil: 0,
+        mirroredUntil: 0,
       };
       this.ships.push(rec);
       this.shipByPlayer.set(bp.playerId, rec);
@@ -243,6 +245,8 @@ export class Arena {
   }
 
   step(inputs: Record<PlayerId, InputState>): void {
+    // Touching a freed Rapier world corrupts WASM memory; a stray late step must be a no-op.
+    if (this.disposed) return;
     this.tickCount++;
     this.updateRing();
 
@@ -338,7 +342,7 @@ export class Arena {
         if (thr.length) s.thr = thr;
         if (chg.length) s.chg = chg;
         const ship = this.shipOf(b);
-        if (ship && ship.invulnerableUntil > this.tickCount) s.inv = 1;
+        if (ship && ship.mirroredUntil > this.tickCount) s.mir = 1;
       }
       bodies.push(s);
     }
@@ -369,6 +373,8 @@ export class Arena {
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.eventQueue.free();
     this.world.free();
   }
@@ -502,7 +508,6 @@ export class Arena {
     const body = c.body;
     const ship = this.shipOf(body);
     if (ship && attacker && attacker !== ship.playerId) ship.lastDamager = attacker;
-    if (ship && ship.invulnerableUntil > this.tickCount) return;
     c.hp -= amount;
     if (body) body.dirty = true;
     if (c.hp > 0) return;
@@ -653,10 +658,12 @@ export class Arena {
       const target = this.cellByCollider.get(hit.collider.handle);
       if (!target?.body?.rb) return;
 
-      // A mirror reflects beams that strike its protected edge, taking no damage.
-      if (target.type === "mirror" && this.isOpen(target)) {
+      // A mirror reflects beams that strike its protected edge, taking no damage; a ship with
+      // the power-up's mirror skin reflects them off any outer surface.
+      const skin = (this.shipOf(target.body)?.mirroredUntil ?? 0) > this.tickCount;
+      if (skin || (target.type === "mirror" && this.isOpen(target))) {
         const edge = this.cellWorldDir(target);
-        if (-(d.x * edge.x + d.y * edge.y) > SIM.edgeFacingDot) {
+        if (skin || -(d.x * edge.x + d.y * edge.y) > SIM.edgeFacingDot) {
           const n = hit.normal;
           const k = 2 * (d.x * n.x + d.y * n.y);
           d = { x: d.x - k * n.x, y: d.y - k * n.y };
@@ -941,12 +948,7 @@ export class Arena {
     if (!c.alive) return;
     const pos = this.cellWorld(c);
     if (pos) this.events.push({ e: "spark", x: r3(pos.x), y: r3(pos.y), power: 5 });
-    // Crushing ignores invulnerability: the ring always wins.
-    const ship = this.shipOf(c.body);
-    const inv = ship?.invulnerableUntil ?? 0;
-    if (ship) ship.invulnerableUntil = 0;
     this.damageCell(c, c.hp, null, touched, cause);
-    if (ship) ship.invulnerableUntil = inv;
   }
 
   private updatePowerup() {
@@ -959,7 +961,7 @@ export class Arena {
         return !!p && p.x * p.x + p.y * p.y < r2;
       });
       if (!near) continue;
-      ship.invulnerableUntil = this.tickCount + Math.round(SIM.invulnerableSeconds * TICK_HZ);
+      ship.mirroredUntil = this.tickCount + Math.round(SIM.mirrorSkinSeconds * TICK_HZ);
       this.powerupTaken = true;
       this.events.push({ e: "pickup", playerId: ship.playerId });
       this.log(`${ship.playerId} took the power-up`);

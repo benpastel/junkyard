@@ -12,7 +12,7 @@ import {
   type InitCell,
 } from "@ja/shared/sim/view";
 import { openChecker } from "@ja/shared";
-import { drawCellPart, drawCellPlate, type CellStyle } from "../art/cells";
+import { NEON, drawCellPart, drawCellPlate, type CellStyle } from "../art/cells";
 
 /** Where the engine bell ends and the laser barrel tip sits, in cells from the cell centre (see art/cells.ts). */
 const NOZZLE_END = 0.67;
@@ -86,7 +86,6 @@ export class ArenaRenderer {
   private beams: Beam[] = [];
   private camera = { x: 0, y: 0, zoom: 1 };
   /** Fixed view rotation so my ship starts pointing up the screen. */
-  private camRot: number | null = null;
   private cameraReady = false;
   private shake = 0;
   private lastFrame = 0;
@@ -142,14 +141,10 @@ export class ArenaRenderer {
     const S = (Math.min(width, height * 1.4) / VIEW_CELLS) * this.camera.zoom;
     const shakeX = this.shake > 0 ? (Math.sin(nowMs * 0.09) * this.shake * S) / 3 : 0;
     const shakeY = this.shake > 0 ? (Math.cos(nowMs * 0.11) * this.shake * S) / 3 : 0;
-    const rot = this.camRot ?? 0;
-    const rc = Math.cos(rot);
-    const rs = Math.sin(rot);
-    const toScreen = (x: number, y: number) => {
-      const dx = x - this.camera.x;
-      const dy = y - this.camera.y;
-      return { x: width / 2 + (dx * rc - dy * rs) * S + shakeX, y: height / 2 + (dx * rs + dy * rc) * S + shakeY };
-    };
+    const toScreen = (x: number, y: number) => ({
+      x: width / 2 + (x - this.camera.x) * S + shakeX,
+      y: height / 2 + (y - this.camera.y) * S + shakeY,
+    });
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.drawBackdrop(ctx, width, height, S);
@@ -163,7 +158,7 @@ export class ArenaRenderer {
     for (const b of bodies) if (b.owner) this.drawEngines(ctx, b, S, toScreen, nowMs);
     this.drawHooks(ctx, bodies, S, toScreen);
     for (const b of bodies) if (b.owner) this.drawCharge(ctx, b, S, toScreen, nowMs);
-    for (const b of bodies) if (b.snap.inv) this.drawShield(ctx, b, S, toScreen, nowMs);
+    for (const b of bodies) if (b.snap.mir) this.drawMirrorSkin(ctx, b, S, toScreen, nowMs);
     this.drawBeams(ctx, S, toScreen);
     this.drawParticles(ctx, S, toScreen);
     this.drawNames(ctx, bodies, S, toScreen);
@@ -281,15 +276,14 @@ export class ArenaRenderer {
   }
 
   /**
-   * While you fly, the camera is locked to your ship and turns with it, so your ship sits still
-   * in the middle pointing up and the world moves round it. Once dead (or just watching), the
-   * camera stays put, the arrow keys pan it, and it's leashed so the ring stays on screen.
+   * While you fly, the camera is locked to your ship's position (north stays up; the ship turns
+   * on screen). Once dead (or just watching), the camera stays put, the arrow keys pan it, and
+   * it's leashed so the ring stays on screen.
    */
   private updateCamera(bodies: BodyView[], width: number, height: number, dt: number, ring: number) {
     const mine = this.me && !this.dead.has(this.me) ? bodies.find((b) => b.owner === this.me) : undefined;
     if (mine) {
       this.camera = { x: mine.x, y: mine.y, zoom: 1 };
-      this.camRot = -mine.a;
       this.cameraReady = true;
       return;
     }
@@ -297,17 +291,14 @@ export class ArenaRenderer {
       // A spectator from the start: open on the whole ring.
       const fit = Math.min(1, VIEW_CELLS / (this.init.ring.startRadius * 2.2) / Math.min(1, width / (height * 1.4)));
       this.camera = { x: 0, y: 0, zoom: fit };
-      this.camRot = 0;
       this.cameraReady = true;
     }
     const sx = (this.pan.right ? 1 : 0) - (this.pan.left ? 1 : 0);
     const sy = (this.pan.down ? 1 : 0) - (this.pan.up ? 1 : 0);
     if (sx || sy) {
-      // Screen directions back into world directions (undo the camera's rotation).
-      const rot = -(this.camRot ?? 0);
       const speed = (PAN_CELLS_PER_SECOND / this.camera.zoom) * dt;
-      this.camera.x += (sx * Math.cos(rot) - sy * Math.sin(rot)) * speed;
-      this.camera.y += (sx * Math.sin(rot) + sy * Math.cos(rot)) * speed;
+      this.camera.x += sx * speed;
+      this.camera.y += sy * speed;
     }
     const leash = ring + PAN_LEASH_CELLS;
     const d = Math.hypot(this.camera.x, this.camera.y);
@@ -373,8 +364,8 @@ export class ArenaRenderer {
         this.celebration = { winner: e.winner, start: performance.now(), confetti: null };
         break;
       case "pickup":
-        this.particles.push({ kind: "ring", x: 0, y: 0, vx: 0, vy: 0, life: 0.5, max: 0.5, size: 4, color: "#8cf0ff", rot: 0, vr: 0 });
-        this.burst(0, 0, 24, "#bff6ff", 8, 0.5);
+        this.particles.push({ kind: "ring", x: 0, y: 0, vx: 0, vy: 0, life: 0.5, max: 0.5, size: 4, color: "#f2ea3c", rot: 0, vr: 0 });
+        this.burst(0, 0, 24, "#fff7b0", 8, 0.5);
         break;
       case "died": {
         this.dead.add(e.playerId);
@@ -438,9 +429,8 @@ export class ArenaRenderer {
     ctx.fillRect(0, 0, w, h);
 
     const tile = 900;
-    const rot = this.camRot ?? 0;
-    const camX = this.camera.x * Math.cos(rot) - this.camera.y * Math.sin(rot);
-    const camY = this.camera.x * Math.sin(rot) + this.camera.y * Math.cos(rot);
+    const camX = this.camera.x;
+    const camY = this.camera.y;
     this.stars.forEach((layer, i) => {
       const depth = [0.15, 0.35, 0.6][i]!;
       const ox = -camX * S * depth;
@@ -491,7 +481,6 @@ export class ArenaRenderer {
     nowMs: number,
   ) {
     const c = toScreen(0, 0);
-    const rot = this.camRot ?? 0;
     const t = nowMs / 1000;
     // Radius at a world angle, dented outward where something just bounced.
     const radiusAt = (a: number) => {
@@ -508,8 +497,8 @@ export class ArenaRenderer {
       for (let i = 0; i <= N; i++) {
         const a = (i / N) * Math.PI * 2;
         const r = (radiusAt(a) + offset) * S;
-        const x = c.x + Math.cos(a + rot) * r;
-        const y = c.y + Math.sin(a + rot) * r;
+        const x = c.x + Math.cos(a) * r;
+        const y = c.y + Math.sin(a) * r;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -551,17 +540,17 @@ export class ArenaRenderer {
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3);
-    g.addColorStop(0, "rgba(140,240,255,0.55)");
-    g.addColorStop(1, "rgba(140,240,255,0)");
+    g.addColorStop(0, "rgba(242,234,60,0.55)");
+    g.addColorStop(1, "rgba(242,234,60,0)");
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(p.x, p.y, r * 3, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#e8fdff";
+    ctx.fillStyle = "#fffbd0";
     ctx.beginPath();
     ctx.arc(p.x, p.y, r * 0.6, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "rgba(140,240,255,0.9)";
+    ctx.strokeStyle = "rgba(242,234,60,0.9)";
     ctx.lineWidth = Math.max(1, 0.1 * S);
     ctx.beginPath();
     ctx.arc(p.x, p.y, r, t * 3, t * 3 + Math.PI * 1.4);
@@ -569,32 +558,41 @@ export class ArenaRenderer {
     ctx.restore();
   }
 
-  /** Shimmering bubble around an invulnerable ship. */
-  private drawShield(ctx: CanvasRenderingContext2D, b: BodyView, S: number, toScreen: (x: number, y: number) => { x: number; y: number }, nowMs: number) {
+  /** Power-up mirror skin: every outer edge of the ship glows laser yellow. */
+  private drawMirrorSkin(ctx: CanvasRenderingContext2D, b: BodyView, S: number, toScreen: (x: number, y: number) => { x: number; y: number }, nowMs: number) {
     const cells = this.bodyCells.get(b.snap.id);
     if (!cells) return;
-    let reach = 0;
+    const at = new Set<string>();
     for (const cid of cells.cells) {
       const c = this.cellInfo.get(cid);
-      if (c) reach = Math.max(reach, Math.hypot(c.x, c.y));
+      if (c) at.add(`${c.x},${c.y}`);
     }
     const p = toScreen(b.x, b.y);
-    const r = (reach + 1.2) * S;
-    const k = 0.5 + 0.5 * Math.sin(nowMs / 90);
+    const k = 0.7 + 0.3 * Math.sin(nowMs / 80);
     ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    const g = ctx.createRadialGradient(p.x, p.y, r * 0.6, p.x, p.y, r);
-    g.addColorStop(0, "rgba(140,240,255,0)");
-    g.addColorStop(1, `rgba(140,240,255,${0.18 + 0.12 * k})`);
-    ctx.fillStyle = g;
+    ctx.translate(p.x, p.y);
+    ctx.rotate(b.a);
+    ctx.strokeStyle = NEON;
+    ctx.shadowColor = NEON;
+    ctx.shadowBlur = S * 0.5;
+    ctx.globalAlpha = k;
+    ctx.lineWidth = S * 0.16;
+    ctx.lineCap = "round";
     ctx.beginPath();
-    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = `rgba(190,248,255,${0.5 + 0.3 * k})`;
-    ctx.lineWidth = Math.max(1, 0.07 * S);
+    for (const cid of cells.cells) {
+      const c = this.cellInfo.get(cid);
+      if (!c) continue;
+      const x0 = (c.x - 0.5) * S;
+      const y0 = (c.y - 0.5) * S;
+      if (!at.has(`${c.x},${c.y - 1}`)) (ctx.moveTo(x0, y0), ctx.lineTo(x0 + S, y0));
+      if (!at.has(`${c.x},${c.y + 1}`)) (ctx.moveTo(x0, y0 + S), ctx.lineTo(x0 + S, y0 + S));
+      if (!at.has(`${c.x - 1},${c.y}`)) (ctx.moveTo(x0, y0), ctx.lineTo(x0, y0 + S));
+      if (!at.has(`${c.x + 1},${c.y}`)) (ctx.moveTo(x0 + S, y0), ctx.lineTo(x0 + S, y0 + S));
+    }
     ctx.stroke();
     ctx.restore();
   }
+
 
   /** Open-line checkers per alive-cell list; a new list arrives whenever a body's cells change. */
   private openCheckers = new WeakMap<readonly number[], ReturnType<typeof openChecker>>();
@@ -614,7 +612,7 @@ export class ArenaRenderer {
     const p = toScreen(b.x, b.y);
     ctx.save();
     ctx.translate(p.x, p.y);
-    ctx.rotate(b.a + (this.camRot ?? 0));
+    ctx.rotate(b.a);
     const debris = !b.owner;
     // Wreckage (dead ships, broken-off chunks) is dark and see-through so it never reads as a live, damaged ship.
     if (debris) ctx.globalAlpha = 0.45;

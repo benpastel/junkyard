@@ -60,8 +60,8 @@ export interface BodySnap {
   thr?: [number, number][];
   /** Lasers currently charging: [cid, level 1..9]. Ships only. */
   chg?: [number, number][];
-  /** Present (1) while the ship is invulnerable. */
-  inv?: 1;
+  /** Present (1) while the power-up's mirror skin is on: every outer surface reflects lasers. */
+  mir?: 1;
 }
 
 export interface HookSnap {
