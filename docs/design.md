@@ -42,7 +42,7 @@ Online multiplayer, fast-paced, round-based game:
 
 - **Overhanging parts:** a part sticks out past its square in its working direction (laser barrels, saw blades, engine bells, shield strips), so its silhouette says what it is and which way it points. Ships are drawn in two passes (all plates, then all parts). A part whose overhang would land on another cell is covered, so it does nothing and is drawn faded.
 - Engines are drawn firing during the draft (easier to read) and off in the arena until they fire.
-- The core is a canopy with the pilot seen from above, helmet in the player colour.
+- The core is a teardrop canopy pointing forward with swept tail fins in the player colour (so it alone shows which way the ship faces), and a googly-eyed pilot looking forward.
 - Each cell looks independent for now; long-term each placed piece should look like one cohesive salvaged chunk.
 
 - Theme: junkyard / scrapyard salvage. Crisp pentomino shapes that snap satisfyingly to the grid, with grimy mismatched salvage art.

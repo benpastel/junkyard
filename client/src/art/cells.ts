@@ -155,17 +155,35 @@ function pen(ctx: CanvasRenderingContext2D) {
 const PI = Math.PI;
 
 const PARTS: Partial<Record<CellType, (d: Pen, s: CellStyle, dir: Dir) => void>> = {
-  // bubble canopy with the pilot seen from above: shoulders, helmet, visor facing forward
+  // teardrop canopy pointing forward + swept tail fins out the back corners, so the core
+  // alone says which way the ship faces. Pilot has googly eyes looking forward.
+  // Overhangs: tip ~0.2 past the front edge, fins ~0.2 past the back and sides.
   core(d, s) {
-    d.ellipse(0.5, 0.5, 0.4, 0.42, "#16222e");
-    d.ctx.strokeStyle = "rgba(160,200,230,.4)";
-    d.ctx.lineWidth = 0.04;
-    d.ctx.stroke();
-    d.ellipse(0.5, 0.64, 0.27, 0.13, shade(s.color, -0.45));
-    d.circle(0.5, 0.5, 0.17, s.color);
-    d.ellipse(0.5, 0.41, 0.11, 0.05, "#c8ecff");
-    d.arc(0.5, 0.5, 0.32, PI * 1.15, PI * 1.4, "rgba(255,255,255,.4)", 0.035);
-    d.rect(0.06, 0.8, 0.3, 0.08, TAPE);
+    const ctx = d.ctx;
+    const fin: [number, number][] = [[0.18, 0.55], [-0.22, 1.15], [0.36, 0.88]];
+    d.poly(fin, s.color);
+    d.poly(fin.map(([x, y]) => [1 - x, y]), s.color);
+
+    ctx.beginPath();
+    ctx.moveTo(0.5, -0.2);
+    ctx.bezierCurveTo(0.75, 0.14, 0.88, 0.42, 0.82, 0.67);
+    ctx.bezierCurveTo(0.76, 0.92, 0.24, 0.92, 0.18, 0.67);
+    ctx.bezierCurveTo(0.12, 0.42, 0.25, 0.14, 0.5, -0.2);
+    ctx.closePath();
+    ctx.fillStyle = "#16222e";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(160,200,230,.45)";
+    ctx.lineWidth = 0.04;
+    ctx.stroke();
+
+    // shoulders, helmet, eyes (pupils nudged forward)
+    d.ellipse(0.5, 0.66, 0.25, 0.12, shade(s.color, -0.45));
+    d.circle(0.5, 0.5, 0.2, s.color);
+    for (const x of [0.41, 0.59]) {
+      d.circle(x, 0.43, 0.09, "#fff");
+      d.circle(x, 0.38, 0.045, "#111");
+    }
+    d.arc(0.5, 0.45, 0.27, PI * 1.2, PI * 1.42, "rgba(255,255,255,.35)", 0.03);
   },
 
   hull() {},
