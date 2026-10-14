@@ -24,7 +24,7 @@ await page.getByLabel("Name").fill("Benji");
 await page.getByRole("button", { name: /create room/i }).click();
 await page.waitForSelector(".share-row");
 // New rooms start with 3 bots.
-await page.getByRole("button", { name: "0:45" }).click();
+await page.getByRole("button", { name: "Frantic" }).click();
 await page.getByLabel("Chat message").fill("ready to scrap");
 await page.keyboard.press("Enter");
 await page.waitForTimeout(300);
@@ -62,12 +62,12 @@ for (let piece = 0; piece < 8; piece++) {
   await offer.click();
   await page.waitForTimeout(150);
   for (const [x, y] of spots) {
-    if (!(await page.locator(".draft-hand .held").count())) break;
+    if (!(await page.locator(".draft-offers .piece-card.active").count())) break;
     await page.mouse.move(board.x + (x + 0.5) * cell, board.y + (y + 0.5) * cell);
     await page.mouse.click(board.x + (x + 0.5) * cell, board.y + (y + 0.5) * cell);
     await page.waitForTimeout(60);
   }
-  if (!(await page.locator(".draft-hand .held").count())) placed++;
+  if (!(await page.locator(".draft-offers .piece-card.active").count())) placed++;
   if (piece === 2) await shot("05-draft-building");
 }
 console.log("placed", placed);

@@ -332,6 +332,12 @@ table.results {
 /* Hull picker */
 .hull-picker {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hull-row {
+  display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }

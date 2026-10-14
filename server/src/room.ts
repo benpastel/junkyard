@@ -1,9 +1,9 @@
 import type { WebSocket } from "ws";
 import {
-  BUILD_SECONDS_OPTIONS,
   DEFAULT_SETTINGS,
   HULL_IDS,
   MAX_PLAYERS,
+  PACES,
   NO_INPUT,
   PLAYER_COLORS,
   Rng,
@@ -17,7 +17,7 @@ import {
   type RoundResults,
   type ServerMsg,
 } from "@ja/shared";
-import { Draft, REROLL_SECONDS, draftBotAction, type DraftAction } from "@ja/shared/draft";
+import { Draft, REROLL_SECONDS, buildSeconds, draftBotAction, type DraftAction } from "@ja/shared/draft";
 import { Arena, CELEBRATE_SECONDS, FAST_FORWARD_SPEED, FightRecorder, SIM, SNAPSHOT_EVERY, TICK_HZ, arenaBotInput, type ArenaSetup } from "@ja/shared/sim";
 import { saveRecording } from "./recordings.js";
 
@@ -169,8 +169,8 @@ export class Room {
       }
       case "settings": {
         if (!isHost || this.phase !== "lobby") return;
-        const { buildSeconds, hull } = msg.settings;
-        if ((BUILD_SECONDS_OPTIONS as readonly number[]).includes(buildSeconds)) this.settings.buildSeconds = buildSeconds;
+        const { pace, hull } = msg.settings;
+        if ((PACES as readonly string[]).includes(pace)) this.settings.pace = pace;
         if ((HULL_IDS as readonly string[]).includes(hull)) this.settings.hull = hull;
         this.broadcastRoom();
         return;
@@ -240,7 +240,7 @@ export class Room {
       hull: this.settings.hull,
       seed: this.rng.int(2 ** 31),
     });
-    this.setPhase("draft", Date.now() + this.settings.buildSeconds * 1000);
+    this.setPhase("draft", Date.now() + buildSeconds(this.settings.pace, this.settings.hull) * 1000);
     this.broadcastRoom();
     this.broadcastDraft();
     this.ensureLoop();

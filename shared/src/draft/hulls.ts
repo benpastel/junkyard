@@ -1,8 +1,10 @@
-import type { HullId } from "../types.js";
+import type { HullId, HullTier, Pace } from "../types.js";
 
 export interface HullDef {
   id: HullId;
   name: string;
+  /** Size class: the lobby shows one row per tier, and build time scales with it. */
+  tier: HullTier;
   /** '#' = buildable, 'C' = core (pre-placed), '.' = outside the hull. Nose points up. */
   rows: string[];
 }
@@ -11,6 +13,7 @@ export const HULLS: Record<HullId, HullDef> = {
   hauler: {
     id: "hauler",
     name: "Hauler",
+    tier: "small",
     rows: [
       "....#....",
       "...###...",
@@ -27,6 +30,7 @@ export const HULLS: Record<HullId, HullDef> = {
   hammerhead: {
     id: "hammerhead",
     name: "Hammerhead",
+    tier: "small",
     rows: [
       "###########",
       "###########",
@@ -44,6 +48,7 @@ export const HULLS: Record<HullId, HullDef> = {
   starfish: {
     id: "starfish",
     name: "Starfish",
+    tier: "small",
     rows: [
       "....###....",
       "....###....",
@@ -61,6 +66,7 @@ export const HULLS: Record<HullId, HullDef> = {
   barge: {
     id: "barge",
     name: "Barge",
+    tier: "small",
     rows: [
       ".....#.....",
       "....###....",
@@ -71,14 +77,13 @@ export const HULLS: Record<HullId, HullDef> = {
       "###########",
       "###########",
       "####.#.####",
-      "###.....###",
-      "##.......##",
     ],
   },
   // Twin hulls joined by a bridge
   catamaran: {
     id: "catamaran",
     name: "Catamaran",
+    tier: "small",
     rows: [
       ".##.....##.",
       "###.....###",
@@ -88,14 +93,13 @@ export const HULLS: Record<HullId, HullDef> = {
       "###########",
       "###.....###",
       "###.....###",
-      "###.....###",
-      "##.......##",
     ],
   },
   // Wide body with two forward pincers
   crab: {
     id: "crab",
     name: "Crab",
+    tier: "medium",
     rows: [
       "##.......##",
       "###.....###",
@@ -113,6 +117,7 @@ export const HULLS: Record<HullId, HullDef> = {
   trident: {
     id: "trident",
     name: "Trident",
+    tier: "medium",
     rows: [
       "##..###..##",
       "##..###..##",
@@ -130,6 +135,7 @@ export const HULLS: Record<HullId, HullDef> = {
   wing: {
     id: "wing",
     name: "Flying Wing",
+    tier: "medium",
     rows: [
       "........#........",
       ".......###.......",
@@ -146,11 +152,8 @@ export const HULLS: Record<HullId, HullDef> = {
   strike: {
     id: "strike",
     name: "Strike",
+    tier: "medium",
     rows: [
-      "......#......",
-      "......#......",
-      ".....###.....",
-      ".....###.....",
       ".....###.....",
       ".....###.....",
       ".....###.....",
@@ -169,8 +172,8 @@ export const HULLS: Record<HullId, HullDef> = {
   panels: {
     id: "panels",
     name: "Panels",
+    tier: "medium",
     rows: [
-      "###.........###",
       "###.........###",
       "###.........###",
       "###...###...###",
@@ -180,13 +183,13 @@ export const HULLS: Record<HullId, HullDef> = {
       "###...###...###",
       "###.........###",
       "###.........###",
-      "###.........###",
     ],
   },
   // Star-destroyer triangle
   wedge: {
     id: "wedge",
     name: "Wedge",
+    tier: "large",
     rows: [
       "......#......",
       "......#......",
@@ -201,6 +204,7 @@ export const HULLS: Record<HullId, HullDef> = {
       ".###########.",
       ".###########.",
       "#############",
+      "#############",
       "###.##.##.###",
     ],
   },
@@ -208,12 +212,14 @@ export const HULLS: Record<HullId, HullDef> = {
   manta: {
     id: "manta",
     name: "Manta",
+    tier: "large",
     rows: [
       "......###......",
       ".....#####.....",
       "...#########...",
       ".#############.",
       "#######C#######",
+      "###############",
       "###############",
       ".#############.",
       "..###########..",
@@ -226,6 +232,7 @@ export const HULLS: Record<HullId, HullDef> = {
   station: {
     id: "station",
     name: "Station",
+    tier: "large",
     rows: [
       "....#####....",
       "..#########..",
@@ -246,6 +253,7 @@ export const HULLS: Record<HullId, HullDef> = {
   saucer: {
     id: "saucer",
     name: "Saucer",
+    tier: "large",
     rows: [
       "...#######...",
       "..#########..",
@@ -267,6 +275,7 @@ export const HULLS: Record<HullId, HullDef> = {
   dreadnought: {
     id: "dreadnought",
     name: "Dreadnought",
+    tier: "large",
     rows: [
       ".....###.....",
       ".....###.....",
@@ -312,3 +321,14 @@ export function hullSize(hull: HullId): { width: number; height: number } {
   const rows = HULLS[hull].rows;
   return { width: rows[0]!.length, height: rows.length };
 }
+
+/** Build time for a pace on a hull: bigger hulls get longer. */
+export function buildSeconds(pace: Pace, hull: HullId): number {
+  return BUILD_SECONDS[HULLS[hull].tier][pace];
+}
+
+const BUILD_SECONDS: Record<HullTier, Record<Pace, number>> = {
+  small: { frantic: 25, fast: 40, strategic: 60 },
+  medium: { frantic: 35, fast: 60, strategic: 90 },
+  large: { frantic: 50, fast: 80, strategic: 120 },
+};

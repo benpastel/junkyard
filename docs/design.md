@@ -19,10 +19,11 @@ Online multiplayer, fast-paced, round-based game:
 
 ## Draft
 
-- Each player privately sees **3 piece offers** at a time and takes one.
-- The two unused offers go into a **common pool** anyone can claim.
-- Timed. Default **1 minute**; 0:30, 0:45, 1:00, 1:30 selectable in the lobby.
-- Ship space: **pre-made hull layouts**, Galaxy Trucker style. 15 hulls, from Hauler (50 squares, the smallest) up to Dreadnought (138), borrowing from real planes, animals and sci-fi: Hauler, Hammerhead, Starfish, Barge, Catamaran, Crab, Trident, Flying Wing, Strike, Panels, Wedge, Manta, Station, Saucer, Dreadnought. Every arm is at least 2 squares wide so pentominoes can reach it.
+- Each player privately sees **5 piece offers**. Pick one up and the others stay on offer; switch to another, or put it back (Esc). Placing a piece deals a fresh hand of 5.
+- **Reroll** (R / hourglass): throw the hand away; 5 new offers arrive after a 1s wait, so you can't cycle for free.
+- The shared pool (unused offers go to a tray anyone can grab) is still in the code but switched off (POOL_ENABLED).
+- **Pace** (lobby): Frantic / Fast (default) / Strategic. Build time scales with hull tier: small 25/40/60s, medium 35/60/90s, large 50/80/120s.
+- **Hulls**, three tiers of five: small (50–61 squares) Hauler, Hammerhead, Starfish, Barge, Catamaran; medium (71–84) Crab, Trident, Flying Wing, Panels, Strike; large (103–138) Station, Wedge, Manta, Saucer, Dreadnought. Every arm is at least 2 squares wide so pentominoes can reach it.
 
 ## Pieces and cells
 

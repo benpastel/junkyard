@@ -58,17 +58,22 @@ export const NO_INPUT: InputState = {
   grapple: false,
 };
 
-export const HULL_IDS = ["hauler", "hammerhead", "starfish", "barge", "catamaran", "crab", "trident", "wing", "strike", "panels", "wedge", "manta", "station", "saucer", "dreadnought"] as const;
+export const HULL_IDS = ["hauler", "hammerhead", "starfish", "barge", "catamaran", "crab", "trident", "wing", "panels", "strike", "station", "wedge", "manta", "saucer", "dreadnought"] as const;
 export type HullId = (typeof HULL_IDS)[number];
 
-export const BUILD_SECONDS_OPTIONS = [30, 45, 60, 90] as const;
+export const HULL_TIERS = ["small", "medium", "large"] as const;
+export type HullTier = (typeof HULL_TIERS)[number];
+
+/** How long the build phase lasts, scaled by hull size (see buildSeconds in draft/hulls.ts). */
+export const PACES = ["frantic", "fast", "strategic"] as const;
+export type Pace = (typeof PACES)[number];
 
 export interface RoomSettings {
-  buildSeconds: number;
+  pace: Pace;
   hull: HullId;
 }
 
-export const DEFAULT_SETTINGS: RoomSettings = { buildSeconds: 60, hull: "hauler" };
+export const DEFAULT_SETTINGS: RoomSettings = { pace: "fast", hull: "hauler" };
 
 export const PLAYER_COLORS = [
   "#e8743b",

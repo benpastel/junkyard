@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { BUILD_SECONDS_OPTIONS, HULL_IDS, MAX_PLAYERS, type ChatMessage, type RoomView } from "@ja/shared";
+import { HULL_IDS, HULL_TIERS, MAX_PLAYERS, PACES, type ChatMessage, type Pace, type RoomView } from "@ja/shared";
 import { HULLS } from "@ja/shared/draft";
 import { net } from "../net";
 import { Chat } from "./Chat";
 import { PlayerList } from "./PlayerList";
-import { Segmented, formatSeconds } from "./ui";
+import { Segmented } from "./ui";
+
+const PACE_LABELS: Record<Pace, string> = { frantic: "Frantic", fast: "Fast", strategic: "Strategic" };
 
 export function Lobby({ room, me, chat }: { room: RoomView; me: string | null; chat: ChatMessage[] }) {
   const isHost = room.hostId === me;
@@ -34,23 +36,27 @@ export function Lobby({ room, me, chat }: { room: RoomView; me: string | null; c
         <section className="panel section">
           <h3>Build time</h3>
           <Segmented
-            options={BUILD_SECONDS_OPTIONS.map((s) => ({ value: s, label: formatSeconds(s) }))}
-            value={settings.buildSeconds}
+            options={PACES.map((p) => ({ value: p, label: PACE_LABELS[p] }))}
+            value={settings.pace}
             disabled={!isHost}
-            onChange={(buildSeconds) => net.send({ t: "settings", settings: { ...settings, buildSeconds } })}
+            onChange={(pace) => net.send({ t: "settings", settings: { ...settings, pace } })}
           />
           <h3>Hull</h3>
           <div className="hull-picker">
-            {HULL_IDS.map((h) => (
-              <button
-                key={h}
-                className={h === settings.hull ? "on" : ""}
-                disabled={!isHost && h !== settings.hull}
-                onClick={() => net.send({ t: "settings", settings: { ...settings, hull: h } })}
-              >
-                <HullOutline rows={HULLS[h].rows} />
-                {HULLS[h].name}
-              </button>
+            {HULL_TIERS.map((tier) => (
+              <div key={tier} className="hull-row">
+                {HULL_IDS.filter((h) => HULLS[h].tier === tier).map((h) => (
+                  <button
+                    key={h}
+                    className={h === settings.hull ? "on" : ""}
+                    disabled={!isHost && h !== settings.hull}
+                    onClick={() => net.send({ t: "settings", settings: { ...settings, hull: h } })}
+                  >
+                    <HullOutline rows={HULLS[h].rows} />
+                    {HULLS[h].name}
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         </section>
