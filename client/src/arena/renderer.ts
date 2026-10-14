@@ -81,7 +81,10 @@ export class ArenaRenderer {
   private readonly cidBody = new Map<number, number>();
   private readonly lastShipPos = new Map<PlayerId, { x: number; y: number }>();
   private readonly dead = new Set<PlayerId>();
-  private clockOffset: number | null = null;
+  private playTick: number | null = null;
+  private latestTick = 0;
+  /** Sim speed from the newest snapshot (1 normally, more while fast-forwarding). */
+  private speed = 1;
   private particles: Particle[] = [];
   private beams: Beam[] = [];
   private camera = { x: 0, y: 0, zoom: 1 };
@@ -112,11 +115,8 @@ export class ArenaRenderer {
   }
 
   push(snap: ArenaSnapshot) {
-    const now = performance.now() / 1000;
-    const sample = now - snap.tick / TICK_HZ;
-    // Track the smallest observed offset (least network delay), drifting up slowly in case the clock moves.
-    if (this.clockOffset === null || sample < this.clockOffset) this.clockOffset = sample;
-    else this.clockOffset += (sample - this.clockOffset) * 0.01;
+    this.latestTick = Math.max(this.latestTick, snap.tick);
+    this.speed = snap.speed ?? 1;
     this.buffer.push(snap);
   }
 
@@ -130,7 +130,7 @@ export class ArenaRenderer {
     const dt = this.lastFrame ? Math.min(0.05, (nowMs - this.lastFrame) / 1000) : 0;
     this.lastFrame = nowMs;
 
-    const renderTick = this.renderTick(nowMs / 1000);
+    const renderTick = this.advanceClock(dt);
     this.consume(renderTick);
     const bodies = this.interpolate(renderTick);
     const ring = this.ringAt(renderTick);
@@ -215,9 +215,21 @@ export class ArenaRenderer {
 
   // ---------------------------------------------------------------- timing
 
-  private renderTick(nowSec: number): number {
-    if (this.clockOffset === null) return 0;
-    return (nowSec - this.clockOffset - RENDER_DELAY) * TICK_HZ;
+  /**
+   * Playback clock in sim ticks. It runs at the sim's current speed (faster while fast-forwarding)
+   * and is nudged toward RENDER_DELAY behind the newest snapshot, so there's always a pair of
+   * snapshots to interpolate between.
+   */
+  private advanceClock(dt: number): number {
+    if (!this.buffer.length && !this.current) return 0;
+    const delay = RENDER_DELAY * TICK_HZ * this.speed;
+    const target = this.latestTick - delay;
+    if (this.playTick === null || Math.abs(target - this.playTick) > delay * 4) this.playTick = target;
+    else {
+      this.playTick += dt * TICK_HZ * this.speed;
+      this.playTick += (target - this.playTick) * Math.min(1, dt * 3);
+    }
+    return this.playTick;
   }
 
   /** Apply every snapshot whose tick has been reached: cell lists and events. */

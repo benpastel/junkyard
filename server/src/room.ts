@@ -18,7 +18,7 @@ import {
   type ServerMsg,
 } from "@ja/shared";
 import { Draft, draftBotAction } from "@ja/shared/draft";
-import { Arena, CELEBRATE_SECONDS, FightRecorder, SIM, SNAPSHOT_EVERY, TICK_HZ, arenaBotInput, type ArenaSetup } from "@ja/shared/sim";
+import { Arena, CELEBRATE_SECONDS, FAST_FORWARD_SPEED, FightRecorder, SIM, SNAPSHOT_EVERY, TICK_HZ, arenaBotInput, type ArenaSetup } from "@ja/shared/sim";
 import { saveRecording } from "./recordings.js";
 
 const CHAT_HISTORY = 100;
@@ -63,6 +63,8 @@ export class Room {
   private tickAccumulator = 0;
   private arenaTick = 0;
   private overTick: number | null = null;
+  /** Humans who want the fight sped up; it speeds up once every connected human is in. */
+  private fastVotes = new Set<PlayerId>();
 
   /** Wall-clock time when the last human left, for cleanup. */
   emptySince: number | null = Date.now();
@@ -208,6 +210,13 @@ export class Room {
         this.broadcastDraft();
         return;
       }
+      case "fastForward": {
+        if (this.phase !== "arena" || player.isBot || !player.inRound) return;
+        if (msg.on) this.fastVotes.add(playerId);
+        else this.fastVotes.delete(playerId);
+        this.broadcastRoom();
+        return;
+      }
       case "input": {
         if (this.phase !== "arena" || !player.inRound) return;
         this.arenaInputs[playerId] = sanitizeInput(msg.input);
@@ -249,6 +258,7 @@ export class Room {
     this.arenaInputs = {};
     this.arenaTick = 0;
     this.overTick = null;
+    this.fastVotes.clear();
     this.tickAccumulator = 0;
     this.setPhase("arena", null);
     this.broadcastRoom();
@@ -311,7 +321,8 @@ export class Room {
       this.updateDraftBots();
       if (this.phaseEndsAt !== null && Date.now() >= this.phaseEndsAt) this.startArena();
     } else if (this.phase === "arena" && this.arena) {
-      this.tickAccumulator = Math.min(this.tickAccumulator + elapsed, TICK_MS * MAX_CATCHUP_TICKS);
+      const speed = this.speed();
+      this.tickAccumulator = Math.min(this.tickAccumulator + elapsed * speed, TICK_MS * MAX_CATCHUP_TICKS * speed);
       while (this.tickAccumulator >= TICK_MS && this.arena) {
         this.tickAccumulator -= TICK_MS;
         this.stepArena(this.arena);
@@ -345,10 +356,31 @@ export class Room {
     this.recorder?.record(inputs);
     arena.step(inputs);
     this.arenaTick++;
-    if (this.arenaTick % SNAPSHOT_EVERY === 0) this.broadcast({ t: "arenaSnap", snap: arena.snapshot() });
+    // Same snapshot rate in real time whatever the speed, so bandwidth stays flat.
+    const speed = this.speed();
+    if (this.arenaTick % (SNAPSHOT_EVERY * speed) === 0) {
+      const snap = arena.snapshot();
+      if (speed !== 1) snap.speed = speed;
+      this.broadcast({ t: "arenaSnap", snap });
+    }
     // Once decided, keep the arena running a few seconds so everyone sees who won.
-    if (arena.over && this.overTick === null) this.overTick = this.arenaTick;
+    if (arena.over && this.overTick === null) {
+      this.overTick = this.arenaTick;
+      this.broadcastRoom(); // fast-forward ends with the fight
+    }
     if (this.overTick !== null && this.arenaTick - this.overTick >= CELEBRATE_SECONDS * TICK_HZ) this.finishArena();
+  }
+
+  /** Humans whose vote counts: connected and in the fight (dead ones too). */
+  private fastVoters(): Player[] {
+    return [...this.players.values()].filter((p) => !p.isBot && p.inRound && p.socket);
+  }
+
+  /** Sim ticks per real tick. The celebration always runs at normal speed. */
+  private speed(): number {
+    if (this.phase !== "arena" || !this.arena || this.arena.over) return 1;
+    const voters = this.fastVoters();
+    return voters.length > 0 && voters.every((p) => this.fastVotes.has(p.id)) ? FAST_FORWARD_SPEED : 1;
   }
 
   // -------------------------------------------------------------- outbound
@@ -361,6 +393,11 @@ export class Room {
       phaseEndsInMs: this.phaseEndsAt === null ? null : Math.max(0, this.phaseEndsAt - Date.now()),
       round: this.round,
       settings: this.settings,
+      fastForward: {
+        votes: [...this.fastVotes].filter((id) => this.players.get(id)?.socket),
+        needed: this.fastVoters().length,
+        active: this.speed() !== 1,
+      },
       players: [...this.players.values()].map((p) => ({
         id: p.id,
         name: p.name,

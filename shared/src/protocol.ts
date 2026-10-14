@@ -23,6 +23,8 @@ export interface RoomView {
   round: number;
   settings: RoomSettings;
   players: PlayerInfo[];
+  /** Fast-forward vote during a fight: it runs at FAST_FORWARD_SPEED once every connected human has voted. */
+  fastForward: { votes: PlayerId[]; needed: number; active: boolean };
 }
 
 export interface ChatMessage {
@@ -48,6 +50,7 @@ export type ClientMsg =
   | { t: "start" }
   | { t: "draft"; action: DraftAction }
   | { t: "input"; input: InputState }
+  | { t: "fastForward"; on: boolean }
   | { t: "nextRound" }
   | { t: "toLobby" };
 

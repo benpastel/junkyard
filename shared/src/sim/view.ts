@@ -7,6 +7,8 @@ export const TICK_HZ = 60;
 export const SNAPSHOT_EVERY = 3;
 /** After the fight is decided the arena keeps running (frozen ring, no damage) this long before results. */
 export const CELEBRATE_SECONDS = 4;
+/** Sim speed while every human has voted to fast-forward. */
+export const FAST_FORWARD_SPEED = 4;
 
 export interface InitCell {
   /** Unique across the whole arena. Debris keeps the cid of the cell it came from. */
@@ -90,6 +92,8 @@ export type ArenaEvent =
 export interface ArenaSnapshot {
   tick: number;
   ring: number;
+  /** Sim ticks per real tick while fast-forwarding; absent at normal speed. Set by the server. */
+  speed?: number;
   /** Whether the power-up orb is sitting at the centre. */
   powerup: boolean;
   bodies: BodySnap[];

@@ -54,8 +54,9 @@ Online multiplayer, fast-paced, round-based game:
 - **Physics:** thrust is applied at each engine's actual position, so a lopsided engine layout spins the ship. Ships are only sensible to pilot with weight-symmetric engines, and get weirder as cells fly off. That's intended.
 - **Rotation** will be hard with this scheme; dedicated rotation pieces (gyros) are a likely addition.
 - **Weapons:** fixed-direction, one key per weapon type. Lasers fire automatically whenever their line is clear; X = grapple (toggle).
+- **Fast-forward:** an F button in the arena; once every connected human in the fight (dead ones too) has voted, the fight runs at 4× until it is decided. Snapshots stay at 20/s, and the client playback clock follows the sim speed.
 - **Controls bar:** the arena shows each key as a clickable button that lights while held; the draft uses the same buttons for rotate (Q/E), flip (F) and discard (Esc).
-  - lasers (ranged, raycasts; auto-firing, ~1.25 shots/s, light knockback)
+  - lasers (ranged, raycasts; auto-firing, one shot every 2.4s, light knockback)
   - collisions above a speed threshold break one cell on each side
   - **saw**: a spinning blade with its own round hitbox past the cell, wide enough to reach the tile in front and both tiles diagonally in front; it cuts whatever it touches (one hit every 0.2s, at any speed) and takes no harm from it. Armor facing the blade turns it. It only works with its line and both front diagonals clear.
   - grapple and armor are switched off in the piece mix for now (the parts still work).

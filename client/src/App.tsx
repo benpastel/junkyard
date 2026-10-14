@@ -1,5 +1,7 @@
 import { Suspense, lazy, useEffect, useRef } from "react";
-import { ArenaScreen } from "./arena/ArenaScreen";
+import type { RoomView } from "@ja/shared";
+import type { ArenaInit } from "@ja/shared/sim/view";
+import { ArenaScreen, type FastForward } from "./arena/ArenaScreen";
 import { DraftScreen } from "./draft/DraftScreen";
 import { net, useNet } from "./net";
 import { Landing, storedName } from "./screens/Landing";
@@ -59,7 +61,13 @@ function Game() {
       break;
     case "arena":
       screen = s.arenaInit ? (
-        <ArenaScreen init={s.arenaInit} me={playerId} subscribe={net.subscribeSnaps} sendInput={(input) => net.send({ t: "input", input })} />
+        <ArenaScreen
+          init={s.arenaInit}
+          me={playerId}
+          subscribe={net.subscribeSnaps}
+          sendInput={(input) => net.send({ t: "input", input })}
+          fastForward={fastForwardFor(room, playerId, s.arenaInit)}
+        />
       ) : (
         <Waiting room={room} me={playerId} chat={s.chat} endsAt={null} />
       );
@@ -86,4 +94,17 @@ function Game() {
       )}
     </>
   );
+}
+
+/** The viewer's fast-forward vote, if they're in this fight. */
+function fastForwardFor(room: RoomView, me: string, init: ArenaInit): FastForward | undefined {
+  if (!init.ships.some((sh) => sh.playerId === me)) return undefined;
+  const voted = room.fastForward.votes.includes(me);
+  return {
+    voted,
+    votes: room.fastForward.votes.length,
+    needed: room.fastForward.needed,
+    active: room.fastForward.active,
+    toggle: () => net.send({ t: "fastForward", on: !voted }),
+  };
 }

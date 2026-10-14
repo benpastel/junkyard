@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { InputState, PlayerId } from "@ja/shared";
-import type { ArenaInit, ArenaSnapshot } from "@ja/shared/sim/view";
+import { FAST_FORWARD_SPEED, type ArenaInit, type ArenaSnapshot } from "@ja/shared/sim/view";
 import { KeyButton } from "../ui/KeyButton";
 import { ArenaRenderer } from "./renderer";
 import "./arena.css";
@@ -21,8 +21,12 @@ export function ArenaScreen(props: {
   me: PlayerId | null;
   subscribe: (cb: (s: ArenaSnapshot) => void) => () => void;
   sendInput: (i: InputState) => void;
+  /** Fast-forward vote; omitted when this viewer has no vote. */
+  fastForward?: FastForward;
 }) {
-  const { init, me, subscribe, sendInput } = props;
+  const { init, me, subscribe, sendInput, fastForward } = props;
+  const ffRef = useRef(fastForward);
+  ffRef.current = fastForward;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [pips, setPips] = useState<{ color: string; alive: boolean }[]>([]);
   const [held, setHeld] = useState<InputState>(NO_KEYS);
@@ -85,7 +89,10 @@ export function ArenaScreen(props: {
       e.preventDefault();
       press(k, down);
     };
-    const onDown = (e: KeyboardEvent) => set(e, true);
+    const onDown = (e: KeyboardEvent) => {
+      if (e.code === FAST_FORWARD_KEY && !e.repeat) ffRef.current?.toggle();
+      set(e, true);
+    };
     const onUp = (e: KeyboardEvent) => set(e, false);
     const onBlur = () => {
       for (const k of Object.keys(keys) as (keyof InputState)[]) keys[k] = false;
@@ -113,6 +120,7 @@ export function ArenaScreen(props: {
           <span key={i} className={p.alive ? "pip" : "pip dead"} style={{ ["--c" as string]: p.color }} />
         ))}
       </div>
+      {fastForward?.active && <div className="arena-speed mono">{FAST_FORWARD_SPEED}×</div>}
       {flying && (
         <div className="arena-controls">
           {CONTROLS.map((group, i) => (
@@ -129,9 +137,49 @@ export function ArenaScreen(props: {
               ))}
             </div>
           ))}
+          {fastForward && (
+            <div className="arena-controls-group">
+              <KeyButton
+                title="Fast-forward"
+                keyLabel="F"
+                icon={
+                  <span className="ff-icon">
+                    <FastForwardIcon />
+                    {fastForward.needed > 1 && (
+                      <span className="ff-votes mono">
+                        {fastForward.votes}/{fastForward.needed}
+                      </span>
+                    )}
+                  </span>
+                }
+                active={fastForward.voted || fastForward.active}
+                onClick={fastForward.toggle}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+export interface FastForward {
+  /** This viewer has voted. */
+  voted: boolean;
+  votes: number;
+  needed: number;
+  /** Everyone's in: the fight is running at FAST_FORWARD_SPEED. */
+  active: boolean;
+  toggle: () => void;
+}
+
+const FAST_FORWARD_KEY = "KeyF";
+
+function FastForwardIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 20 20" aria-hidden>
+      <path d="M2 4 L10 10 L2 16 Z M10 4 L18 10 L10 16 Z" fill="currentColor" />
+    </svg>
   );
 }
 

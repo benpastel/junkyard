@@ -52,3 +52,24 @@
   display: flex;
   gap: 6px;
 }
+
+.arena-speed {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--hazard);
+  pointer-events: none;
+}
+
+.ff-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ff-votes {
+  font-size: 11px;
+}

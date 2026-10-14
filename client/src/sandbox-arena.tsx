@@ -1,8 +1,8 @@
 // Local arena sandbox: runs the sim in the browser with bots, no server.
 // ?sandbox=arena[&bots=N][&me=0][&seed=N]
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NO_INPUT, PLAYER_COLORS, type InputState, type ShipBlueprint } from "@ja/shared";
-import { Arena, CELEBRATE_SECONDS, SIM, SNAPSHOT_EVERY, TICK_HZ, arenaBotInput, initPhysics, type ArenaInit, type ArenaSnapshot } from "@ja/shared/sim";
+import { Arena, CELEBRATE_SECONDS, FAST_FORWARD_SPEED, SIM, SNAPSHOT_EVERY, TICK_HZ, arenaBotInput, initPhysics, type ArenaInit, type ArenaSnapshot } from "@ja/shared/sim";
 import { SANDBOX_SHIPS, parseShip } from "@ja/shared/sim/testShips";
 import { ArenaScreen } from "./arena/ArenaScreen";
 
@@ -33,6 +33,11 @@ export function SandboxArena() {
     };
   }, []);
 
+  // Fast-forward: you're the only human, so your vote alone speeds it up.
+  const [fast, setFast] = useState(false);
+  const fastRef = useRef(fast);
+  fastRef.current = fast;
+
   useEffect(() => {
     let arena: Arena | null = null;
     let timer = 0;
@@ -61,15 +66,17 @@ export function SandboxArena() {
       timer = window.setInterval(() => {
         if (cancelled) return;
         const now = performance.now();
-        acc = Math.min(acc + (now - last) / 1000, 0.25);
+        const speed = fastRef.current && !a.over ? FAST_FORWARD_SPEED : 1;
+        acc = Math.min(acc + ((now - last) / 1000) * speed, 0.25 * speed);
         last = now;
         while (acc >= 1 / TICK_HZ) {
           acc -= 1 / TICK_HZ;
           const inputs: Record<string, InputState> = {};
           for (const s of a.ships) inputs[s.playerId] = s.playerId === ME ? hub.input : idle ? NO_INPUT : arenaBotInput(a, s.playerId);
           a.step(inputs);
-          if (a.tickCount % SNAPSHOT_EVERY === 0) {
+          if (a.tickCount % (SNAPSHOT_EVERY * speed) === 0) {
             const snap = a.snapshot();
+            if (speed !== 1) snap.speed = speed;
             for (const cb of hub.subs) cb(snap);
           }
         }
@@ -89,5 +96,14 @@ export function SandboxArena() {
   }, [round, withMe, bots, seed, hub]);
 
   if (!init) return null;
-  return <ArenaScreen key={round} init={init} me={withMe ? ME : null} subscribe={hub.subscribe} sendInput={(i) => (hub.input = i)} />;
+  return (
+    <ArenaScreen
+      key={round}
+      init={init}
+      me={withMe ? ME : null}
+      subscribe={hub.subscribe}
+      sendInput={(i) => (hub.input = i)}
+      fastForward={withMe ? { voted: fast, votes: fast ? 1 : 0, needed: 1, active: fast, toggle: () => setFast((f) => !f) } : undefined}
+    />
+  );
 }

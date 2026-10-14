@@ -28,7 +28,7 @@ export const SIM = {
   engineRampSeconds: 0.15,
 
   laserChargeSeconds: 0.25,
-  laserCooldownSeconds: 0.8,
+  laserCooldownSeconds: 2.4,
   laserRange: 25,
   /** Hits dealt per laser shot. */
   laserDamage: 1,
