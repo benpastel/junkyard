@@ -233,6 +233,10 @@ describe("arena", () => {
     for (let i = 0; i < TICK_HZ * 12 && stuck.length === 0; i++) a.step({ a: { ...NO_INPUT, up: true } });
     expect(stuck.some((l) => l.includes("] a lost"))).toBe(true);
     expect(stuck.some((l) => l.includes("] b lost"))).toBe(true);
+    // The blast knocks them apart: b (ahead, at larger y) now moves away from a.
+    const va = a.ship("a")!.body.rb!.linvel();
+    const vb = a.ship("b")!.body.rb!.linvel();
+    expect(vb.y - va.y).toBeGreaterThan(SIM.stuckKnockbackSpeed);
     a.dispose();
   });
 

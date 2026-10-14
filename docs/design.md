@@ -58,7 +58,7 @@ Online multiplayer, fast-paced, round-based game:
 - **Controls bar:** the arena shows each key as a clickable button that lights while held; the draft uses the same buttons for rotate (Q/E), flip (F) and discard (Esc).
   - lasers (ranged, raycasts; auto-firing, one shot every 2.4s, light knockback; range 12 cells, just short of the window edge on a laptop screen)
   - collisions above a speed threshold break one cell on each side
-  - **anti-stuck:** cells of two ships that stay touching for 3s explode, on both sides at once
+  - **anti-stuck:** cells of two ships that stay touching for 5s explode, on both sides at once, and the blast shoves the two ships apart
   - **saw**: a spinning blade with its own round hitbox past the cell, wide enough to reach the tile in front and both tiles diagonally in front; it cuts whatever it touches (one hit every 0.2s, at any speed) and takes no harm from it. Armor facing the blade turns it. It only works with its line and both front diagonals clear.
   - grapple and armor are switched off in the piece mix for now (the parts still work).
   - grappling hook (attaches two ships, applies force as it retracts)

@@ -909,12 +909,28 @@ export class Arena {
    */
   private breakStuck(touched: Set<SimBody>) {
     const limit = Math.round(SIM.stuckSeconds * TICK_HZ);
+    const shoved = new Set<string>();
     for (const [key, t] of this.touching) {
       if (this.tickCount - t.since < limit) continue;
       this.touching.delete(key);
       const c1 = this.cellByCollider.get(t.h1);
       const c2 = this.cellByCollider.get(t.h2);
       if (!c1?.alive || !c2?.alive || c1.body?.kind !== "ship" || c2.body?.kind !== "ship" || c1.body === c2.body) continue;
+      // Blow the two ships apart along the line between the touching cells, once per pair of ships.
+      const pair = c1.body.id < c2.body.id ? `${c1.body.id}:${c2.body.id}` : `${c2.body.id}:${c1.body.id}`;
+      const p1 = this.cellWorld(c1);
+      const p2 = this.cellWorld(c2);
+      if (!shoved.has(pair) && p1 && p2 && c1.body.rb && c2.body.rb) {
+        shoved.add(pair);
+        const dx = p1.x - p2.x;
+        const dy = p1.y - p2.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const k = SIM.stuckKnockbackSpeed / len;
+        const m1 = c1.body.rb.mass();
+        const m2 = c2.body.rb.mass();
+        c1.body.rb.applyImpulse({ x: dx * k * m1, y: dy * k * m1 }, true);
+        c2.body.rb.applyImpulse({ x: -dx * k * m2, y: -dy * k * m2 }, true);
+      }
       this.damageCell(c1, c1.hp, null, touched, `stuck to ${c2.body.owner}`);
       this.damageCell(c2, c2.hp, null, touched, `stuck to ${c1.body?.owner ?? "a wreck"}`);
     }
