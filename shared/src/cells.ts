@@ -21,6 +21,15 @@ export function workingDir(type: CellType, dir: Dir): Dir | null {
 }
 
 /**
+ * How many squares along its working direction a part needs clear. Lasers and grapples shoot,
+ * so they need the whole line to the ship's edge (or they'd hit their own ship); engines and
+ * saws just need the square next to them open.
+ */
+export function clearReach(type: CellType): number {
+  return type === "laser" || type === "grapple" ? Infinity : 1;
+}
+
+/**
  * Extra squares (beyond the straight line) a part's overhang covers, as [forward, sideways]
  * offsets in the part's own frame. The saw blade is wide enough to reach the squares
  * diagonally in front, so those must be empty too.
@@ -44,7 +53,7 @@ export function partOffset(w: Dir, forward: number, side: number): { x: number; 
 
 /**
  * Builds a checker for one ship (or one rigid body's worth of cells): a part is open when the
- * straight grid line from it, in its working direction, contains none of the ship's own cells,
+ * squares it needs in its working direction (see clearReach) hold none of the ship's own cells,
  * and nothing sits under the rest of its overhang (see overhangSquares). Covered parts do
  * nothing until whatever covers them is destroyed.
  */
@@ -64,7 +73,8 @@ export function openChecker(cells: readonly { x: number; y: number }[]) {
     const w = workingDir(c.type, c.dir);
     if (w === null) return true;
     const v = DIR_VECTORS[w];
-    for (let x = c.x + v.x, y = c.y + v.y; x >= minX && x <= maxX && y >= minY && y <= maxY; x += v.x, y += v.y) {
+    const reach = clearReach(c.type);
+    for (let x = c.x + v.x, y = c.y + v.y, i = 0; i < reach && x >= minX && x <= maxX && y >= minY && y <= maxY; x += v.x, y += v.y, i++) {
       if (occupied.has(`${x},${y}`)) return false;
     }
     for (const [f, sd] of overhangSquares(c.type)) {

@@ -242,6 +242,19 @@ function findValidSpot(d: Draft, id: string) {
 }
 
 describe("openChecker", () => {
+  it("engines and saws only need the square next to them; lasers need the whole line", () => {
+    const hull = (x: number, y: number): Cell => ({ x, y, type: "hull", dir: 0 });
+    // Something two squares away in the working direction, with a gap in between.
+    const engine: Cell = { x: 0, y: 0, type: "engine", dir: 0 }; // exhaust points down
+    expect(openChecker([engine, hull(0, 2)])(engine)).toBe(true);
+    expect(openChecker([engine, hull(0, 1)])(engine)).toBe(false);
+    const saw: Cell = { x: 0, y: 2, type: "saw", dir: 0 };
+    expect(openChecker([saw, hull(0, 0)])(saw)).toBe(true);
+    expect(openChecker([saw, hull(0, 1)])(saw)).toBe(false);
+    const laser: Cell = { x: 0, y: 2, type: "laser", dir: 0 };
+    expect(openChecker([laser, hull(0, 0)])(laser)).toBe(false);
+  });
+
   it("needs a saw's front-diagonal squares empty too", () => {
     const saw: Cell = { x: 1, y: 1, type: "saw", dir: 0 };
     const hull = (x: number, y: number): Cell => ({ x, y, type: "hull", dir: 0 });
