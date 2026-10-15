@@ -68,12 +68,17 @@ export type HullTier = (typeof HULL_TIERS)[number];
 export const PACES = ["frantic", "fast", "strategic"] as const;
 export type Pace = (typeof PACES)[number];
 
+/** How well bots fly and how fast they build. */
+export const BOT_SKILLS = ["easy", "medium", "hard"] as const;
+export type BotSkill = (typeof BOT_SKILLS)[number];
+
 export interface RoomSettings {
   pace: Pace;
+  botSkill: BotSkill;
   hull: HullId;
 }
 
-export const DEFAULT_SETTINGS: RoomSettings = { pace: "fast", hull: "hauler" };
+export const DEFAULT_SETTINGS: RoomSettings = { pace: "fast", hull: "hauler", botSkill: "medium" };
 
 export const PLAYER_COLORS = [
   "#e8743b",

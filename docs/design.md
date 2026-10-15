@@ -69,7 +69,11 @@ Online multiplayer, fast-paced, round-based game:
 
 ## Bots
 
-Needed early: simple, human-like, easy bots to play against during development, both for drafting and for flying.
+- Skill (lobby): **Easy / Medium (default) / Hard**.
+  - Building: hard bots take a draft action every 1.5–3s, medium 2.4–4.8s, easy 3.75–7.5s. This is the biggest difficulty lever: slower builders field smaller ships.
+  - Flying: easy reacts slowest with the sloppiest aim; medium as before; hard aims steadier, goes after small nearby ships, side-steps enemy laser lines, and fights from the edge of laser range when outgunned.
+  - Faster reactions measured worse (the thrust controller over-corrects), so hard thinks as often as medium.
+- All bots only charge in to ram with a working saw lined up; otherwise they hold distance (lasers ~8, unarmed ~12) and turn round to retreat if they can't thrust in reverse.
 
 ## Architecture
 

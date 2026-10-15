@@ -2,11 +2,13 @@ import type { WebSocket } from "ws";
 import {
   DEFAULT_SETTINGS,
   HULL_IDS,
+  BOT_SKILLS,
   MAX_PLAYERS,
   PACES,
   NO_INPUT,
   PLAYER_COLORS,
   Rng,
+  type BotSkill,
   type ChatMessage,
   type ClientMsg,
   type InputState,
@@ -22,6 +24,8 @@ import { Arena, CELEBRATE_SECONDS, FAST_FORWARD_SPEED, FightRecorder, SIM, SNAPS
 import { saveRecording } from "./recordings.js";
 
 const CHAT_HISTORY = 100;
+/** Shortest wait between a bot's draft actions (up to twice this), by skill. */
+const DRAFT_BOT_MS: Record<BotSkill, number> = { easy: 3750, medium: 2400, hard: 1500 };
 const BOT_NAMES = ["Rustbucket", "Scrapjaw", "Tinpot", "Clunker", "Bolt", "Dentz", "Gearmouth", "Hubcap"];
 const TICK_MS = 1000 / TICK_HZ;
 /** Never simulate more than this many ticks in one go after a stall. */
@@ -169,8 +173,9 @@ export class Room {
       }
       case "settings": {
         if (!isHost || this.phase !== "lobby") return;
-        const { pace, hull } = msg.settings;
+        const { pace, hull, botSkill } = msg.settings;
         if ((PACES as readonly string[]).includes(pace)) this.settings.pace = pace;
+        if ((BOT_SKILLS as readonly string[]).includes(botSkill)) this.settings.botSkill = botSkill;
         if ((HULL_IDS as readonly string[]).includes(hull)) this.settings.hull = hull;
         this.broadcastRoom();
         return;
@@ -233,7 +238,7 @@ export class Room {
     this.round++;
     for (const p of this.players.values()) {
       p.inRound = p.isBot || p.socket !== null;
-      p.botNextActAt = Date.now() + 1500 + this.rng.int(1500);
+      p.botNextActAt = Date.now() + this.draftBotDelay();
     }
     this.draft = new Draft({
       playerIds: [...this.players.values()].filter((p) => p.inRound).map((p) => p.id),
@@ -333,6 +338,12 @@ export class Room {
     }
   }
 
+  /** Milliseconds a bot waits between draft actions: easier bots build more slowly. */
+  private draftBotDelay(): number {
+    const base = DRAFT_BOT_MS[this.settings.botSkill];
+    return base + this.rng.int(base);
+  }
+
   /** Applies a draft action; a reroll deals its new hand REROLL_SECONDS later. */
   private applyDraft(playerId: PlayerId, action: DraftAction): string | null {
     const draft = this.draft;
@@ -355,7 +366,7 @@ export class Room {
     let changed = false;
     for (const p of this.players.values()) {
       if (!p.isBot || !p.inRound || now < p.botNextActAt) continue;
-      p.botNextActAt = now + 1500 + this.rng.int(1500);
+      p.botNextActAt = now + this.draftBotDelay();
       const action = draftBotAction(draft, p.id, this.rng);
       if (action && this.applyDraft(p.id, action) === null) changed = true;
     }
@@ -366,7 +377,7 @@ export class Room {
     const inputs: Record<PlayerId, InputState> = {};
     for (const p of this.players.values()) {
       if (!p.inRound) continue;
-      inputs[p.id] = p.isBot ? arenaBotInput(arena, p.id) : (this.arenaInputs[p.id] ?? NO_INPUT);
+      inputs[p.id] = p.isBot ? arenaBotInput(arena, p.id, this.settings.botSkill) : (this.arenaInputs[p.id] ?? NO_INPUT);
     }
     this.recorder?.record(inputs);
     arena.step(inputs);

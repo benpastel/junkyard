@@ -1,7 +1,7 @@
 // Local arena sandbox: runs the sim in the browser with bots, no server.
 // ?sandbox=arena[&bots=N][&me=0][&seed=N]
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NO_INPUT, PLAYER_COLORS, type InputState, type ShipBlueprint } from "@ja/shared";
+import { NO_INPUT, PLAYER_COLORS, type BotSkill, type InputState, type ShipBlueprint } from "@ja/shared";
 import { Arena, CELEBRATE_SECONDS, FAST_FORWARD_SPEED, SIM, SNAPSHOT_EVERY, TICK_HZ, arenaBotInput, initPhysics, type ArenaInit, type ArenaSnapshot } from "@ja/shared/sim";
 import { SANDBOX_SHIPS, parseShip } from "@ja/shared/sim/testShips";
 import { ArenaScreen } from "./arena/ArenaScreen";
@@ -18,6 +18,8 @@ export function SandboxArena() {
   if (shrink) Object.assign(SIM, { ringDelaySeconds: 0, ringShrinkSeconds: Number(shrink) });
   // ?idle=1 keeps the bots from steering or shooting.
   const idle = params.get("idle") === "1";
+  // ?skill=easy|medium|hard (default hard) for the bots.
+  const skill = (params.get("skill") ?? "hard") as BotSkill;
 
   const [init, setInit] = useState<ArenaInit | null>(null);
   const [round, setRound] = useState(0);
@@ -72,7 +74,7 @@ export function SandboxArena() {
         while (acc >= 1 / TICK_HZ) {
           acc -= 1 / TICK_HZ;
           const inputs: Record<string, InputState> = {};
-          for (const s of a.ships) inputs[s.playerId] = s.playerId === ME ? hub.input : idle ? NO_INPUT : arenaBotInput(a, s.playerId);
+          for (const s of a.ships) inputs[s.playerId] = s.playerId === ME ? hub.input : idle ? NO_INPUT : arenaBotInput(a, s.playerId, skill);
           a.step(inputs);
           if (a.tickCount % (SNAPSHOT_EVERY * speed) === 0) {
             const snap = a.snapshot();

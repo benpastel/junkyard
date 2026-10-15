@@ -10,5 +10,5 @@ export interface ArenaSetup {
 export * from "./view.js";
 export { CELL_HP, SIM } from "./constants.js";
 export { Arena, initPhysics } from "./arena.js";
-export { arenaBotInput } from "./bot.js";
+export { BOT_SKILL_PROFILES, arenaBotInput } from "./bot.js";
 export { FightRecorder, packInput, replayFight, unpackInput, type FightRecording } from "./replay.js";

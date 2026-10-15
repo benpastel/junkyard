@@ -1,11 +1,12 @@
 // Simple, human-ish arena bot. Reads arena internals directly.
-import { DIR_VECTORS, NO_INPUT, type Dir, type InputState, type PlayerId } from "../types.js";
+import { DIR_VECTORS, NO_INPUT, type BotSkill, type Dir, type InputState, type PlayerId } from "../types.js";
 import { Rng } from "../rng.js";
 import { SIM } from "./constants.js";
 import { TICK_HZ, angleDiff } from "./view.js";
 import type { Arena, ShipRecord } from "./arena.js";
 
 interface BotState {
+  skill: SkillProfile;
   rng: Rng;
   nextDecision: number;
   input: InputState;
@@ -22,6 +23,33 @@ const BOT_UNARMED_HOLD = 12;
 /** A saw this close to pointing at the target (radians) is lined up enough to charge in. */
 const SAW_CHARGE_ANGLE = 0.35;
 
+interface SkillProfile {
+  /** Ticks between decisions: min + up to rand more. */
+  reactMin: number;
+  reactRand: number;
+  /** How far off (radians, peak to peak) its aim wanders. */
+  aimNoise: number;
+  /** Go after small, nearby ships rather than just the nearest. */
+  pickWeak: boolean;
+  /** Side-step out of enemy laser lines. */
+  dodge: boolean;
+  /** Fight from the edge of laser range when outgunned. */
+  standoff: boolean;
+}
+
+export const BOT_SKILL_PROFILES: Record<BotSkill, SkillProfile> = {
+  easy: { reactMin: 14, reactRand: 10, aimNoise: 0.6, pickWeak: false, dodge: false, standoff: false },
+  medium: { reactMin: 8, reactRand: 8, aimNoise: 0.35, pickWeak: false, dodge: false, standoff: false },
+  // Faster reactions measured worse (the thrust controller over-corrects), so hard thinks as
+  // often as medium; it wins on steadier aim and better choices.
+  hard: { reactMin: 8, reactRand: 8, aimNoise: 0.2, pickWeak: true, dodge: true, standoff: true },
+};
+
+/** Hard bots side-step this fast when an enemy laser is lined up on them. */
+const DODGE_SPEED = 5;
+/** Hard bots with fewer than this share of their target's cells keep to the edge of laser range. */
+const OUTGUNNED = 0.6;
+
 const ARROWS: { key: "up" | "right" | "down" | "left"; dir: Dir }[] = [
   { key: "up", dir: 0 },
   { key: "right", dir: 1 },
@@ -29,17 +57,17 @@ const ARROWS: { key: "up" | "right" | "down" | "left"; dir: Dir }[] = [
   { key: "left", dir: 3 },
 ];
 
-export function arenaBotInput(arena: Arena, playerId: PlayerId): InputState {
+export function arenaBotInput(arena: Arena, playerId: PlayerId, skill: BotSkill = "medium"): InputState {
   let perArena = bots.get(arena);
   if (!perArena) bots.set(arena, (perArena = new Map()));
   let st = perArena.get(playerId);
   if (!st) {
-    st = { rng: new Rng(hash(playerId)), nextDecision: 0, input: NO_INPUT, aimNoise: 0, hookedSince: null };
+    st = { skill: BOT_SKILL_PROFILES[skill], rng: new Rng(hash(playerId)), nextDecision: 0, input: NO_INPUT, aimNoise: 0, hookedSince: null };
     perArena.set(playerId, st);
   }
   if (arena.tickCount < st.nextDecision) return st.input;
-  // Reaction delay: think 4-8 times a second.
-  st.nextDecision = arena.tickCount + 8 + st.rng.int(8);
+  // Reaction delay: how often it thinks depends on skill.
+  st.nextDecision = arena.tickCount + st.skill.reactMin + st.rng.int(st.skill.reactRand);
   st.input = decide(arena, playerId, st);
   return st.input;
 }
@@ -57,14 +85,15 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
   const mass = Math.max(1e-3, rb.mass());
   const inertia = Math.max(1e-3, rb.principalInertia());
 
-  const target = nearestEnemy(arena, me, pos);
+  const foe = st.skill.pickWeak ? weakestNearby(arena, me, pos) : nearestEnemy(arena, me, pos);
+  const target = foe?.at ?? null;
   const cells = me.body.cells.filter((c) => c.alive);
   // Only parts that actually work count (covered ones do nothing).
   const lasers = cells.filter((c) => c.type === "laser" && arena.isOpen(c));
   const grapples = cells.filter((c) => c.type === "grapple" && arena.isOpen(c));
   const saws = cells.filter((c) => c.type === "saw" && arena.isOpen(c));
 
-  if (st.rng.chance(0.3)) st.aimNoise = (st.rng.next() - 0.5) * 0.35;
+  if (st.rng.chance(0.3)) st.aimNoise = (st.rng.next() - 0.5) * st.skill.aimNoise;
 
   // Which local direction should face the enemy.
   const aimCells = lasers.length ? lasers : saws.length ? saws : grapples;
@@ -84,7 +113,10 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
     // Only close in to ram when it pays: a working saw already pointing at the target. With
     // lasers, hold off inside their range; with nothing that hurts on contact, keep clear.
     const sawLinedUp = saws.length > 0 && !lasers.length && Math.abs(angleDiff(angle, desiredAngle - st.aimNoise)) < SAW_CHARGE_ANGLE;
-    const preferred = sawLinedUp ? 0 : saws.length ? BOT_SAW_HOLD : lasers.length ? Math.min(BOT_LASER_HOLD, SIM.laserRange - 4) : BOT_UNARMED_HOLD;
+    // Outgunned hard bots fight from the edge of laser range instead.
+    const outgunned = st.skill.standoff && foe !== null && aliveCells(me) < aliveCells(foe.ship) * OUTGUNNED;
+    const laserHold = outgunned ? SIM.laserRange - 1.5 : Math.min(BOT_LASER_HOLD, SIM.laserRange - 4);
+    const preferred = sawLinedUp && !outgunned ? 0 : saws.length ? BOT_SAW_HOLD : lasers.length ? laserHold : BOT_UNARMED_HOLD;
     // Ease off on the way in so it settles at its distance instead of overshooting into you.
     // A lined-up saw charges in flat out: that's the whole point of it.
     const speed = sawLinedUp ? 7 : dist > preferred + 3 ? Math.min(7, (dist - preferred) * 0.6) : dist < preferred - 3 ? -4 : 0;
@@ -101,6 +133,12 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
         desiredAngle = Math.atan2(-uy, -ux) - mainLocal;
       }
     }
+  }
+
+  // Hard bots step out of any enemy laser lined up on them.
+  if (st.skill.dodge) {
+    const dodge = laserDodge(arena, me, pos);
+    if (dodge) desiredVel = { x: desiredVel.x + dodge.x * DODGE_SPEED, y: desiredVel.y + dodge.y * DODGE_SPEED };
   }
 
   // Go for the power-up when it's closer than the fight.
@@ -203,19 +241,55 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
   return input;
 }
 
-function nearestEnemy(arena: Arena, me: ShipRecord, pos: { x: number; y: number }) {
-  let best: { x: number; y: number } | null = null;
-  let bestD = Infinity;
+interface Foe {
+  ship: ShipRecord;
+  at: { x: number; y: number };
+}
+
+function nearestEnemy(arena: Arena, me: ShipRecord, pos: { x: number; y: number }): Foe | null {
+  return pickFoe(arena, me, pos, (d) => d);
+}
+
+/** Nearby and small: distance weighted by how big the enemy is next to us. */
+function weakestNearby(arena: Arena, me: ShipRecord, pos: { x: number; y: number }): Foe | null {
+  const mine = Math.max(1, aliveCells(me));
+  return pickFoe(arena, me, pos, (d, s) => d * Math.sqrt(Math.max(1, aliveCells(s)) / mine));
+}
+
+function pickFoe(arena: Arena, me: ShipRecord, pos: { x: number; y: number }, score: (d: number, s: ShipRecord) => number): Foe | null {
+  let best: Foe | null = null;
+  let bestScore = Infinity;
   for (const s of arena.ships) {
     if (s === me || !s.alive || !s.body.rb) continue;
     const t = s.body.rb.worldCom();
-    const d = Math.hypot(t.x - pos.x, t.y - pos.y);
-    if (d < bestD) {
-      bestD = d;
-      best = { x: t.x, y: t.y };
+    const sc = score(Math.hypot(t.x - pos.x, t.y - pos.y), s);
+    if (sc < bestScore) {
+      bestScore = sc;
+      best = { ship: s, at: { x: t.x, y: t.y } };
     }
   }
   return best;
+}
+
+function aliveCells(s: ShipRecord): number {
+  return s.body.cells.filter((c) => c.alive).length;
+}
+
+/** Unit vector sideways out of the line of the nearest enemy laser aimed at us, if any. */
+function laserDodge(arena: Arena, me: ShipRecord, pos: { x: number; y: number }): { x: number; y: number } | null {
+  for (const s of arena.ships) {
+    if (s === me || !s.alive) continue;
+    for (const c of s.body.cells) {
+      if (c.type !== "laser" || !c.alive || !arena.isOpen(c)) continue;
+      const from = arena.cellWorld(c);
+      const dir = arena.cellWorldDir(c);
+      if (!aligned(from, dir, pos, 0.2, SIM.laserRange)) continue;
+      // Perpendicular to the beam, on whichever side we already are.
+      const side = (pos.x - from!.x) * -dir.y + (pos.y - from!.y) * dir.x >= 0 ? 1 : -1;
+      return { x: -dir.y * side, y: dir.x * side };
+    }
+  }
+  return null;
 }
 
 function aligned(

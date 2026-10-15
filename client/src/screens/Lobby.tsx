@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { HULL_IDS, HULL_TIERS, MAX_PLAYERS, PACES, type ChatMessage, type Pace, type RoomView } from "@ja/shared";
+import { BOT_SKILLS, HULL_IDS, HULL_TIERS, MAX_PLAYERS, PACES, type BotSkill, type ChatMessage, type Pace, type RoomView } from "@ja/shared";
 import { HULLS } from "@ja/shared/draft";
 import { net } from "../net";
 import { Chat } from "./Chat";
@@ -7,6 +7,7 @@ import { PlayerList } from "./PlayerList";
 import { Segmented } from "./ui";
 
 const PACE_LABELS: Record<Pace, string> = { frantic: "Frantic", fast: "Fast", strategic: "Strategic" };
+const SKILL_LABELS: Record<BotSkill, string> = { easy: "Easy", medium: "Medium", hard: "Hard" };
 
 export function Lobby({ room, me, chat }: { room: RoomView; me: string | null; chat: ChatMessage[] }) {
   const isHost = room.hostId === me;
@@ -40,6 +41,13 @@ export function Lobby({ room, me, chat }: { room: RoomView; me: string | null; c
             value={settings.pace}
             disabled={!isHost}
             onChange={(pace) => net.send({ t: "settings", settings: { ...settings, pace } })}
+          />
+          <h3>Bots</h3>
+          <Segmented
+            options={BOT_SKILLS.map((k) => ({ value: k, label: SKILL_LABELS[k] }))}
+            value={settings.botSkill}
+            disabled={!isHost}
+            onChange={(botSkill) => net.send({ t: "settings", settings: { ...settings, botSkill } })}
           />
           <h3>Hull</h3>
           <div className="hull-picker">
