@@ -51,8 +51,14 @@ function Game() {
         <DraftScreen
           view={s.draft}
           me={playerId}
-          endsAt={s.phaseEndsAt ?? performance.now()}
+          endsAt={s.phaseEndsAt}
           act={(action) => net.send({ t: "draft", action })}
+          done={{
+            voted: room.done.votes.includes(playerId),
+            votes: room.done.votes.length,
+            needed: room.done.needed,
+            toggle: () => net.send({ t: "done", on: !room.done.votes.includes(playerId) }),
+          }}
           players={room.players}
         />
       ) : (

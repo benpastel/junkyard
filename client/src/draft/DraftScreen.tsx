@@ -10,12 +10,14 @@ import "./draft.css";
 export function DraftScreen(props: {
   view: DraftView;
   me: PlayerId;
-  /** performance.now()-based ms deadline. */
-  endsAt: number;
+  /** performance.now()-based ms deadline, or null when there's no time limit. */
+  endsAt: number | null;
   act: (a: DraftAction) => void;
   players: PlayerInfo[];
+  /** The Done vote; omitted where there's nobody to wait for (the sandbox). */
+  done?: DoneVote;
 }) {
-  const { view, me, endsAt, act, players } = props;
+  const { view, me, endsAt, act, players, done } = props;
   const color = players.find((p) => p.id === me)?.color ?? "#e8743b";
   const [rot, setRot] = useState<Dir>(0);
   const [flip, setFlip] = useState(false);
@@ -165,7 +167,20 @@ export function DraftScreen(props: {
       </aside>
 
       <main className="draft-main">
-        <Timer endsAt={endsAt} />
+        <div className="draft-top">
+          {endsAt !== null && <Timer endsAt={endsAt} />}
+          {done && (
+            <button className={`draft-done${done.voted ? " on" : ""}`} onClick={done.toggle}>
+              Done
+              {done.needed > 1 && (
+                <span className="mono">
+                  {" "}
+                  {done.votes}/{done.needed}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
         <Board
           hullRows={view.hullRows}
           cells={view.cells}
@@ -310,6 +325,14 @@ if (typeof window !== "undefined") {
     lastPointer.x = e.clientX;
     lastPointer.y = e.clientY;
   });
+}
+
+export interface DoneVote {
+  /** I've clicked Done. */
+  voted: boolean;
+  votes: number;
+  needed: number;
+  toggle: () => void;
 }
 
 function Timer({ endsAt }: { endsAt: number }) {

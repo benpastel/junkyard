@@ -263,3 +263,30 @@
 .draft-floating canvas {
   display: block;
 }
+
+.draft-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 52px;
+}
+
+.draft-done {
+  padding: 10px 22px;
+  font-size: 16px;
+}
+
+.draft-done.on {
+  color: #160c06;
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+.draft-top {
+  margin-bottom: 18px;
+}
+
+.draft-top .draft-timer {
+  margin-bottom: 0;
+}

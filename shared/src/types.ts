@@ -65,7 +65,7 @@ export const HULL_TIERS = ["small", "medium", "large"] as const;
 export type HullTier = (typeof HULL_TIERS)[number];
 
 /** How long the build phase lasts, scaled by hull size (see buildSeconds in draft/hulls.ts). */
-export const PACES = ["frantic", "fast", "strategic"] as const;
+export const PACES = ["frantic", "fast", "strategic", "unlimited"] as const;
 export type Pace = (typeof PACES)[number];
 
 /** How well bots fly and how fast they build. */

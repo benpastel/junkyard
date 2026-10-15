@@ -322,12 +322,12 @@ export function hullSize(hull: HullId): { width: number; height: number } {
   return { width: rows[0]!.length, height: rows.length };
 }
 
-/** Build time for a pace on a hull: bigger hulls get longer. */
-export function buildSeconds(pace: Pace, hull: HullId): number {
-  return BUILD_SECONDS[HULLS[hull].tier][pace];
+/** Build time for a pace on a hull (bigger hulls get longer), or null for no limit. */
+export function buildSeconds(pace: Pace, hull: HullId): number | null {
+  return pace === "unlimited" ? null : BUILD_SECONDS[HULLS[hull].tier][pace];
 }
 
-const BUILD_SECONDS: Record<HullTier, Record<Pace, number>> = {
+const BUILD_SECONDS: Record<HullTier, Record<Exclude<Pace, "unlimited">, number>> = {
   small: { frantic: 25, fast: 40, strategic: 60 },
   medium: { frantic: 35, fast: 60, strategic: 90 },
   large: { frantic: 50, fast: 80, strategic: 120 },

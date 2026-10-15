@@ -6,7 +6,7 @@ import { Chat } from "./Chat";
 import { PlayerList } from "./PlayerList";
 import { Segmented } from "./ui";
 
-const PACE_LABELS: Record<Pace, string> = { frantic: "Frantic", fast: "Fast", strategic: "Strategic" };
+const PACE_LABELS: Record<Pace, string> = { frantic: "Frantic", fast: "Fast", strategic: "Strategic", unlimited: "Unlimited" };
 const SKILL_LABELS: Record<BotSkill, string> = { easy: "Easy", medium: "Medium", hard: "Hard" };
 
 export function Lobby({ room, me, chat }: { room: RoomView; me: string | null; chat: ChatMessage[] }) {

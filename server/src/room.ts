@@ -69,6 +69,8 @@ export class Room {
   private overTick: number | null = null;
   /** Humans who want the fight sped up; it speeds up once every connected human is in. */
   private fastVotes = new Set<PlayerId>();
+  /** Humans who've finished building; the fight starts once every connected human has. */
+  private doneVotes = new Set<PlayerId>();
 
   /** Wall-clock time when the last human left, for cleanup. */
   emptySince: number | null = Date.now();
@@ -215,6 +217,13 @@ export class Room {
         this.broadcastDraft();
         return;
       }
+      case "done": {
+        if (this.phase !== "draft" || player.isBot || !player.inRound) return;
+        if (msg.on) this.doneVotes.add(playerId);
+        else this.doneVotes.delete(playerId);
+        this.broadcastRoom();
+        return;
+      }
       case "fastForward": {
         if (this.phase !== "arena" || player.isBot || !player.inRound) return;
         if (msg.on) this.fastVotes.add(playerId);
@@ -245,7 +254,9 @@ export class Room {
       hull: this.settings.hull,
       seed: this.rng.int(2 ** 31),
     });
-    this.setPhase("draft", Date.now() + buildSeconds(this.settings.pace, this.settings.hull) * 1000);
+    const seconds = buildSeconds(this.settings.pace, this.settings.hull);
+    this.doneVotes.clear();
+    this.setPhase("draft", seconds === null ? null : Date.now() + seconds * 1000);
     this.broadcastRoom();
     this.broadcastDraft();
     this.ensureLoop();
@@ -324,7 +335,8 @@ export class Room {
 
     if (this.phase === "draft") {
       this.updateDraftBots();
-      if (this.phaseEndsAt !== null && Date.now() >= this.phaseEndsAt) this.startArena();
+      const timeUp = this.phaseEndsAt !== null && Date.now() >= this.phaseEndsAt;
+      if (timeUp || this.everyoneDone()) this.startArena();
     } else if (this.phase === "arena" && this.arena) {
       const speed = this.speed();
       this.tickAccumulator = Math.min(this.tickAccumulator + elapsed * speed, TICK_MS * MAX_CATCHUP_TICKS * speed);
@@ -402,6 +414,12 @@ export class Room {
     return [...this.players.values()].filter((p) => !p.isBot && p.inRound && p.socket);
   }
 
+  /** Every connected human in the draft has clicked Done. */
+  private everyoneDone(): boolean {
+    const builders = this.fastVoters();
+    return builders.length > 0 && builders.every((p) => this.doneVotes.has(p.id));
+  }
+
   /** Sim ticks per real tick. The celebration always runs at normal speed. */
   private speed(): number {
     if (this.phase !== "arena" || !this.arena || this.arena.over) return 1;
@@ -419,6 +437,10 @@ export class Room {
       phaseEndsInMs: this.phaseEndsAt === null ? null : Math.max(0, this.phaseEndsAt - Date.now()),
       round: this.round,
       settings: this.settings,
+      done: {
+        votes: [...this.doneVotes].filter((id) => this.players.get(id)?.socket),
+        needed: this.phase === "draft" ? this.fastVoters().length : 0,
+      },
       fastForward: {
         votes: [...this.fastVotes].filter((id) => this.players.get(id)?.socket),
         needed: this.fastVoters().length,

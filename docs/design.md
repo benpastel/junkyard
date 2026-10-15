@@ -22,7 +22,7 @@ Online multiplayer, fast-paced, round-based game:
 - Each player privately sees **5 piece offers**. Pick one up and the others stay on offer; switch to another, or put it back (Esc). Placing a piece deals a fresh hand of 5.
 - **Reroll** (R / hourglass): throw the hand away; 5 new offers arrive after a 1s wait, so you can't cycle for free.
 - The shared pool (unused offers go to a tray anyone can grab) is still in the code but switched off (POOL_ENABLED).
-- **Pace** (lobby): Frantic / Fast (default) / Strategic. Build time scales with hull tier: small 25/40/60s, medium 35/60/90s, large 50/80/120s.
+- **Pace** (lobby): Frantic / Fast (default) / Strategic / Unlimited (no timer). A Done button in the draft starts the fight early once every connected human has clicked it (in Unlimited, that is the only way it starts). Build time scales with hull tier: small 25/40/60s, medium 35/60/90s, large 50/80/120s.
 - **Hulls**, three tiers of five: small (50–61 squares) Hauler, Hammerhead, Starfish, Barge, Catamaran; medium (71–84) Crab, Trident, Flying Wing, Panels, Strike; large (103–138) Station, Wedge, Manta, Saucer, Dreadnought. Every arm is at least 2 squares wide so pentominoes can reach it.
 
 ## Pieces and cells

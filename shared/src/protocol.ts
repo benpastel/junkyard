@@ -25,6 +25,8 @@ export interface RoomView {
   players: PlayerInfo[];
   /** Fast-forward vote during a fight: it runs at FAST_FORWARD_SPEED once every connected human has voted. */
   fastForward: { votes: PlayerId[]; needed: number; active: boolean };
+  /** Players who've clicked Done in the draft; the fight starts once every connected human has. */
+  done: { votes: PlayerId[]; needed: number };
 }
 
 export interface ChatMessage {
@@ -51,6 +53,7 @@ export type ClientMsg =
   | { t: "draft"; action: DraftAction }
   | { t: "input"; input: InputState }
   | { t: "fastForward"; on: boolean }
+  | { t: "done"; on: boolean }
   | { t: "nextRound" }
   | { t: "toLobby" };
 
