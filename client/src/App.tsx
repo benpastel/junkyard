@@ -12,11 +12,19 @@ import { Waiting } from "./screens/Waiting";
 // Sandboxes run the sim in the browser, so they load lazily to keep Rapier out of the main bundle.
 const SandboxArena = lazy(() => import("./sandbox-arena").then((m) => ({ default: m.SandboxArena })));
 const SandboxDraft = lazy(() => import("./sandbox-draft").then((m) => ({ default: m.SandboxDraft })));
+const SandboxButtons = lazy(() => import("./sandbox-buttons").then((m) => ({ default: m.SandboxButtons })));
 
 const params = new URLSearchParams(location.search);
 const sandbox = params.get("sandbox");
 
 export function App() {
+  if (sandbox === "buttons") {
+    return (
+      <Suspense fallback={null}>
+        <SandboxButtons />
+      </Suspense>
+    );
+  }
   if (sandbox === "arena" || sandbox === "draft") {
     return <Suspense fallback={null}>{sandbox === "arena" ? <SandboxArena /> : <SandboxDraft />}</Suspense>;
   }

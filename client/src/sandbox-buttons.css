@@ -1,0 +1,134 @@
+.mock {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 16px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mock-set {
+  display: grid;
+  grid-template-columns: 170px 150px 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.mock-name {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.mock-name b {
+  color: var(--hazard);
+  margin-right: 6px;
+}
+
+.mock-piece {
+  height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mock-tools {
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+.mock-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.mock-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* Rotate pair joined into one segmented control. */
+.mock-pair {
+  display: flex;
+}
+
+.mock-pair .key-button {
+  border-radius: 0;
+}
+
+.mock-pair .mock-btn:first-child .key-button {
+  border-radius: 4px 0 0 4px;
+}
+
+.mock-pair .mock-btn:last-child .key-button {
+  border-radius: 0 4px 4px 0;
+  border-left: 0;
+}
+
+.mock-spacer {
+  width: 18px;
+}
+
+.mock-h {
+  margin-top: 18px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.mock-alts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mock-alt-row {
+  display: grid;
+  grid-template-columns: 170px repeat(5, 72px);
+  align-items: center;
+}
+
+.mock-alt-row .key-button {
+  width: 64px;
+}
+
+.mock-tools.big .key-button {
+  width: 72px;
+  height: 64px;
+}
+
+.mock-tools.big .key-button svg {
+  width: 44px;
+  height: 44px;
+}
+
+.mock-tools.big .key-button kbd {
+  position: static;
+  margin-top: 6px;
+}
+
+.mock-tools.big .mock-btn {
+  position: relative;
+}
+
+/* The keycap moves out from under the icon to sit beneath the button. */
+.mock-tools.big .key-button {
+  overflow: visible;
+}
+
+.mock-tools.big .key-button kbd {
+  position: absolute;
+  left: 50%;
+  right: auto;
+  bottom: -22px;
+  transform: translateX(-50%);
+}
+
+.mock-tools.big {
+  padding-bottom: 22px;
+}
