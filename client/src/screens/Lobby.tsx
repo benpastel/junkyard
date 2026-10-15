@@ -2,8 +2,6 @@ import { useState } from "react";
 import { BOT_SKILLS, HULL_IDS, HULL_TIERS, MAX_PLAYERS, PACES, type BotSkill, type ChatMessage, type Pace, type RoomView } from "@ja/shared";
 import { HULLS } from "@ja/shared/draft";
 import { cockpitCells } from "@ja/shared";
-import { loadCameraMode, saveCameraMode } from "../arena/cameraPref";
-import type { CameraMode } from "../arena/renderer";
 import { net } from "../net";
 import { Chat } from "./Chat";
 import { PlayerList } from "./PlayerList";
@@ -15,8 +13,6 @@ const SKILL_LABELS: Record<BotSkill, string> = { easy: "Easy", medium: "Medium",
 export function Lobby({ room, me, chat }: { room: RoomView; me: string | null; chat: ChatMessage[] }) {
   const isHost = room.hostId === me;
   const [copied, setCopied] = useState(false);
-  // Each player's own view, not a room setting, so anyone can change it.
-  const [camera, setCamera] = useState<CameraMode>(loadCameraMode);
   const { settings } = room;
 
   const copyLink = async () => {
@@ -53,18 +49,6 @@ export function Lobby({ room, me, chat }: { room: RoomView; me: string | null; c
             value={settings.botSkill}
             disabled={!isHost}
             onChange={(botSkill) => net.send({ t: "settings", settings: { ...settings, botSkill } })}
-          />
-          <h3>Camera</h3>
-          <Segmented
-            options={[
-              { value: "north", label: "Fixed" },
-              { value: "ship", label: "Ship-up" },
-            ]}
-            value={camera}
-            onChange={(mode: CameraMode) => {
-              setCamera(mode);
-              saveCameraMode(mode);
-            }}
           />
           <h3>Hull</h3>
           <div className="hull-picker">

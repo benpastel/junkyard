@@ -45,7 +45,7 @@
 /* While a reroll deals: the hourglass holds the space of the hand. */
 .draft-dealing {
   grid-column: 1 / -1;
-  height: calc(122px * 3 + 16px);
+  height: calc(122px * 2 + 8px);
   display: flex;
   align-items: center;
   justify-content: center;

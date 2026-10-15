@@ -1,5 +1,5 @@
 import { memo, useLayoutEffect, useRef } from "react";
-import type { Cell } from "@ja/shared";
+import { openChecker, type Cell } from "@ja/shared";
 import { cockpitOrigin, drawCellPart, drawCellPlate, drawCockpit, mirrorSidesOf, type CellStyle } from "../art/cells";
 import { useClock } from "../art/useClock";
 
@@ -42,9 +42,13 @@ export function drawShipCells(
   }
   if (cockpit) {
     const core = cells.find((c) => c.type === "core")!;
+    // Arrows with no working engine behind them yet are greyed out.
+    const isOpen = openChecker(cells);
+    let available = 0;
+    for (const c of cells) if (c.type === "engine" && isOpen(c)) available |= 1 << c.dir;
     ctx.save();
     ctx.translate(cockpit.x * cell, cockpit.y * cell);
-    drawCockpit(ctx, cell, { color: style(core).color });
+    drawCockpit(ctx, cell, { color: style(core).color, available });
     ctx.restore();
   }
 }

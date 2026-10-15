@@ -54,7 +54,7 @@ export const SIM = {
   /** Saw blade: a ball this big, centred this far out from the saw cell's centre toward its dir. */
   /** Wide enough to bite the tile in front and both tiles diagonally in front. */
   sawRadius: 0.8,
-  sawReach: 0.8,
+  sawReach: 0.5,
   /** A blade in contact with something cuts it (one hit) this often. */
   sawCutSeconds: 0.2,
   impactPairCooldownSeconds: 0.25,

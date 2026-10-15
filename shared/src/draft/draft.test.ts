@@ -111,7 +111,6 @@ describe("Draft", () => {
     const d = new Draft({ playerIds: ["a", "b"], hull: "hauler", seed: 1 });
     const v = d.view("a");
     expect(v.offers).toHaveLength(OFFER_COUNT);
-    expect(OFFER_COUNT).toBe(5);
     // The cockpit: four core cells laid out like the arrow keys around the hull's C.
     expect(v.cells).toEqual(cockpitCells(core.x, core.y));
     expect(v.rivals.map((r) => r.playerId)).toEqual(["b"]);
@@ -184,6 +183,8 @@ describe("Draft", () => {
         for (const id of ["b1", "b2", "b3"]) {
           const a = draftBotAction(d, id, rng);
           if (a) expect(d.apply(id, a)).toBeNull();
+          // The server deals a reroll's new hand a second later; here, straight away.
+          if (a?.type === "reroll") d.finishReroll(id);
         }
       }
       for (const id of ["b1", "b2", "b3"]) {

@@ -37,7 +37,7 @@ export interface DraftView {
   rivals: { playerId: PlayerId; cells: Cell[] }[];
 }
 
-export const OFFER_COUNT = 5;
+export const OFFER_COUNT = 3;
 export const POOL_CAP = 18;
 /**
  * The shared pool (unused offers go to a tray anyone can take from). Switched off for now;

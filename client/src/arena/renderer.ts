@@ -915,10 +915,25 @@ export class ArenaRenderer {
     if (cockpit && b.owner) {
       ctx.save();
       ctx.translate((cockpit.x - 0.5) * S, (cockpit.y - 0.5) * S);
-      drawCockpit(ctx, S, { color: this.shipInfo.get(b.owner)?.color ?? "#fff", held: this.heldKeys(b) });
+      drawCockpit(ctx, S, {
+        color: this.shipInfo.get(b.owner)?.color ?? "#fff",
+        held: this.heldKeys(b),
+        available: this.engineDirs(cells.cells),
+      });
       ctx.restore();
     }
     ctx.restore();
+  }
+
+  /** Bitmask of the dirs this ship has at least one working (intact, uncovered) engine for. */
+  private engineDirs(cids: readonly number[]): number {
+    const isOpen = this.openCheckerFor(cids);
+    let dirs = 0;
+    for (const cid of cids) {
+      const c = this.cellInfo.get(cid);
+      if (c?.type === "engine" && isOpen(c)) dirs |= 1 << c.dir;
+    }
+    return dirs;
   }
 
   /**

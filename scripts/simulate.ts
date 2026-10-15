@@ -22,6 +22,8 @@ for (let round = 0; round < rounds; round++) {
     for (const id of ids) {
       const a = draftBotAction(draft, id, rng);
       if (a) draft.apply(id, a);
+      // The server deals a reroll's new hand a second later; here, straight away.
+      if (a?.type === "reroll") draft.finishReroll(id);
     }
   }
   const arena = new Arena({

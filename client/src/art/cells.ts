@@ -224,10 +224,10 @@ const PARTS: Partial<Record<CellType, (d: Pen, s: CellStyle, dir: Dir) => void>>
   saw(d, s) {
     d.rect(0.3, 0.55, 0.4, 0.38, DARK);
     // arm out to the hub
-    d.rect(0.4, -0.3, 0.2, 0.9, "#2a2d33");
     const ctx = d.ctx;
     ctx.save();
-    ctx.translate(0.5, -0.3);
+    // Hub on the cell's edge: the blade sits half on its block.
+    ctx.translate(0.5, 0);
     ctx.scale(1.55, 1.55);
     ctx.rotate(s.time === undefined || s.inactive ? 0 : s.time * 12);
     const n = 8;
@@ -308,6 +308,11 @@ export interface CockpitStyle {
   color: string;
   /** Held keys, bitmask over ship-frame dirs (bit 0 = up, 1 = right, 2 = down, 3 = left). */
   held?: number;
+  /**
+   * Keys that have a working engine behind them (same bitmask; omit for all). The others are
+   * greyed out, and pressing one shows a red X instead of the glow.
+   */
+  available?: number;
 }
 
 // arrow centres in T units; the down arrow is smaller since the pilot crowds that lobe
@@ -345,16 +350,24 @@ export function drawCockpit(ctx: CanvasRenderingContext2D, size: number, style: 
   ctx.lineJoin = "round";
   ctx.stroke();
 
+  const available = style.available ?? 15;
   for (const a of COCKPIT_ARROWS) {
     const on = (held >> a.dir) & 1;
+    const works = (available >> a.dir) & 1;
     // halo spills past the dome on purpose, so held keys read at arena zoom
-    if (on) [0.5, 0.4, 0.3].forEach((r, j) => d.circle(a.x, a.y, r * a.k, `rgba(120,190,240,${0.12 + j * 0.08})`));
+    if (on && works) [0.5, 0.4, 0.3].forEach((r, j) => d.circle(a.x, a.y, r * a.k, `rgba(120,190,240,${0.12 + j * 0.08})`));
     ctx.save();
     ctx.translate(a.x, a.y);
     ctx.rotate((a.dir * PI) / 2);
     const s = 0.24 * a.k;
-    d.poly([[0, -s], [s * 0.95, s * 0.5], [-s * 0.95, s * 0.5]], on ? "#fff" : "#3d6a8a");
+    d.poly([[0, -s], [s * 0.95, s * 0.5], [-s * 0.95, s * 0.5]], !works ? "#262c33" : on ? "#fff" : "#3d6a8a");
     ctx.restore();
+    // Pressing a key with nothing behind it: a red X over the dead arrow.
+    if (on && !works) {
+      const x = 0.2 * a.k;
+      d.line([[a.x - x, a.y - x], [a.x + x, a.y + x]], "#ff4a3d", 0.08);
+      d.line([[a.x + x, a.y - x], [a.x - x, a.y + x]], "#ff4a3d", 0.08);
+    }
   }
 
   // pilot at the junction: shoulders, helmet, googly eyes looking forward

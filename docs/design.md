@@ -19,8 +19,8 @@ Online multiplayer, fast-paced, round-based game:
 
 ## Draft
 
-- Each player privately sees **5 piece offers**. Pick one up and the others stay on offer; switch to another, or put it back (Esc). Placing a piece deals a fresh hand of 5.
-- **Reroll** (R / hourglass): throw the hand away; 5 new offers arrive after a 1s wait, so you can't cycle for free.
+- Each player privately sees **3 piece offers**. Pick one up and the others stay on offer; switch to another, or put it back (Esc). Placing a piece deals a fresh hand of 5.
+- **Reroll** (R / hourglass): throw the hand away; 3 new offers arrive after a 1s wait, so you can't cycle for free.
 - The shared pool (unused offers go to a tray anyone can grab) is still in the code but switched off (POOL_ENABLED).
 - **Pace** (lobby): Frantic / Fast (default) / Strategic / Unlimited (no timer). A Done button in the draft starts the fight early once every connected human has clicked it (in Unlimited, that is the only way it starts). Build time scales with hull tier: small 25/40/60s, medium 35/60/90s, large 50/80/120s.
 - **Hulls**, three tiers of five: small (50–61 squares) Hauler, Hammerhead, Starfish, Barge, Catamaran; medium (71–84) Crab, Trident, Flying Wing, Panels, Strike; large (103–138) Station, Wedge, Manta, Saucer, Dreadnought. Every arm is at least 2 squares wide so pentominoes can reach it.
@@ -56,11 +56,13 @@ Online multiplayer, fast-paced, round-based game:
 - **Rotation** will be hard with this scheme; dedicated rotation pieces (gyros) are a likely addition.
 - **Weapons:** fixed-direction, one key per weapon type. Lasers fire automatically whenever their line is clear; X = grapple (toggle).
 - **Fast-forward:** an F button in the arena; once every connected human in the fight (dead ones too) has voted, the fight runs at 4× until it is decided. Snapshots stay at 20/s, and the client playback clock follows the sim speed.
+- **Cockpit arrows** grey out for directions with no working engine; pressing one shows a red X.
+- **Camera:** C flips between the fixed view and the ship-up view (prototype; remembered per browser).
 - **Controls bar:** the arena shows each key as a clickable button that lights while held; the draft uses the same buttons for rotate (Q/E), flip (F) and discard (Esc).
   - lasers (ranged, raycasts; auto-firing, one shot every 2.4s, light knockback; range 12 cells, just short of the window edge on a laptop screen)
   - collisions above a speed threshold break one cell on each side
   - **anti-stuck:** cells of two ships that stay touching for 5s explode, on both sides at once, and the blast shoves the two ships apart
-  - **saw**: a spinning blade with its own round hitbox past the cell, wide enough to reach the tile in front and both tiles diagonally in front; it cuts whatever it touches (one hit every 0.2s, at any speed) and takes no harm from it. Armor facing the blade turns it. It only works with its line and both front diagonals clear.
+  - **saw**: a spinning blade with its own round hitbox past the cell, sitting half on its block (hub on the cell edge), wide enough to reach the tile in front and both tiles diagonally in front; it cuts whatever it touches (one hit every 0.2s, at any speed) and takes no harm from it. Armor facing the blade turns it. It only works with its line and both front diagonals clear.
   - grapple and armor are switched off in the piece mix for now (the parts still work).
   - grappling hook (attaches two ships, applies force as it retracts)
   - maybe knockback / recoil
