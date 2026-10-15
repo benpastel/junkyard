@@ -61,10 +61,10 @@ export function placedCells(piece: Piece, x: number, y: number, rot: Dir, flip: 
  */
 const PART_COST: Partial<Record<CellType, number>> = { engine: 0.5, laser: 1, saw: 1, mirror: 1, grapple: 1, armor: 1 };
 const PART_WEIGHTS: [CellType, number][] = [
-  ["engine", 45],
-  ["laser", 25],
-  ["saw", 15],
-  ["mirror", 15],
+  ["engine", 65],
+  ["laser", 20],
+  ["saw", 12],
+  ["mirror", 12],
   ["armor", 0],
   ["grapple", 0],
 ];
