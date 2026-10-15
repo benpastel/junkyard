@@ -11,6 +11,7 @@ import {
   type ArenaSnapshot,
   type BodySnap,
   type InitCell,
+  angleDiff,
 } from "@ja/shared/sim/view";
 import { openChecker } from "@ja/shared";
 import { NEON, drawCellPart, drawCellPlate, mirrorSidesOf, type CellStyle } from "../art/cells";
@@ -28,6 +29,15 @@ const PAN_CELLS_PER_SECOND = 24;
 const PAN_LEASH_CELLS = 6;
 /** How long "GO" hangs over the ships once the countdown ends. */
 const GO_SECONDS = 0.6;
+export type CameraMode = "north" | "ship";
+/** Ship mode: how hard the view chases your heading and position, and how far it may lag. */
+const SHIP_CAM_STIFFNESS = 5;
+const SHIP_CAM_MAX_LAG = (15 * Math.PI) / 180;
+const SHIP_CAM_MAX_DRIFT = 1.5;
+/** Ship mode: dust spacing (one speck per cell this big), streak length, trail length. */
+const DUST_CELL = 3;
+const DUST_STREAK_SECONDS = 0.05;
+const TRAIL_MS = 1500;
 /** How far in from the screen edge (px) the off-screen ship arrows sit. */
 const OFFSCREEN_INSET = 22;
 
@@ -157,6 +167,9 @@ export class ArenaRenderer {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.drawBackdrop(ctx, width, height, S);
     this.drawGrid(ctx, width, height, S, toScreen);
+    const mine = this.me && !this.dead.has(this.me) ? bodies.find((b) => b.owner === this.me) : undefined;
+    if (this.cameraMode === "ship") this.drawDust(ctx, width, height, S, toScreen, mine);
+    if (this.cameraMode === "ship" && mine) this.drawTrail(ctx, S, toScreen, mine, nowMs);
     this.drawRing(ctx, width, height, S, ring, toScreen, nowMs);
     this.drawPowerup(ctx, S, toScreen, nowMs);
 
@@ -170,6 +183,7 @@ export class ArenaRenderer {
     this.drawBeams(ctx, S, toScreen);
     this.drawParticles(ctx, S, toScreen);
     this.drawNames(ctx, bodies, S, toScreen);
+    if (this.cameraMode === "ship" && mine) this.drawHeadingAids(ctx, S, toScreen, mine);
     this.drawCountdown(ctx, bodies, S, toScreen, renderTick);
     this.drawOffscreen(ctx, bodies, width, height, S, toScreen);
     if (this.celebration) this.drawCelebration(ctx, width, height, nowMs, dt);
@@ -372,9 +386,19 @@ export class ArenaRenderer {
 
   // ---------------------------------------------------------------- camera
 
-  /** Fixed turn of the whole view (radians), set from where your ship spawns. 0 for spectators. */
+  /** Turn of the whole view (radians). North mode: fixed, from where your ship spawns. Ship mode: chases your heading. */
   private viewRot = 0;
   private viewRotSet = false;
+  /** The fixed north-mode turn, from where your ship spawned. */
+  private northRot = 0;
+
+  /**
+   * "north": the view is fixed and your ship turns on screen. "ship": the view swings round to
+   * keep your ship pointing up, lagging slightly behind so turns and drift stay readable.
+   */
+  cameraMode: CameraMode = "north";
+  /** Your ship's recent world positions, for the fading trail in ship mode. */
+  private trail: { x: number; y: number; t: number }[] = [];
 
   /** Arrow keys held, for panning the free camera once you have no ship. */
   private pan = { up: false, down: false, left: false, right: false };
@@ -393,10 +417,33 @@ export class ArenaRenderer {
     // Turn the view once, so your spawn point sits at the bottom of the circle with your ship
     // pointing up; it stays fixed after that.
     if (this.viewRotSet === false && mine) {
-      this.viewRot = Math.PI / 2 - Math.atan2(mine.y, mine.x);
+      this.northRot = Math.PI / 2 - Math.atan2(mine.y, mine.x);
+      this.viewRot = this.northRot;
       this.viewRotSet = true;
     }
+    if (mine && this.cameraMode === "ship") {
+      if (!this.cameraReady) this.camera = { x: mine.x, y: mine.y, zoom: 1 };
+      // Spring toward "nose up" and onto the ship, lagging a little but never far.
+      const k = 1 - Math.exp(-dt * SHIP_CAM_STIFFNESS);
+      const want = -mine.a;
+      let err = angleDiff(want, this.viewRot);
+      this.viewRot += err * k;
+      err = angleDiff(want, this.viewRot);
+      if (Math.abs(err) > SHIP_CAM_MAX_LAG) this.viewRot = want - Math.sign(err) * SHIP_CAM_MAX_LAG;
+      this.camera.x += (mine.x - this.camera.x) * k;
+      this.camera.y += (mine.y - this.camera.y) * k;
+      const off = Math.hypot(mine.x - this.camera.x, mine.y - this.camera.y);
+      if (off > SHIP_CAM_MAX_DRIFT) {
+        this.camera.x = mine.x - ((mine.x - this.camera.x) / off) * SHIP_CAM_MAX_DRIFT;
+        this.camera.y = mine.y - ((mine.y - this.camera.y) / off) * SHIP_CAM_MAX_DRIFT;
+      }
+      this.camera.zoom = 1;
+      this.cameraReady = true;
+      return;
+    }
     if (mine) {
+      // Back from ship mode: straight back to the spawn-based view.
+      this.viewRot = this.northRot;
       this.camera = { x: mine.x, y: mine.y, zoom: 1 };
       this.cameraReady = true;
       return;
@@ -567,13 +614,131 @@ export class ArenaRenderer {
     });
   }
 
+  /**
+   * Dust fixed in space, seeded per world cell so it stays put as you fly through it. Each speck
+   * stretches into a streak along your velocity, so motion reads even with the ship held still.
+   */
+  private drawDust(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+    S: number,
+    toScreen: (x: number, y: number) => { x: number; y: number },
+    mine: BodyView | undefined,
+  ) {
+    const cell = DUST_CELL;
+    const half = Math.hypot(w, h) / 2 / S + cell;
+    const vx = mine?.snap.vx ?? 0;
+    const vy = mine?.snap.vy ?? 0;
+    const streak = DUST_STREAK_SECONDS;
+    ctx.save();
+    ctx.strokeStyle = "rgba(210,205,190,0.35)";
+    ctx.lineCap = "round";
+    ctx.lineWidth = Math.max(1, S * 0.05);
+    ctx.beginPath();
+    for (let gx = Math.floor((this.camera.x - half) / cell); gx * cell < this.camera.x + half; gx++) {
+      for (let gy = Math.floor((this.camera.y - half) / cell); gy * cell < this.camera.y + half; gy++) {
+        const hsh = Math.imul(gx * 73856093 ^ gy * 19349663, 2654435761) >>> 0;
+        const x = (gx + (hsh & 1023) / 1024) * cell;
+        const y = (gy + ((hsh >>> 10) & 1023) / 1024) * cell;
+        const a = toScreen(x, y);
+        const b = toScreen(x - vx * streak, y - vy * streak);
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x + 0.5, b.y + 0.5);
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** A fading line along where your ship has just been. */
+  private drawTrail(
+    ctx: CanvasRenderingContext2D,
+    S: number,
+    toScreen: (x: number, y: number) => { x: number; y: number },
+    mine: BodyView,
+    nowMs: number,
+  ) {
+    const last = this.trail[this.trail.length - 1];
+    if (!last || Math.hypot(last.x - mine.x, last.y - mine.y) > 0.25) this.trail.push({ x: mine.x, y: mine.y, t: nowMs });
+    while (this.trail.length && nowMs - this.trail[0]!.t > TRAIL_MS) this.trail.shift();
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineWidth = Math.max(1, S * 0.12);
+    for (let i = 1; i < this.trail.length; i++) {
+      const p0 = this.trail[i - 1]!;
+      const p1 = this.trail[i]!;
+      const a = toScreen(p0.x, p0.y);
+      const b = toScreen(p1.x, p1.y);
+      ctx.strokeStyle = `rgba(255,200,140,${0.35 * (1 - (nowMs - p1.t) / TRAIL_MS)})`;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** Velocity arrow (where you're actually going) and a tick on a ring pointing to the arena centre. */
+  private drawHeadingAids(ctx: CanvasRenderingContext2D, S: number, toScreen: (x: number, y: number) => { x: number; y: number }, mine: BodyView) {
+    const cells = this.bodyCells.get(mine.snap.id);
+    let reach = 1;
+    for (const cid of cells?.cells ?? []) {
+      const c = this.cellInfo.get(cid);
+      if (c) reach = Math.max(reach, Math.hypot(c.x, c.y));
+    }
+    const ringR = reach + 1.6;
+    const p = toScreen(mine.x, mine.y);
+    ctx.save();
+    // Faint ring with a notch toward the arena centre.
+    ctx.strokeStyle = "rgba(200,200,190,0.18)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, ringR * S, 0, Math.PI * 2);
+    ctx.stroke();
+    const c0 = toScreen(0, 0);
+    const toC = Math.atan2(c0.y - p.y, c0.x - p.x);
+    ctx.translate(p.x, p.y);
+    ctx.save();
+    ctx.rotate(toC);
+    ctx.fillStyle = "rgba(230,225,210,0.6)";
+    ctx.beginPath();
+    ctx.moveTo((ringR + 0.55) * S, 0);
+    ctx.lineTo((ringR - 0.05) * S, -0.3 * S);
+    ctx.lineTo((ringR - 0.05) * S, 0.3 * S);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    // Velocity: a chevron out from the ring, longer the faster you're going.
+    const v = Math.hypot(mine.snap.vx, mine.snap.vy);
+    if (v > 0.6) {
+      const vs = toScreen(mine.x + mine.snap.vx, mine.y + mine.snap.vy);
+      ctx.rotate(Math.atan2(vs.y - p.y, vs.x - p.x));
+      const len = Math.min(4, v * 0.25) * S;
+      ctx.strokeStyle = "rgba(127,201,107,0.85)";
+      ctx.lineWidth = Math.max(2, S * 0.12);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(ringR * S, 0);
+      ctx.lineTo(ringR * S + len, 0);
+      ctx.moveTo(ringR * S + len - 0.4 * S, -0.35 * S);
+      ctx.lineTo(ringR * S + len, 0);
+      ctx.lineTo(ringR * S + len - 0.4 * S, 0.35 * S);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   private drawGrid(ctx: CanvasRenderingContext2D, w: number, h: number, S: number, toScreen: (x: number, y: number) => { x: number; y: number }) {
-    const step = 5;
+    // Ship mode leans on the grid to show turning and drift, so it's denser and brighter.
+    const ship = this.cameraMode === "ship";
+    const step = ship ? 2.5 : 5;
     const halfW = Math.hypot(w, h) / 2 / S + step;
     const halfH = halfW;
     const x0 = Math.floor((this.camera.x - halfW) / step) * step;
     const y0 = Math.floor((this.camera.y - halfH) / step) * step;
-    ctx.fillStyle = "rgba(160,150,130,0.12)";
+    ctx.fillStyle = ship ? "rgba(170,160,140,0.22)" : "rgba(160,150,130,0.12)";
     for (let x = x0; x < this.camera.x + halfW; x += step) {
       for (let y = y0; y < this.camera.y + halfH; y += step) {
         const p = toScreen(x, y);
