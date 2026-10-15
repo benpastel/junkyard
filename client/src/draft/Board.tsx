@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
-import { buildableSet, cellKey, deadSquares, placedCells, placementError, transformCells, type Piece } from "@ja/shared/draft";
+import { buildableSet, cellKey, deadSquares, placedCells, placementError, type Piece } from "@ja/shared/draft";
 import { openChecker, type Cell, type Dir } from "@ja/shared";
 import { useClock } from "../art/useClock";
 import { cellVariant, drawShipCells } from "./PieceCanvas";
@@ -13,17 +13,9 @@ export interface DragState {
 }
 
 const FLASH_MS = 320;
-const MAX_CELL = 68;
 /** Margin around the hull, in cells, so parts overhanging the outer squares aren't clipped. */
-const PAD = 1;
-
-/** Top-left anchor that keeps the piece's middle under the pointer. */
-export function anchorFor(piece: Piece, rot: Dir, flip: boolean, hover: { x: number; y: number }) {
-  const shape = transformCells(piece.cells, rot, flip);
-  const w = Math.max(...shape.map((c) => c.x)) + 1;
-  const h = Math.max(...shape.map((c) => c.y)) + 1;
-  return { x: hover.x - Math.floor(w / 2), y: hover.y - Math.floor(h / 2) };
-}
+export const BOARD_PAD = 1;
+const PAD = BOARD_PAD;
 
 export function Board(props: {
   hullRows: string[];
@@ -31,15 +23,18 @@ export function Board(props: {
   held: Piece | null;
   rot: Dir;
   flip: boolean;
+  /** Where the pointer holds the piece, in cells from its top-left corner. */
+  grab: { x: number; y: number };
+  /** CSS pixels per square, shared with the offers so a piece keeps its size. */
+  cell: number;
   color: string;
   drag: MutableRefObject<DragState>;
   onHoverChange: (over: boolean) => void;
   onPlace: (x: number, y: number) => void;
 }) {
-  const { hullRows, cells, held, rot, flip, color, drag, onHoverChange, onPlace } = props;
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const { hullRows, cells, held, rot, flip, grab, cell, color, drag, onHoverChange, onPlace } = props;
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [cell, setCell] = useState(40);
+  // The grid square the held piece's top-left would land on.
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
   const downOnBoard = useRef(false);
   const flashes = useRef(new Map<string, number>());
@@ -51,19 +46,6 @@ export function Board(props: {
   useEffect(() => {
     buildable.current = buildableSet(hullRows);
   }, [hullRows]);
-
-  // Fit the grid to the available space.
-  useLayoutEffect(() => {
-    const wrap = wrapRef.current!;
-    const fit = () => {
-      const r = wrap.getBoundingClientRect();
-      setCell(Math.max(18, Math.min(MAX_CELL, Math.floor(Math.min(r.width / (cols + PAD * 2), r.height / (rows + PAD * 2))))));
-    };
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(wrap);
-    return () => ro.disconnect();
-  }, [cols, rows]);
 
   // Flash newly placed cells.
   const prevKeys = useRef<Set<string> | null>(null);
@@ -86,7 +68,7 @@ export function Board(props: {
     return () => cancelAnimationFrame(raf);
   }, [cells]);
 
-  const ghost = held && hover ? placedCells(held, ...anchorArgs(held, rot, flip, hover)) : null;
+  const ghost = held && hover ? placedCells(held, hover.x, hover.y, rot, flip) : null;
   const ghostValid = ghost ? placementError(buildable.current, cells, ghost) === null : false;
   const time = useClock(cells.some((c) => c.type === "saw") || !!ghost?.some((c) => c.type === "saw"));
 
@@ -154,28 +136,36 @@ export function Board(props: {
     }
   });
 
-  const cellAt = useCallback(
+  // The square under the held piece's top-left, snapped to the nearest one, or null when the
+  // pointer is off the board.
+  const anchorAt = useCallback(
     (clientX: number, clientY: number) => {
       const r = canvasRef.current!.getBoundingClientRect();
-      // Half a cell of slack around the grid so edge placements are easy to hit.
-      const slack = cell / 2;
-      if (clientX < r.left - slack || clientX > r.right + slack || clientY < r.top - slack || clientY > r.bottom + slack) {
-        return null;
-      }
-      return { x: Math.floor((clientX - r.left) / cell) - PAD, y: Math.floor((clientY - r.top) / cell) - PAD };
+      if (clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) return null;
+      return {
+        x: Math.round((clientX - r.left) / cell - PAD - grab.x),
+        y: Math.round((clientY - r.top) / cell - PAD - grab.y),
+      };
     },
-    [cell, cols, rows],
+    [cell, grab, cols, rows],
   );
 
-  // Pointer tracking is on window so drags from the side panels land here too.
-  const latest = useRef({ held, rot, flip, cells, cellAt, onPlace });
-  latest.current = { held, rot, flip, cells, cellAt, onPlace };
+  // Pointer tracking is on window so drags from the offers land here too.
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  const latest = useRef({ held, rot, flip, cells, anchorAt, onPlace });
+  latest.current = { held, rot, flip, cells, anchorAt, onPlace };
+  const track = useCallback(() => {
+    const p = pointer.current;
+    const h = p ? latest.current.anchorAt(p.x, p.y) : null;
+    setHover((prev) => (prev?.x === h?.x && prev?.y === h?.y ? prev : h));
+    onHoverChange(h !== null);
+  }, [onHoverChange]);
+  // Turning the piece moves its grab point, so re-snap without waiting for the pointer to move.
+  useEffect(track, [track, anchorAt, rot, flip, held]);
   useEffect(() => {
     const move = (e: PointerEvent) => {
-      const overWrap = isOver(wrapRef.current!, e);
-      const h = overWrap ? latest.current.cellAt(e.clientX, e.clientY) : null;
-      setHover((prev) => (prev?.x === h?.x && prev?.y === h?.y ? prev : h));
-      onHoverChange(h !== null);
+      pointer.current = { x: e.clientX, y: e.clientY };
+      track();
       const d = drag.current;
       if (d.active && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 6) d.moved = true;
     };
@@ -186,10 +176,9 @@ export function Board(props: {
       d.active = false;
       downOnBoard.current = false;
       if (e.button !== 0 || !(fromDrag || fromBoard)) return;
-      const { held, rot, flip, cellAt, onPlace } = latest.current;
-      const h = isOver(wrapRef.current!, e) ? cellAt(e.clientX, e.clientY) : null;
-      if (!held || !h) return;
-      const a = anchorFor(held, rot, flip, h);
+      const { held, rot, flip, anchorAt, onPlace } = latest.current;
+      const a = anchorAt(e.clientX, e.clientY);
+      if (!held || !a) return;
       const cells = placedCells(held, a.x, a.y, rot, flip);
       if (placementError(buildable.current, latest.current.cells, cells) === null) onPlace(a.x, a.y);
     };
@@ -199,11 +188,10 @@ export function Board(props: {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
-  }, [drag, onHoverChange]);
+  }, [drag, track]);
 
   return (
     <div
-      ref={wrapRef}
       className="draft-board"
       onPointerDown={(e) => {
         if (e.button === 0) downOnBoard.current = true;
@@ -214,15 +202,6 @@ export function Board(props: {
   );
 }
 
-function isOver(el: HTMLElement, e: PointerEvent): boolean {
-  const r = el.getBoundingClientRect();
-  return e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom;
-}
-
-function anchorArgs(piece: Piece, rot: Dir, flip: boolean, hover: { x: number; y: number }): [number, number, Dir, boolean] {
-  const a = anchorFor(piece, rot, flip, hover);
-  return [a.x, a.y, rot, flip];
-}
 
 /**
  * Faint riveted floor plates for the buildable squares, with a rusty rim around the hull.

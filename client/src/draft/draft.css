@@ -1,9 +1,7 @@
 .draft {
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 220px;
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
-  padding: 20px;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -15,10 +13,15 @@
   min-height: 0;
 }
 
-.draft-side h3 {
-  font-size: 12px;
-  color: var(--text-dim);
-  margin-bottom: 10px;
+.draft-body {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.draft-status {
+  align-items: center;
+  gap: 14px;
 }
 
 .draft-side section {
@@ -34,18 +37,17 @@
 
 .draft-offers {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .draft-offers .piece-card {
-  height: 122px;
+  height: 100%;
+  overflow: visible;
 }
 
 /* While a reroll deals: the hourglass holds the space of the hand. */
 .draft-dealing {
   grid-column: 1 / -1;
-  height: calc(122px * 2 + 8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -137,27 +139,24 @@
   gap: 8px;
 }
 
-.piece-card.held {
-  height: 150px;
-  cursor: default;
-  border-color: var(--hazard);
-  box-shadow: inset 0 0 0 1px rgba(224, 178, 58, 0.25);
+/* In hand: an empty slot until the piece is placed or put back. */
+.piece-card.held,
+.piece-card.held:hover:not(:disabled) {
+  background: transparent;
+  border: 1px dashed var(--line-2);
+  box-shadow: none;
+  transform: none;
   animation: none;
 }
 
-.piece-card.held:hover {
-  transform: none;
-}
-
 .draft-tools {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 6px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
 }
 
 .draft-tools .key-button {
-  width: 100%;
-  min-width: 0;
+  width: 64px;
 }
 
 .draft-pool {
@@ -176,9 +175,10 @@
 }
 
 .draft-rivals {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
 }
 
 .rival {
@@ -264,14 +264,6 @@
   display: block;
 }
 
-.draft-top {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  min-height: 52px;
-}
-
 .draft-done {
   padding: 10px 22px;
   font-size: 16px;
@@ -283,10 +275,6 @@
   border-color: var(--ok);
 }
 
-.draft-top {
-  margin-bottom: 18px;
-}
-
-.draft-top .draft-timer {
+.draft-status .draft-timer {
   margin-bottom: 0;
 }

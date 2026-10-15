@@ -4,7 +4,7 @@ import { cockpitOrigin, drawCellPart, drawCellPlate, drawCockpit, mirrorSidesOf,
 import { useClock } from "../art/useClock";
 
 /** Room around the piece, in cells, for parts that overhang their square. */
-const PAD = 0.8;
+export const PIECE_PAD = 0.8;
 
 /** Stable per-position variant so plating doesn't reshuffle between redraws. */
 export function cellVariant(x: number, y: number): number {
@@ -67,8 +67,8 @@ export const PieceCanvas = memo(function PieceCanvas(props: {
   useLayoutEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const w = Math.max(...cells.map((c) => c.x)) + 1 + PAD * 2;
-    const h = Math.max(...cells.map((c) => c.y)) + 1 + PAD * 2;
+    const w = Math.max(...cells.map((c) => c.x)) + 1 + PIECE_PAD * 2;
+    const h = Math.max(...cells.map((c) => c.y)) + 1 + PIECE_PAD * 2;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(w * cell * dpr);
     canvas.height = Math.round(h * cell * dpr);
@@ -77,7 +77,7 @@ export const PieceCanvas = memo(function PieceCanvas(props: {
     const ctx = canvas.getContext("2d")!;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w * cell, h * cell);
-    ctx.translate(PAD * cell, PAD * cell);
+    ctx.translate(PIECE_PAD * cell, PIECE_PAD * cell);
     drawShipCells(ctx, cells, cell, (c) => ({ color, variant: cellVariant(c.x, c.y), time }));
   }, [cells, cell, color, time]);
 
