@@ -85,8 +85,9 @@ function pickPart(rng: Rng, allowed: (t: CellType) => boolean): CellType | null 
 
 const DIRS: Dir[] = [0, 1, 2, 3];
 
-export function generatePiece(rng: Rng, id: string): Piece {
-  const shape = rng.pick(PENTOMINO_NAMES);
+/** A random piece; pass `shapes` to draw its shape only from those (e.g. ones that fit). */
+export function generatePiece(rng: Rng, id: string, shapes: readonly PentominoName[] = PENTOMINO_NAMES): Piece {
+  const shape = rng.pick(shapes);
   const coords = PENTOMINOES[shape];
   const cells: Cell[] = coords.map(([x, y]) => ({ x, y, type: "hull", dir: 0 }));
   let budget: number = rng.pick(PIECE_BUDGETS);

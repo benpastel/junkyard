@@ -20,6 +20,7 @@ Online multiplayer, fast-paced, round-based game:
 ## Draft
 
 - Each player privately sees **3 piece offers**. Pick one up and the others stay on offer; switch to another, or put it back (Esc). Placing a piece deals a fresh hand of 5.
+- Offers come from an endless bag but only in shapes that fit somewhere on your ship right now. Empty pockets of fewer than 5 squares can never be filled and are hatched dark. Once nothing fits, your ship is full and counts as Done.
 - **Reroll** (R / hourglass): throw the hand away; 3 new offers arrive after a 1s wait, so you can't cycle for free.
 - The shared pool (unused offers go to a tray anyone can grab) is still in the code but switched off (POOL_ENABLED).
 - **Pace** (lobby): Frantic / Fast (default) / Strategic / Unlimited (no timer). A Done button in the draft starts the fight early once every connected human has clicked it (in Unlimited, that is the only way it starts). Build time scales with hull tier: small 25/40/60s, medium 35/60/90s, large 50/80/120s.

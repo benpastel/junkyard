@@ -204,7 +204,7 @@ function bestPlacement(view: DraftView, piece: Piece, rng: Rng): { placement: Pl
 /** Next action for a bot, or null to wait. Called every couple of seconds. */
 export function draftBotAction(draft: Draft, playerId: PlayerId, rng: Rng): DraftAction | null {
   const view = draft.view(playerId);
-  if (view.dealing) return null;
+  if (view.dealing || view.full) return null;
 
   if (view.held) {
     const best = bestPlacement(view, view.held, rng);

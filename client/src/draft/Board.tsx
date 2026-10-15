@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
-import { buildableSet, cellKey, placedCells, placementError, transformCells, type Piece } from "@ja/shared/draft";
+import { buildableSet, cellKey, deadSquares, placedCells, placementError, transformCells, type Piece } from "@ja/shared/draft";
 import { openChecker, type Cell, type Dir } from "@ja/shared";
 import { useClock } from "../art/useClock";
 import { cellVariant, drawShipCells } from "./PieceCanvas";
@@ -104,7 +104,7 @@ export function Board(props: {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     ctx.translate(PAD * cell, PAD * cell);
-    drawBay(ctx, hullRows, cell);
+    drawBay(ctx, hullRows, cell, deadSquares(buildable.current, cells));
 
     // Covered parts (including ones whose overhang lands on another piece) are judged against
     // the ship as it would be with the ghost placed, and drawn faded.
@@ -224,8 +224,11 @@ function anchorArgs(piece: Piece, rot: Dir, flip: boolean, hover: { x: number; y
   return [a.x, a.y, rot, flip];
 }
 
-/** Faint riveted floor plates for the buildable squares, with a rusty rim around the hull. */
-function drawBay(ctx: CanvasRenderingContext2D, hullRows: string[], cell: number) {
+/**
+ * Faint riveted floor plates for the buildable squares, with a rusty rim around the hull.
+ * Dead squares (pockets too small for any piece) are darkened and hatched.
+ */
+function drawBay(ctx: CanvasRenderingContext2D, hullRows: string[], cell: number, dead: ReadonlySet<string>) {
   const inside = (x: number, y: number) => (hullRows[y]?.[x] ?? ".") !== ".";
   hullRows.forEach((row, y) =>
     [...row].forEach((_, x) => {
@@ -250,6 +253,30 @@ function drawBay(ctx: CanvasRenderingContext2D, hullRows: string[], cell: number
       }
     }),
   );
+
+  // Pockets nothing can fill: dark, with diagonal hatching.
+  ctx.save();
+  for (const k of dead) {
+    const [x, y] = k.split(",").map(Number) as [number, number];
+    const x0 = x * cell;
+    const y0 = y * cell;
+    ctx.fillStyle = "#07080b";
+    ctx.fillRect(x0, y0, cell, cell);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x0, y0, cell, cell);
+    ctx.clip();
+    ctx.strokeStyle = "rgba(255,255,255,0.07)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let t = -cell; t < cell; t += cell / 4) {
+      ctx.moveTo(x0 + t, y0 + cell);
+      ctx.lineTo(x0 + t + cell, y0);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
 
   ctx.strokeStyle = "#8f4520";
   ctx.lineWidth = 2;

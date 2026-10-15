@@ -170,7 +170,7 @@ export function DraftScreen(props: {
         <div className="draft-top">
           {endsAt !== null && <Timer endsAt={endsAt} />}
           {done && (
-            <button className={`draft-done${done.voted ? " on" : ""}`} onClick={done.toggle}>
+            <button className={`draft-done${done.voted || view.full ? " on" : ""}`} onClick={done.toggle} disabled={view.full}>
               Done
               {done.needed > 1 && (
                 <span className="mono">

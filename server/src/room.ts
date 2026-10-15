@@ -215,6 +215,7 @@ export class Room {
         const err = this.applyDraft(playerId, msg.action);
         if (err) this.send(player, { t: "error", message: err });
         this.broadcastDraft();
+        this.broadcastRoom(); // the Done count changes when a ship fills up
         return;
       }
       case "done": {
@@ -414,10 +415,14 @@ export class Room {
     return [...this.players.values()].filter((p) => !p.isBot && p.inRound && p.socket);
   }
 
-  /** Every connected human in the draft has clicked Done. */
+  /** Every connected human in the draft is done: clicked Done, or nothing fits on their ship. */
   private everyoneDone(): boolean {
     const builders = this.fastVoters();
-    return builders.length > 0 && builders.every((p) => this.doneVotes.has(p.id));
+    return builders.length > 0 && builders.every((p) => this.isDone(p.id));
+  }
+
+  private isDone(id: PlayerId): boolean {
+    return this.doneVotes.has(id) || (this.phase === "draft" && !!this.draft?.isFull(id));
   }
 
   /** Sim ticks per real tick. The celebration always runs at normal speed. */
@@ -438,7 +443,9 @@ export class Room {
       round: this.round,
       settings: this.settings,
       done: {
-        votes: [...this.doneVotes].filter((id) => this.players.get(id)?.socket),
+        votes: this.fastVoters()
+          .map((p) => p.id)
+          .filter((id) => this.isDone(id)),
         needed: this.phase === "draft" ? this.fastVoters().length : 0,
       },
       fastForward: {

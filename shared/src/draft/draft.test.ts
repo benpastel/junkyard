@@ -3,8 +3,11 @@ import { Rng } from "../rng.js";
 import { cockpitCells, openChecker } from "../cells.js";
 import {
   Draft,
+  buildableSet,
+  deadSquares,
   draftBotAction,
   exhaustSquare,
+  validPlacements,
   generatePiece,
   hullBuildable,
   hullCore,
@@ -224,6 +227,40 @@ function findValidSpot(d: Draft, id: string) {
   if (!spot) throw new Error("no spot");
   return spot;
 }
+
+describe("dead space and fitting offers", () => {
+  it("marks pockets of fewer than 5 empty squares as dead", () => {
+    // A 3x3 hull: the cockpit-free ship is one cell in a corner, leaving one pocket of 8.
+    const buildable = new Set(["0,0", "1,0", "2,0", "0,1", "1,1", "2,1", "0,2", "1,2", "2,2"]);
+    const hull = (x: number, y: number): Cell => ({ x, y, type: "hull", dir: 0 });
+    expect(deadSquares(buildable, [hull(0, 0)]).size).toBe(0);
+    // Wall off the right column: it becomes a pocket of 3 (dead); the rest is 3 too.
+    const wall = [hull(0, 0), hull(1, 0), hull(1, 1), hull(1, 2)];
+    expect([...deadSquares(buildable, wall)].sort()).toEqual(["0,1", "0,2", "2,0", "2,1", "2,2"]);
+  });
+
+  it("only ever offers pieces that fit, and fills up to just dead space", { timeout: 30000 }, () => {
+    for (const hull of ["hauler", "crab", "station"] as const) {
+      const d = new Draft({ playerIds: ["b"], hull, seed: 21 });
+      const rng = new Rng(4);
+      const buildable = buildableSet(d.view("b").hullRows);
+      for (let step = 0; step < 400 && !d.isFull("b"); step++) {
+        const v = d.view("b");
+        const size = { w: v.hullRows[0]!.length, h: v.hullRows.length };
+        for (const o of v.offers) expect(validPlacements(buildable, v.cells, o, size.w, size.h).length).toBeGreaterThan(0);
+        const a = draftBotAction(d, "b", rng);
+        if (a) d.apply("b", a);
+        if (a?.type === "reroll") d.finishReroll("b");
+      }
+      expect(d.isFull("b")).toBe(true);
+      const v = d.view("b");
+      expect(v.full).toBe(true);
+      expect(v.offers).toHaveLength(0);
+      const empty = [...buildable].filter((k) => !v.cells.some((c) => `${c.x},${c.y}` === k));
+      expect(deadSquares(buildable, v.cells).size).toBe(empty.length);
+    }
+  });
+});
 
 describe("openChecker", () => {
   it("engines and saws only need the square next to them; lasers need the whole line", () => {

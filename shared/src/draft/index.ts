@@ -3,12 +3,12 @@ import { Rng } from "../rng.js";
 import { cockpitCells } from "../cells.js";
 import { hullBuildable, hullCore, HULLS } from "./hulls.js";
 import { generatePiece, placedCells, type Piece } from "./pieces.js";
-import { cellKey as key, placementError } from "./rules.js";
+import { cellKey as key, fittingShapes, placementError } from "./rules.js";
 
 export * from "./hulls.js";
 export * from "./pieces.js";
 export * from "./rules.js";
-export { draftBotAction } from "./bot.js";
+export { draftBotAction, validPlacements } from "./bot.js";
 
 export type DraftAction =
   /** Pick up one of my offers (the rest stay on offer until I place it). */
@@ -32,6 +32,8 @@ export interface DraftView {
   held: Piece | null;
   /** A reroll is under way: new offers are on their way. */
   dealing: boolean;
+  /** Nothing fits on my ship any more, so I'm done building. */
+  full: boolean;
   /** The shared pool, oldest first (always empty while POOL_ENABLED is off). */
   pool: Piece[];
   rivals: { playerId: PlayerId; cells: Cell[] }[];
@@ -52,6 +54,8 @@ interface PlayerDraft {
   held: Piece | null;
   cells: Cell[];
   dealing: boolean;
+  /** Nothing fits on the ship any more. */
+  full: boolean;
 }
 
 export class Draft {
@@ -68,7 +72,9 @@ export class Draft {
     this.buildable = new Set(hullBuildable(opts.hull).map((p) => key(p.x, p.y)));
     const core = hullCore(opts.hull);
     for (const id of opts.playerIds) {
-      this.players.set(id, { offers: this.dealOffers(), held: null, cells: cockpitCells(core.x, core.y), dealing: false });
+      const p: PlayerDraft = { offers: [], held: null, cells: cockpitCells(core.x, core.y), dealing: false, full: false };
+      p.offers = this.dealOffers(p);
+      this.players.set(id, p);
     }
   }
 
@@ -105,7 +111,7 @@ export class Draft {
         const placed = p.held;
         this.addToPool(p.offers.filter((o) => o !== placed));
         p.held = null;
-        p.offers = this.dealOffers();
+        p.offers = this.dealOffers(p);
         return null;
       }
       case "discard": {
@@ -141,6 +147,7 @@ export class Draft {
       offers: p ? p.offers.slice() : [],
       held: p?.held ?? null,
       dealing: p?.dealing ?? false,
+      full: p?.full ?? false,
       pool: this.pool.slice(),
       rivals,
     };
@@ -156,11 +163,23 @@ export class Draft {
     const p = this.players.get(playerId);
     if (!p?.dealing) return;
     p.dealing = false;
-    p.offers = this.dealOffers();
+    p.offers = this.dealOffers(p);
   }
 
-  private dealOffers(): Piece[] {
-    return Array.from({ length: OFFER_COUNT }, () => generatePiece(this.rng, `p${this.nextId++}`));
+  /**
+   * A fresh hand, drawn from an endless bag but only in shapes that fit somewhere on the ship
+   * right now. If nothing fits any more, the ship is full: no hand, and it counts as done.
+   */
+  private dealOffers(p: PlayerDraft): Piece[] {
+    const shapes = fittingShapes(this.buildable, p.cells);
+    p.full = shapes.length === 0;
+    if (p.full) return [];
+    return Array.from({ length: OFFER_COUNT }, () => generatePiece(this.rng, `p${this.nextId++}`, shapes));
+  }
+
+  /** Nothing fits on this player's ship any more. */
+  isFull(playerId: PlayerId): boolean {
+    return this.players.get(playerId)?.full ?? false;
   }
 
   private addToPool(pieces: Piece[]) {
