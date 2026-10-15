@@ -15,6 +15,13 @@ interface BotState {
 
 const bots = new WeakMap<Arena, Map<PlayerId, BotState>>();
 
+/** Distances (cells) the bot keeps from its target: lasers in range, a saw while it turns, unarmed well clear. */
+const BOT_LASER_HOLD = 8;
+const BOT_SAW_HOLD = 6;
+const BOT_UNARMED_HOLD = 12;
+/** A saw this close to pointing at the target (radians) is lined up enough to charge in. */
+const SAW_CHARGE_ANGLE = 0.35;
+
 const ARROWS: { key: "up" | "right" | "down" | "left"; dir: Dir }[] = [
   { key: "up", dir: 0 },
   { key: "right", dir: 1 },
@@ -52,9 +59,10 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
 
   const target = nearestEnemy(arena, me, pos);
   const cells = me.body.cells.filter((c) => c.alive);
-  const lasers = cells.filter((c) => c.type === "laser");
-  const grapples = cells.filter((c) => c.type === "grapple");
-  const saws = cells.filter((c) => c.type === "saw");
+  // Only parts that actually work count (covered ones do nothing).
+  const lasers = cells.filter((c) => c.type === "laser" && arena.isOpen(c));
+  const grapples = cells.filter((c) => c.type === "grapple" && arena.isOpen(c));
+  const saws = cells.filter((c) => c.type === "saw" && arena.isOpen(c));
 
   if (st.rng.chance(0.3)) st.aimNoise = (st.rng.next() - 0.5) * 0.35;
 
@@ -73,9 +81,26 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
     const ux = dx / dist;
     const uy = dy / dist;
     desiredAngle = Math.atan2(uy, ux) - aimLocal + st.aimNoise;
-    const preferred = lasers.length ? Math.min(11, SIM.laserRange - 4) : 0;
-    const speed = dist > preferred + 3 ? 7 : dist < preferred - 3 ? -3 : 0;
+    // Only close in to ram when it pays: a working saw already pointing at the target. With
+    // lasers, hold off inside their range; with nothing that hurts on contact, keep clear.
+    const sawLinedUp = saws.length > 0 && !lasers.length && Math.abs(angleDiff(angle, desiredAngle - st.aimNoise)) < SAW_CHARGE_ANGLE;
+    const preferred = sawLinedUp ? 0 : saws.length ? BOT_SAW_HOLD : lasers.length ? Math.min(BOT_LASER_HOLD, SIM.laserRange - 4) : BOT_UNARMED_HOLD;
+    // Ease off on the way in so it settles at its distance instead of overshooting into you.
+    // A lined-up saw charges in flat out: that's the whole point of it.
+    const speed = sawLinedUp ? 7 : dist > preferred + 3 ? Math.min(7, (dist - preferred) * 0.6) : dist < preferred - 3 ? -4 : 0;
     desiredVel = { x: ux * speed, y: uy * speed };
+    // Backing off: most ships can't thrust in reverse, so if this one can't push away from the
+    // way it's facing, turn round and fly off on its main engines instead of drifting into you.
+    if (speed < 0) {
+      const engines = cells.filter((c) => c.type === "engine" && arena.isOpen(c));
+      const facing = dominantDir(aimCells.map((c) => c.dir));
+      const reverse = ((facing + 2) % 4) as Dir;
+      if (!engines.some((c) => c.dir === reverse) && engines.length) {
+        const main = dominantDir(engines.map((c) => c.dir));
+        const mainLocal = Math.atan2(DIR_VECTORS[main].y, DIR_VECTORS[main].x);
+        desiredAngle = Math.atan2(-uy, -ux) - mainLocal;
+      }
+    }
   }
 
   // Go for the power-up when it's closer than the fight.
