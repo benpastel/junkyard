@@ -14,7 +14,7 @@ import {
   angleDiff,
 } from "@ja/shared/sim/view";
 import { openChecker } from "@ja/shared";
-import { NEON, drawCellPart, drawCellPlate, mirrorSidesOf, type CellStyle } from "../art/cells";
+import { NEON, cockpitOrigin, drawCellPart, drawCellPlate, drawCockpit, mirrorSidesOf, type CellStyle } from "../art/cells";
 
 /** Where the engine bell ends and the laser barrel tip sits, in cells from the cell centre (see art/cells.ts). */
 const NOZZLE_END = 0.67;
@@ -898,10 +898,13 @@ export class ArenaRenderer {
       time: nowMs / 1000,
     });
     // Two passes: parts overhang their square, so they go on top of every plate.
+    // A full cockpit is drawn once over its four cells, its arrows lit for the keys being held.
+    const cockpit = debris ? null : cockpitOrigin(cells.cells.flatMap((cid) => this.cellInfo.get(cid) ?? []));
     for (const pass of [drawCellPlate, null] as const) {
       cells.cells.forEach((cid, i) => {
         const c = this.cellInfo.get(cid);
         if (!c) return;
+        if (!pass && cockpit && c.type === "core") return;
         ctx.save();
         ctx.translate((c.x - 0.5) * S, (c.y - 0.5) * S);
         if (pass) pass(ctx, S, style(c, i));
@@ -909,7 +912,30 @@ export class ArenaRenderer {
         ctx.restore();
       });
     }
+    if (cockpit && b.owner) {
+      ctx.save();
+      ctx.translate((cockpit.x - 0.5) * S, (cockpit.y - 0.5) * S);
+      drawCockpit(ctx, S, { color: this.shipInfo.get(b.owner)?.color ?? "#fff", held: this.heldKeys(b) });
+      ctx.restore();
+    }
     ctx.restore();
+  }
+
+  /**
+   * Which arrow keys a ship is holding, as a bitmask over dirs: your own straight from the
+   * keyboard; anyone else's from which of their engines are firing.
+   */
+  private heldKeys(b: BodyView): number {
+    if (b.owner === this.me) {
+      const k = this.pan;
+      return (k.up ? 1 : 0) | (k.right ? 2 : 0) | (k.down ? 4 : 0) | (k.left ? 8 : 0);
+    }
+    let held = 0;
+    for (const [cid] of b.snap.thr ?? []) {
+      const c = this.cellInfo.get(cid);
+      if (c) held |= 1 << c.dir;
+    }
+    return held;
   }
 
   private drawEngines(ctx: CanvasRenderingContext2D, b: BodyView, S: number, toScreen: (x: number, y: number) => { x: number; y: number }, nowMs: number) {

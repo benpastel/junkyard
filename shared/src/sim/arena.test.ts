@@ -277,6 +277,20 @@ describe("arena", () => {
     }
   });
 
+  it("losing any part of the cockpit blows the whole cockpit and kills the ship", () => {
+    const a = new Arena({ ships: [bp("a", ["C"]), bp("b", [".k.", "kCk", "###"])], seed: 1 });
+    const ship = a.ship("b")!;
+    expect(ship.cockpit).toHaveLength(4);
+    const left = ship.cockpit.find((c) => c.dir === 3)!;
+    const touched = new Set<unknown>();
+    (a as any).damageCell(left, left.hp, "a", touched, "test");
+    for (const body of touched) (a as any).splitBody(body);
+    expect(ship.cockpit.every((c) => !c.alive)).toBe(true);
+    expect(ship.alive).toBe(false);
+    expect(ship.cellsLost).toBe(4);
+    a.dispose();
+  });
+
   it("is deterministic", () => {
     const mk = () =>
       new Arena({ ships: SANDBOX_SHIPS.map((s, i) => bp(`p${i}`, s.rows)), seed: 42 });

@@ -288,6 +288,87 @@ const PARTS: Partial<Record<CellType, (d: Pen, s: CellStyle, dir: Dir) => void>>
   },
 };
 
+// ---- T-shaped cockpit (the arrow-key cluster) ----
+// One glass dome over 4 cells laid out like a keyboard's arrow keys, nose up:
+//   . U .
+//   L D R
+// Each lobe has a backlit arrow that glows while that key is held. Arrows are in the ship frame,
+// same as the controls, so a rotated ship still shows which way you're pushing.
+
+/** Cockpit cells relative to the T's top-left, with the key (dir) each one stands for. */
+export const COCKPIT_CELLS: readonly { x: number; y: number; dir: Dir }[] = [
+  { x: 1, y: 0, dir: 0 },
+  { x: 2, y: 1, dir: 1 },
+  { x: 1, y: 1, dir: 2 },
+  { x: 0, y: 1, dir: 3 },
+];
+
+export interface CockpitStyle {
+  /** Player colour: pilot + fins. */
+  color: string;
+  /** Held keys, bitmask over ship-frame dirs (bit 0 = up, 1 = right, 2 = down, 3 = left). */
+  held?: number;
+}
+
+// arrow centres in T units; the down arrow is smaller since the pilot crowds that lobe
+const COCKPIT_ARROWS: readonly { x: number; y: number; dir: Dir; k: number }[] = [
+  { x: 1.5, y: 0.42, dir: 0, k: 1 },
+  { x: 2.58, y: 1.5, dir: 1, k: 1 },
+  { x: 1.5, y: 1.7, dir: 2, k: 0.8 },
+  { x: 0.42, y: 1.5, dir: 3, k: 1 },
+];
+
+/**
+ * The whole cockpit, filling (0,0)-(3*size, 2*size) of the current transform (nose up),
+ * plus fins hanging ~0.35 cells off the back corners. Draw it in the parts pass, after plates.
+ */
+export function drawCockpit(ctx: CanvasRenderingContext2D, size: number, style: CockpitStyle) {
+  const held = style.held ?? 0;
+  ctx.save();
+  ctx.scale(size, size);
+  const d = pen(ctx);
+
+  // swept fins off the back corners of the side keys
+  const fin: [number, number][] = [[0.1, 1.75], [-0.25, 2.25], [0.4, 1.92]];
+  d.poly(fin, style.color);
+  d.poly(fin.map(([x, y]) => [3 - x, y]), style.color);
+
+  // dark dome, inset a bit from the T's cells
+  const i = 0.08;
+  const outline: [number, number][] = [
+    [1 + i, i], [2 - i, i], [2 - i, 1 + i], [3 - i, 1 + i],
+    [3 - i, 2 - i], [i, 2 - i], [i, 1 + i], [1 + i, 1 + i],
+  ];
+  d.poly(outline, "#0c1218");
+  ctx.strokeStyle = "rgba(160,200,230,.45)";
+  ctx.lineWidth = 0.04;
+  ctx.lineJoin = "round";
+  ctx.stroke();
+
+  for (const a of COCKPIT_ARROWS) {
+    const on = (held >> a.dir) & 1;
+    // halo spills past the dome on purpose, so held keys read at arena zoom
+    if (on) [0.5, 0.4, 0.3].forEach((r, j) => d.circle(a.x, a.y, r * a.k, `rgba(120,190,240,${0.12 + j * 0.08})`));
+    ctx.save();
+    ctx.translate(a.x, a.y);
+    ctx.rotate((a.dir * PI) / 2);
+    const s = 0.24 * a.k;
+    d.poly([[0, -s], [s * 0.95, s * 0.5], [-s * 0.95, s * 0.5]], on ? "#fff" : "#3d6a8a");
+    ctx.restore();
+  }
+
+  // pilot at the junction: shoulders, helmet, googly eyes looking forward
+  const px = 1.5;
+  const py = 1.1;
+  d.ellipse(px, py + 0.16, 0.25, 0.12, shade(style.color, -0.45));
+  d.circle(px, py, 0.2, style.color);
+  for (const o of [-0.09, 0.09]) {
+    d.circle(px + o, py - 0.07, 0.09, "#fff");
+    d.circle(px + o, py - 0.12, 0.045, "#111");
+  }
+  ctx.restore();
+}
+
 /** Darken (amount < 0) or lighten a #rrggbb colour. */
 function shade(hex: string, amount: number): string {
   const n = parseInt(hex.slice(1), 16);
@@ -315,4 +396,16 @@ function drawDamage(ctx: CanvasRenderingContext2D, s: number, damage: number, v:
   }
   ctx.stroke();
   ctx.restore();
+}
+
+/**
+ * Where to draw a full cockpit for these cells: the top-left of its T in grid units, or null if
+ * the four lobes aren't all there (test ships with a lone core keep the old canopy).
+ */
+export function cockpitOrigin(cells: readonly { x: number; y: number; type: CellType; dir: Dir }[]): { x: number; y: number } | null {
+  const cores = cells.filter((c) => c.type === "core");
+  if (cores.length !== 4) return null;
+  const d = cores.find((c) => c.dir === 2);
+  if (!d || new Set(cores.map((c) => c.dir)).size !== 4) return null;
+  return { x: d.x - 1, y: d.y - 1 };
 }

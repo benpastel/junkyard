@@ -1,6 +1,6 @@
 import { memo, useLayoutEffect, useRef } from "react";
 import type { Cell } from "@ja/shared";
-import { drawCellPart, drawCellPlate, mirrorSidesOf, type CellStyle } from "../art/cells";
+import { cockpitOrigin, drawCellPart, drawCellPlate, drawCockpit, mirrorSidesOf, type CellStyle } from "../art/cells";
 import { useClock } from "../art/useClock";
 
 /** Room around the piece, in cells, for parts that overhang their square. */
@@ -31,10 +31,20 @@ export function drawShipCells(
     overPlate?.(c);
     ctx.restore();
   }
+  // A full cockpit is drawn once over its four cells instead of cell by cell.
+  const cockpit = cockpitOrigin(cells);
   for (const c of cells) {
+    if (cockpit && c.type === "core") continue;
     ctx.save();
     ctx.translate(c.x * cell, c.y * cell);
     drawCellPart(ctx, c.type, c.dir, cell, styled(c));
+    ctx.restore();
+  }
+  if (cockpit) {
+    const core = cells.find((c) => c.type === "core")!;
+    ctx.save();
+    ctx.translate(cockpit.x * cell, cockpit.y * cell);
+    drawCockpit(ctx, cell, { color: style(core).color });
     ctx.restore();
   }
 }

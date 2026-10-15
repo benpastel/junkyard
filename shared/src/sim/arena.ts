@@ -71,7 +71,8 @@ export interface SimBody {
 export interface ShipRecord {
   playerId: PlayerId;
   body: SimBody;
-  core: SimCell;
+  /** The cockpit's core cells (one, or four laid out like the arrow keys). Lose any and you lose them all. */
+  cockpit: SimCell[];
   alive: boolean;
   deathTick: number | null;
   lastDamager: PlayerId | null;
@@ -168,7 +169,9 @@ export class Arena {
       // Nose (local -y) points at the origin: R(a)·(0,-1) = (sin a, -cos a) = -p/|p|.
       const a = Math.atan2(-px, py);
 
-      const core = bp.cells.find((c) => c.type === "core") ?? bp.cells[0];
+      // The ship's centre is the cockpit's "D" cell (dir 2), or its only core cell.
+      const cores = bp.cells.filter((c) => c.type === "core");
+      const core = cores.find((c) => c.dir === 2) ?? cores[0] ?? bp.cells[0];
       const ox = core?.x ?? 0;
       const oy = core?.y ?? 0;
       const body = this.newBody("ship", bp.playerId, px, py, a, 0, 0, 0);
@@ -190,11 +193,11 @@ export class Arena {
         cooldown: 0,
       }));
       for (const c of cells) this.attachCell(body, c);
-      const coreCell = cells.find((c) => c.type === "core") ?? cells[0]!;
+      const cockpit = cells.filter((c) => c.type === "core");
       const rec: ShipRecord = {
         playerId: bp.playerId,
         body,
-        core: coreCell,
+        cockpit: cockpit.length ? cockpit : [cells[0]!],
         alive: cells.length > 0,
         deathTick: null,
         lastDamager: null,
@@ -546,6 +549,10 @@ export class Arena {
     c.alive = false;
     this.detachCell(c);
     if (body) touched.add(body);
+    // The cockpit is one piece of glass: lose any part of it and the rest blows too.
+    if (c.type === "core" && ship) {
+      for (const other of ship.cockpit) if (other.alive) this.damageCell(other, other.hp, attacker, touched, `cockpit going up (${cause})`);
+    }
   }
 
   /** After damage: kill ships whose core died, split off disconnected groups as debris. */
@@ -554,7 +561,7 @@ export class Arena {
     const ship = this.shipOf(b);
     const alive = b.cells.filter((c) => c.alive);
 
-    if (ship && ship.alive && !ship.core.alive) {
+    if (ship && ship.alive && ship.cockpit.some((c) => !c.alive)) {
       ship.alive = false;
       ship.deathTick = this.tickCount;
       const killer = ship.lastDamager;
@@ -576,7 +583,7 @@ export class Arena {
     const groups = components(alive);
     if (groups.length <= 1) return;
     let keep: SimCell[];
-    if (ship) keep = groups.find((g) => g.includes(ship.core)) ?? groups[0]!;
+    if (ship) keep = groups.find((g) => g.some((c) => ship.cockpit.includes(c))) ?? groups[0]!;
     else keep = groups.reduce((a, g) => (g.length > a.length ? g : a));
     for (const g of groups) if (g !== keep) this.spawnDebris(b, g);
   }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BOT_SKILLS, HULL_IDS, HULL_TIERS, MAX_PLAYERS, PACES, type BotSkill, type ChatMessage, type Pace, type RoomView } from "@ja/shared";
 import { HULLS } from "@ja/shared/draft";
+import { cockpitCells } from "@ja/shared";
 import { net } from "../net";
 import { Chat } from "./Chat";
 import { PlayerList } from "./PlayerList";
@@ -88,13 +89,16 @@ export function Lobby({ room, me, chat }: { room: RoomView; me: string | null; c
 function HullOutline({ rows }: { rows: string[] }) {
   const box = 80;
   const cell = box / Math.max(rows[0]!.length, rows.length);
+  // The cockpit's T around the hull's C.
+  const cy = rows.findIndex((r) => r.includes("C"));
+  const cockpit = new Set(cockpitCells(rows[cy]!.indexOf("C"), cy).map((c) => `${c.x},${c.y}`));
   return (
     <svg width={box} height={box} viewBox={`0 0 ${box} ${box}`} aria-hidden>
       <g transform={`translate(${(box - rows[0]!.length * cell) / 2} ${(box - rows.length * cell) / 2})`}>
         {rows.flatMap((row, y) =>
           [...row].map((ch, x) =>
             ch === "." ? null : (
-              <rect key={`${x},${y}`} x={x * cell} y={y * cell} width={cell * 0.85} height={cell * 0.85} fill={ch === "C" ? "var(--rust)" : "currentColor"} />
+              <rect key={`${x},${y}`} x={x * cell} y={y * cell} width={cell * 0.85} height={cell * 0.85} fill={cockpit.has(`${x},${y}`) ? "var(--rust)" : "currentColor"} />
             ),
           ),
         )}

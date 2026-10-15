@@ -11,7 +11,9 @@ import type { Cell, CellType, Dir } from "../types.js";
  */
 export function parseShip(rows: string[]): Cell[] {
   const map: Record<string, [CellType, Dir]> = {
-    C: ["core", 0],
+    // C: the cockpit's "D" cell (the ship's centre); k: its other lobes, keyed by where they sit.
+    C: ["core", 2],
+    k: ["core", 0],
     "#": ["hull", 0],
     M: ["mirror", 0],
     A: ["armor", 0],
@@ -35,6 +37,14 @@ export function parseShip(rows: string[]): Cell[] {
       if (m) cells.push({ x, y, type: m[0], dir: m[1] });
     }),
   );
+  // Each 'k' lobe stands for the key matching where it sits around the C (above, right, left).
+  const c = cells.find((q) => q.type === "core" && q.dir === 2);
+  if (c) {
+    for (const q of cells) {
+      if (q.type !== "core" || q === c) continue;
+      q.dir = q.y < c.y ? 0 : q.x > c.x ? 1 : 3;
+    }
+  }
   return cells;
 }
 
@@ -43,8 +53,8 @@ export const SANDBOX_SHIPS: { name: string; rows: string[] }[] = [
     name: "Balanced",
     rows: [
       ".iMi.",
-      ">###<",
-      ".#C#.",
+      ">#k#<",
+      ".kCk.",
       ".###.",
       ".^#^.",
     ],
@@ -52,8 +62,8 @@ export const SANDBOX_SHIPS: { name: string; rows: string[] }[] = [
   {
     name: "Lopsided",
     rows: [
-      "i##.",
-      "#C#<",
+      "ik#.",
+      "kCk<",
       "^#..",
       "^...",
     ],
@@ -61,17 +71,17 @@ export const SANDBOX_SHIPS: { name: string; rows: string[] }[] = [
   {
     name: "Tiny",
     rows: [
-      ">i<",
-      ".C.",
-      ".^.",
+      "iki",
+      "kCk",
+      "^.^",
     ],
   },
   {
     name: "Brute",
     rows: [
       "RAGAR",
-      ">###<",
-      "##C##",
+      ">#k#<",
+      "#kCk#",
       "#####",
       "^^.^^",
     ],

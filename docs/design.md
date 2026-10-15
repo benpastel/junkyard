@@ -37,7 +37,7 @@ Online multiplayer, fast-paced, round-based game:
 - Special cells have a facing that rotates with the piece.
 - **Damage is per cell**: single cells get destroyed / fall off. A piece is only a placement unit; after placement the ship is just a grid of cells.
 - **Covered parts do nothing.** Lasers and grapples work only while the straight line from them to the ship's edge is clear (so they never shoot their own ship). Engines, saws and armor just need the square next to them in their working direction open (a saw also needs its two front diagonals). Saws never cut their own ship. Shooting away the cover switches it on. Covered parts are drawn dimmed.
-- One **core / cockpit** cell per ship. If destroying cells disconnects part of the ship from the core, that part breaks off as debris. Ship dies when the core dies.
+- The **cockpit** is four core cells laid out like the arrow keys (up on top; left, down, right below), drawn as one dome with a backlit arrow per key that glows while it's held (for other ships: while those engines fire). Lose any part of it and the whole cockpit blows, killing the ship. If destroying cells disconnects part of the ship from the core, that part breaks off as debris. Ship dies when the core dies.
 
 ## Art
 

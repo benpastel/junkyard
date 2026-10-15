@@ -1,5 +1,6 @@
 import type { Cell, Dir, HullId, PlayerId } from "../types.js";
 import { Rng } from "../rng.js";
+import { cockpitCells } from "../cells.js";
 import { hullBuildable, hullCore, HULLS } from "./hulls.js";
 import { generatePiece, placedCells, type Piece } from "./pieces.js";
 import { cellKey as key, placementError } from "./rules.js";
@@ -67,7 +68,7 @@ export class Draft {
     this.buildable = new Set(hullBuildable(opts.hull).map((p) => key(p.x, p.y)));
     const core = hullCore(opts.hull);
     for (const id of opts.playerIds) {
-      this.players.set(id, { offers: this.dealOffers(), held: null, cells: [{ ...core, type: "core", dir: 0 }], dealing: false });
+      this.players.set(id, { offers: this.dealOffers(), held: null, cells: cockpitCells(core.x, core.y), dealing: false });
     }
   }
 

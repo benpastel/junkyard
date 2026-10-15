@@ -84,3 +84,22 @@ export function openChecker(cells: readonly { x: number; y: number }[]) {
     return true;
   };
 }
+
+/**
+ * The cockpit: four core cells laid out like a keyboard's arrow keys, nose up.
+ *   . U .
+ *   L D R
+ * Each cell's dir is the key it stands for. Offsets are from the "D" cell (the hull's 'C'),
+ * which is also the ship's centre in the arena.
+ */
+export const COCKPIT_LAYOUT: readonly { dx: number; dy: number; dir: Dir }[] = [
+  { dx: 0, dy: -1, dir: 0 },
+  { dx: 1, dy: 0, dir: 1 },
+  { dx: 0, dy: 0, dir: 2 },
+  { dx: -1, dy: 0, dir: 3 },
+];
+
+/** The cockpit's core cells with its "D" cell at (x, y). */
+export function cockpitCells(x: number, y: number): { x: number; y: number; type: CellType; dir: Dir }[] {
+  return COCKPIT_LAYOUT.map((o) => ({ x: x + o.dx, y: y + o.dy, type: "core" as const, dir: o.dir }));
+}

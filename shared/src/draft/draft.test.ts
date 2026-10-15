@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Rng } from "../rng.js";
-import { openChecker } from "../cells.js";
+import { cockpitCells, openChecker } from "../cells.js";
 import {
   Draft,
   draftBotAction,
@@ -112,7 +112,8 @@ describe("Draft", () => {
     const v = d.view("a");
     expect(v.offers).toHaveLength(OFFER_COUNT);
     expect(OFFER_COUNT).toBe(5);
-    expect(v.cells).toEqual([{ ...core, type: "core", dir: 0 }]);
+    // The cockpit: four core cells laid out like the arrow keys around the hull's C.
+    expect(v.cells).toEqual(cockpitCells(core.x, core.y));
     expect(v.rivals.map((r) => r.playerId)).toEqual(["b"]);
   });
 
@@ -134,7 +135,7 @@ describe("Draft", () => {
     expect(d.apply("a", { type: "place", ...spot })).toBeNull();
     const v = d.view("a");
     expect(v.held).toBeNull();
-    expect(v.cells).toHaveLength(6);
+    expect(v.cells).toHaveLength(9);
     expect(v.offers).toHaveLength(OFFER_COUNT);
     expect(v.offers.some((p) => hand.includes(p.id))).toBe(false);
   });
@@ -189,7 +190,7 @@ describe("Draft", () => {
         const cells = d.blueprintCells(id);
         // Pentominoes can leave gaps nothing fits in, especially on the odd-shaped hulls.
         expect(cells.length).toBeGreaterThan(hullBuildable(hull).length * 0.5);
-        expect(cells.filter((c) => c.type === "core")).toHaveLength(1);
+        expect(cells.filter((c) => c.type === "core")).toHaveLength(4);
         expect(cells.some((c) => c.type === "engine")).toBe(true);
         expect(new Set(cells.map((c) => `${c.x},${c.y}`)).size).toBe(cells.length);
       }
@@ -212,8 +213,12 @@ function findSpot(d: Draft, id: string, ok: (cells: Cell[]) => boolean) {
 function findValidSpot(d: Draft, id: string) {
   const v = d.view(id);
   const occupied = new Set(v.cells.map((c) => `${c.x},${c.y}`));
-  const spot = findSpot(d, id, (cells) =>
-    cells.some((c) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => occupied.has(`${c.x + dx!},${c.y + dy!}`))),
+  const spot = findSpot(
+    d,
+    id,
+    (cells) =>
+      cells.every((c) => !occupied.has(`${c.x},${c.y}`)) &&
+      cells.some((c) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => occupied.has(`${c.x + dx!},${c.y + dy!}`))),
   );
   if (!spot) throw new Error("no spot");
   return spot;
