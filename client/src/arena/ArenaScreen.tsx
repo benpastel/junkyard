@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { InputState, PlayerId } from "@ja/shared";
 import { FAST_FORWARD_SPEED, type ArenaInit, type ArenaSnapshot } from "@ja/shared/sim/view";
 import { KeyButton } from "../ui/KeyButton";
-import { ArenaRenderer, type CameraMode } from "./renderer";
+import { loadCameraMode } from "./cameraPref";
+import { ArenaRenderer } from "./renderer";
 import "./arena.css";
 
 /** Keyboard layout. Arrow keys fire engines facing that way; letters fire weapons. Lasers fire on their own. */
@@ -92,11 +93,6 @@ export function ArenaScreen(props: {
     };
     const onDown = (e: KeyboardEvent) => {
       if (e.code === FAST_FORWARD_KEY && !e.repeat) ffRef.current?.toggle();
-      if (e.code === CAMERA_KEY && !e.repeat && rendererRef.current) {
-        const next = rendererRef.current.cameraMode === "ship" ? "north" : "ship";
-        rendererRef.current.cameraMode = next;
-        saveCameraMode(next);
-      }
       set(e, true);
     };
     const onUp = (e: KeyboardEvent) => set(e, false);
@@ -180,25 +176,6 @@ export interface FastForward {
 }
 
 const FAST_FORWARD_KEY = "KeyF";
-/** Toggles between the fixed view and the ship-up view (prototype; remembered per browser). */
-const CAMERA_KEY = "KeyC";
-const CAMERA_STORAGE = "ja.camera";
-
-function loadCameraMode(): CameraMode {
-  try {
-    return localStorage.getItem(CAMERA_STORAGE) === "ship" ? "ship" : "north";
-  } catch {
-    return "north";
-  }
-}
-
-function saveCameraMode(mode: CameraMode) {
-  try {
-    localStorage.setItem(CAMERA_STORAGE, mode);
-  } catch {
-    // Just won't be remembered.
-  }
-}
 
 function FastForwardIcon() {
   return (
