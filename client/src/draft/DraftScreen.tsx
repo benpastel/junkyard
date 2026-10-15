@@ -19,8 +19,9 @@ export function DraftScreen(props: {
 }) {
   const { view, me, endsAt, act, players, done } = props;
   const color = players.find((p) => p.id === me)?.color ?? "#e8743b";
-  const [rot, setRot] = useState<Dir>(0);
-  const [flip, setFlip] = useState(false);
+  // Each piece's own orientation, by id; pieces not listed are upright.
+  const [orients, setOrients] = useState<Record<string, Orient>>({});
+  const orientOf = (id: string): Orient => orients[id] ?? UPRIGHT;
   const [overBoard, setOverBoard] = useState(false);
   // Where the pointer holds the piece, in cells from its top-left corner.
   const [grab, setGrab] = useState({ x: 0, y: 0 });
@@ -39,16 +40,33 @@ export function DraftScreen(props: {
   const held = held0 && held0.id === placing ? null : held0;
 
   const heldId = held?.id ?? null;
+  const { rot, flip } = heldId ? orientOf(heldId) : UPRIGHT;
   const heldShape = useMemo(() => (held ? transformCells(held.cells, rot, flip) : null), [held, rot, flip]);
   const heldBox = useRef({ w: 1, h: 1 });
   if (heldShape) heldBox.current = shapeBox(heldShape);
 
-  // Rotate and flip turn the whole hand, and the held piece turns about the pointer.
-  const rotate = useCallback((by: 1 | -1) => {
-    const { w, h } = heldBox.current;
-    setGrab((g) => (by === 1 ? { x: h - g.y, y: g.x } : { x: g.y, y: w - g.x }));
-    setRot((r) => (((r + by + 4) % 4) as Dir));
-  }, []);
+  // Rotate and flip turn only the held piece (about the pointer), or, with nothing held, every offer.
+  const handIds = [...view.offers, ...view.pool].map((p) => p.id).join(" ");
+  const turn = useCallback(
+    (f: (o: Orient) => Orient) => {
+      const ids = heldId ? [heldId] : handIds.split(" ").filter(Boolean);
+      setOrients((all) => {
+        const next = { ...all };
+        for (const id of ids) next[id] = f(all[id] ?? UPRIGHT);
+        return next;
+      });
+    },
+    [heldId, handIds],
+  );
+
+  const rotate = useCallback(
+    (by: 1 | -1) => {
+      const { w, h } = heldBox.current;
+      if (heldId) setGrab((g) => (by === 1 ? { x: h - g.y, y: g.x } : { x: g.y, y: w - g.x }));
+      turn((o) => ({ ...o, rot: ((o.rot + by + 4) % 4) as Dir }));
+    },
+    [heldId, turn],
+  );
 
   const reroll = useCallback(() => {
     if (view.dealing) return;
@@ -88,10 +106,9 @@ export function DraftScreen(props: {
   // mirroring after a rotation r is the same as mirroring first and rotating by -r.
   const toggleFlip = useCallback(() => {
     const { w } = heldBox.current;
-    setGrab((g) => ({ x: w - g.x, y: g.y }));
-    setFlip((f) => !f);
-    setRot((r) => ((4 - r) % 4) as Dir);
-  }, []);
+    if (heldId) setGrab((g) => ({ x: w - g.x, y: g.y }));
+    turn((o) => ({ rot: ((4 - o.rot) % 4) as Dir, flip: !o.flip }));
+  }, [heldId, turn]);
 
   // Keyboard: Q / E rotate, F flips, Esc puts the piece back, R rerolls the offers.
   useEffect(() => {
@@ -172,7 +189,7 @@ export function DraftScreen(props: {
               <PieceCard
                 key={p.id}
                 piece={p}
-                cells={transformCells(p.cells, rot, flip)}
+                cells={transformCells(p.cells, orientOf(p.id).rot, orientOf(p.id).flip)}
                 cell={cell}
                 color={color}
                 held={held?.id === p.id}
@@ -261,6 +278,12 @@ export function DraftScreen(props: {
 const EDGE = 16;
 const GAP = 12;
 const SIDE = 180;
+
+interface Orient {
+  rot: Dir;
+  flip: boolean;
+}
+const UPRIGHT: Orient = { rot: 0, flip: false };
 const MAX_CELL = 64;
 /** Height of the offer row, in squares: room for a piece five squares tall. */
 const OFFER_CELLS = 5.6;
