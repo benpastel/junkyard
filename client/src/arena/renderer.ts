@@ -28,6 +28,8 @@ const PAN_CELLS_PER_SECOND = 24;
 const PAN_LEASH_CELLS = 6;
 /** How long "GO" hangs over the ships once the countdown ends. */
 const GO_SECONDS = 0.6;
+/** How far in from the screen edge (px) the off-screen ship arrows sit. */
+const OFFSCREEN_INSET = 22;
 
 interface CellInfo extends InitCell {
   color: string;
@@ -169,7 +171,54 @@ export class ArenaRenderer {
     this.drawParticles(ctx, S, toScreen);
     this.drawNames(ctx, bodies, S, toScreen);
     this.drawCountdown(ctx, bodies, S, toScreen, renderTick);
+    this.drawOffscreen(ctx, bodies, width, height, S, toScreen);
     if (this.celebration) this.drawCelebration(ctx, width, height, nowMs, dt);
+  }
+
+  /** A small arrow in its colour at the screen edge for every other ship that's out of view. */
+  private drawOffscreen(
+    ctx: CanvasRenderingContext2D,
+    bodies: BodyView[],
+    w: number,
+    h: number,
+    S: number,
+    toScreen: (x: number, y: number) => { x: number; y: number },
+  ) {
+    const cx = w / 2;
+    const cy = h / 2;
+    for (const b of bodies) {
+      if (!b.owner || b.owner === this.me || this.dead.has(b.owner)) continue;
+      const p = toScreen(b.x, b.y);
+      // Ships are a few cells across; only point at ones wholly off screen.
+      const slack = S * 2;
+      if (p.x > -slack && p.x < w + slack && p.y > -slack && p.y < h + slack) continue;
+      const dx = p.x - cx;
+      const dy = p.y - cy;
+      // Pin to the screen edge, inset so the arrow is fully visible.
+      const k = Math.min((cx - OFFSCREEN_INSET) / Math.abs(dx || 1e-6), (cy - OFFSCREEN_INSET) / Math.abs(dy || 1e-6));
+      const ax = cx + dx * k;
+      const ay = cy + dy * k;
+      // Nearer ships get a bigger, brighter arrow.
+      const cells = Math.hypot(dx, dy) / S;
+      const near = Math.max(0.45, Math.min(1, 30 / cells));
+      const size = 9 + 7 * near;
+      ctx.save();
+      ctx.translate(ax, ay);
+      ctx.rotate(Math.atan2(dy, dx));
+      ctx.globalAlpha = 0.55 + 0.45 * near;
+      ctx.fillStyle = this.shipInfo.get(b.owner)?.color ?? "#fff";
+      ctx.strokeStyle = "rgba(0,0,0,0.6)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(size, 0);
+      ctx.lineTo(-size * 0.7, size * 0.75);
+      ctx.lineTo(-size * 0.35, 0);
+      ctx.lineTo(-size * 0.7, -size * 0.75);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   /** 3-2-1 over every ship while the fight's frozen at the start, then a quick GO. */
