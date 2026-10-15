@@ -66,7 +66,7 @@
 }
 
 .draft-dealing .hourglass,
-.key-button.active .hourglass {
+.key-button.active .dice {
   animation: hourglass-turn 1s ease-in-out infinite;
 }
 
@@ -157,6 +157,26 @@
 
 .draft-tools .key-button {
   width: 64px;
+}
+
+/* Rotate left and right read as one control. */
+.draft-rotate-pair {
+  display: flex;
+}
+
+.draft-rotate-pair .key-button:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.draft-rotate-pair .key-button:last-child {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 0;
+}
+
+.draft-tools-gap {
+  width: 18px;
 }
 
 .draft-pool {

@@ -200,11 +200,14 @@ export function DraftScreen(props: {
           )}
         </div>
         <div className="draft-tools" ref={toolsRef}>
-          <KeyButton title="Rotate counter-clockwise" keyLabel="Q" icon={<RotateIcon ccw />} onClick={() => rotate(-1)} />
-          <KeyButton title="Rotate clockwise" keyLabel="E" icon={<RotateIcon />} onClick={() => rotate(1)} />
+          <div className="draft-rotate-pair">
+            <KeyButton title="Rotate counter-clockwise" keyLabel="Q" icon={<RotateIcon ccw />} onClick={() => rotate(-1)} />
+            <KeyButton title="Rotate clockwise" keyLabel="E" icon={<RotateIcon />} onClick={() => rotate(1)} />
+          </div>
           <KeyButton title="Flip" keyLabel="F" icon={<FlipIcon />} onClick={toggleFlip} active={flip} />
+          <span className="draft-tools-gap" />
           <KeyButton title="Put back" keyLabel="Esc" icon={<DiscardIcon />} onClick={discard} disabled={!held} />
-          <KeyButton title="New offers" keyLabel="R" icon={<HourglassIcon />} onClick={reroll} active={view.dealing} disabled={view.dealing} />
+          <KeyButton title="New offers" keyLabel="R" icon={<DiceIcon />} onClick={reroll} active={view.dealing} disabled={view.dealing} />
         </div>
       </section>
 
@@ -294,21 +297,63 @@ function shapeBox(cells: readonly { x: number; y: number }[]) {
 
 const ICON = { width: 26, height: 26, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" } as const;
 
+// Rotate and flip show a little L before (faint) and after (solid).
+function MiniL(props: { x: number; y: number; turned?: boolean; mirror?: boolean; ghost?: boolean }) {
+  const s = 5;
+  let cells: [number, number][] = [
+    [0, 0],
+    [0, 1],
+    [0, 2],
+    [1, 2],
+  ];
+  if (props.mirror) cells = cells.map(([x, y]) => [1 - x, y]);
+  // A quarter turn clockwise.
+  if (props.turned) cells = cells.map(([x, y]) => [2 - y, x]);
+  return (
+    <g opacity={props.ghost ? 0.35 : 1}>
+      {cells.map(([cx, cy]) => (
+        <rect key={`${cx},${cy}`} x={props.x + cx * s} y={props.y + cy * s} width={s - 1} height={s - 1} fill="currentColor" stroke="none" rx={0.6} />
+      ))}
+    </g>
+  );
+}
+
+const GLYPH = { ...ICON, width: 36, height: 36, viewBox: "0 0 32 32" } as const;
+
 function RotateIcon({ ccw }: { ccw?: boolean }) {
   return (
-    <svg {...ICON} style={ccw ? { transform: "scaleX(-1)" } : undefined} aria-hidden>
-      <path d="M20 12a8 8 0 1 1-2.34-5.66" />
-      <path d="M20 4v5h-5" />
+    <svg {...GLYPH} style={ccw ? { transform: "scaleX(-1)" } : undefined} aria-hidden>
+      <MiniL x={2} y={13} ghost />
+      <MiniL x={15} y={16} turned />
+      <path d="M5 10C7 3 19 2 23 10" />
+      <path d="M24.5 5.5 23.3 10.4 18.6 9" />
     </svg>
   );
 }
 
 function FlipIcon() {
   return (
-    <svg {...ICON} aria-hidden>
-      <path d="M12 3v18" strokeDasharray="2 2.5" />
-      <path d="M9 7 4 12l5 5V7Z" />
-      <path d="M15 7l5 5-5 5V7Z" />
+    <svg {...GLYPH} aria-hidden>
+      <path d="M16 2v26" strokeDasharray="2 2.5" strokeWidth={1.5} />
+      <MiniL x={3} y={9} ghost />
+      <MiniL x={19} y={9} mirror />
+    </svg>
+  );
+}
+
+function DiceIcon() {
+  return (
+    <svg {...ICON} width={30} height={30} className="dice" aria-hidden>
+      <rect x={3.5} y={3.5} width={17} height={17} rx={3} strokeWidth={2.2} />
+      {[
+        [8.5, 8.5],
+        [15.5, 8.5],
+        [12, 12],
+        [8.5, 15.5],
+        [15.5, 15.5],
+      ].map(([cx, cy]) => (
+        <circle key={`${cx},${cy}`} cx={cx} cy={cy} r={1.4} fill="currentColor" stroke="none" />
+      ))}
     </svg>
   );
 }
