@@ -58,7 +58,8 @@ Online multiplayer, fast-paced, round-based game:
 - **Weapons:** fixed-direction, one key per weapon type. Lasers fire automatically whenever their line is clear; X = grapple (toggle).
 - **Fast-forward:** an F button in the arena; once every connected human in the fight (dead ones too) has voted, the fight runs at 4× until it is decided. Snapshots stay at 20/s, and the client playback clock follows the sim speed.
 - **Cockpit arrows** grey out for directions with no working engine; pressing one shows a red X.
-- **Camera:** C flips between the fixed view and the ship-up view (prototype; remembered per browser).
+- **Camera:** C (or the camera button, which names the current mode) flips between the fixed view and the ship-up view (prototype; remembered per browser). Both show a fading trail behind your ship and a distant dust layer.
+- Once every human in the fight is dead, it fast-forwards on its own.
 - **Controls bar:** the arena shows each key as a clickable button that lights while held; the draft uses the same buttons for rotate (Q/E), flip (F) and discard (Esc).
   - lasers (ranged, raycasts; auto-firing, one shot every 2.4s, light knockback; range 12 cells, just short of the window edge on a laptop screen)
   - collisions above a speed threshold break one cell on each side

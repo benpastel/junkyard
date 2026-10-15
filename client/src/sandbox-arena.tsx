@@ -68,7 +68,9 @@ export function SandboxArena() {
       timer = window.setInterval(() => {
         if (cancelled) return;
         const now = performance.now();
-        const speed = fastRef.current && !a.over ? FAST_FORWARD_SPEED : 1;
+        // Fast-forward when asked, or on its own once your ship is gone (like the server).
+        const meDead = withMe && !a.ship(ME)?.alive;
+        const speed = (fastRef.current || meDead) && !a.over ? FAST_FORWARD_SPEED : 1;
         acc = Math.min(acc + ((now - last) / 1000) * speed, 0.25 * speed);
         last = now;
         while (acc >= 1 / TICK_HZ) {

@@ -7,7 +7,7 @@ import {
 } from "@ja/shared/sim/view";
 import { KeyButton } from "../ui/KeyButton";
 import { loadCameraMode, saveCameraMode } from "./cameraPref";
-import { ArenaRenderer } from "./renderer";
+import { ArenaRenderer, type CameraMode } from "./renderer";
 import "./arena.css";
 
 /** Keyboard layout. Arrow keys fire engines facing that way; letters fire weapons. Lasers fire on their own. */
@@ -35,6 +35,15 @@ export function ArenaScreen(props: {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [pips, setPips] = useState<{ color: string; alive: boolean }[]>([]);
   const rendererRef = useRef<ArenaRenderer | null>(null);
+  const [camera, setCamera] = useState<CameraMode>(loadCameraMode);
+  const toggleCamera = () => {
+    const next: CameraMode = (rendererRef.current?.cameraMode ?? camera) === "ship" ? "north" : "ship";
+    if (rendererRef.current) rendererRef.current.cameraMode = next;
+    saveCameraMode(next);
+    setCamera(next);
+  };
+  const toggleCameraRef = useRef(toggleCamera);
+  toggleCameraRef.current = toggleCamera;
 
   // Latest sendInput without re-running the effects when the parent re-renders.
   const sendRef = useRef(sendInput);
@@ -95,12 +104,7 @@ export function ArenaScreen(props: {
     };
     const onDown = (e: KeyboardEvent) => {
       if (e.code === FAST_FORWARD_KEY && !e.repeat) ffRef.current?.toggle();
-      if (e.code === CAMERA_KEY && !e.repeat && rendererRef.current) {
-        const next =
-          rendererRef.current.cameraMode === "ship" ? "north" : "ship";
-        rendererRef.current.cameraMode = next;
-        saveCameraMode(next);
-      }
+      if (e.code === CAMERA_KEY && !e.repeat) toggleCameraRef.current();
       set(e, true);
     };
     const onUp = (e: KeyboardEvent) => set(e, false);
@@ -137,8 +141,21 @@ export function ArenaScreen(props: {
       {fastForward?.active && (
         <div className="arena-speed mono">{FAST_FORWARD_SPEED}×</div>
       )}
-      {fastForward && (
-        <div className="arena-controls">
+      <div className="arena-controls">
+        <div className="arena-controls-group">
+          <KeyButton
+            title="Switch camera"
+            keyLabel="C"
+            icon={
+              <span className="cam-mode">
+                {camera === "ship" ? <ShipUpIcon /> : <FixedIcon />}
+                <span className="cam-label mono">{camera === "ship" ? "Ship-up" : "Fixed"}</span>
+              </span>
+            }
+            onClick={toggleCamera}
+          />
+        </div>
+        {fastForward && (
           <div className="arena-controls-group">
             <KeyButton
               title="Fast-forward"
@@ -157,9 +174,29 @@ export function ArenaScreen(props: {
               onClick={fastForward.toggle}
             />
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
+  );
+}
+
+/** Fixed view: a still frame with a ship turning inside it. */
+function FixedIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+      <rect x="2" y="2" width="16" height="16" rx="2" />
+      <path d="M10 5.5 L13 13 L10 11.5 L7 13 Z" fill="currentColor" stroke="none" transform="rotate(35 10 10)" />
+    </svg>
+  );
+}
+
+/** Ship-up view: the ship stays pointing up while the frame turns round it. */
+function ShipUpIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+      <rect x="2" y="2" width="16" height="16" rx="2" transform="rotate(-20 10 10)" />
+      <path d="M10 5.5 L13 13 L10 11.5 L7 13 Z" fill="currentColor" stroke="none" />
+    </svg>
   );
 }
 

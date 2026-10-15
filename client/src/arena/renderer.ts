@@ -170,8 +170,9 @@ export class ArenaRenderer {
     this.drawBackdrop(ctx, width, height, S);
     this.drawGrid(ctx, width, height, S, toScreen);
     const mine = this.me && !this.dead.has(this.me) ? bodies.find((b) => b.owner === this.me) : undefined;
-    if (this.cameraMode === "ship") this.drawDust(ctx, width, height, S, toScreen, mine);
-    if (this.cameraMode === "ship" && mine) this.drawTrail(ctx, S, toScreen, mine, nowMs);
+    // Both views get the far dust and your trail: they show motion whichever way the camera works.
+    this.drawDust(ctx, width, height, S, toScreen, mine);
+    if (mine) this.drawTrail(ctx, S, toScreen, mine, nowMs);
     this.drawRing(ctx, width, height, S, ring, toScreen, nowMs);
     this.drawPowerup(ctx, S, toScreen, nowMs);
 

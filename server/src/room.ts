@@ -67,6 +67,7 @@ export class Room {
   private tickAccumulator = 0;
   private arenaTick = 0;
   private overTick: number | null = null;
+  private lastSpeed = 1;
   /** Humans who want the fight sped up; it speeds up once every connected human is in. */
   private fastVotes = new Set<PlayerId>();
   /** Humans who've finished building; the fight starts once every connected human has. */
@@ -397,6 +398,11 @@ export class Room {
     this.arenaTick++;
     // Same snapshot rate in real time whatever the speed, so bandwidth stays flat.
     const speed = this.speed();
+    // Tell everyone when the speed changes on its own (e.g. the last human just died).
+    if (speed !== this.lastSpeed) {
+      this.lastSpeed = speed;
+      this.broadcastRoom();
+    }
     if (this.arenaTick % (SNAPSHOT_EVERY * speed) === 0) {
       const snap = arena.snapshot();
       if (speed !== 1) snap.speed = speed;
@@ -429,6 +435,9 @@ export class Room {
   private speed(): number {
     if (this.phase !== "arena" || !this.arena || this.arena.over) return 1;
     const voters = this.fastVoters();
+    // Once every human is dead there's nobody to wait for: speed up on its own.
+    const arena = this.arena;
+    if (voters.length > 0 && voters.every((p) => !arena.ship(p.id)?.alive)) return FAST_FORWARD_SPEED;
     return voters.length > 0 && voters.every((p) => this.fastVotes.has(p.id)) ? FAST_FORWARD_SPEED : 1;
   }
 

@@ -73,3 +73,16 @@
 .ff-votes {
   font-size: 11px;
 }
+
+.cam-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
+}
+
+.cam-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
