@@ -17,13 +17,20 @@ export function Results({ room, me, results, chat }: { room: RoomView; me: strin
 
         <table className="results panel">
           <thead>
+            <tr className="group">
+              <th colSpan={2} />
+              <th colSpan={2}>Round</th>
+              <th colSpan={3} className="total">
+                Total
+              </th>
+            </tr>
             <tr>
               <th>#</th>
               <th className="left">Pilot</th>
               <th>Kills</th>
               <th>Destroyed</th>
-              <th>Lost</th>
-              <th>Survived</th>
+              <th className="total">Kills</th>
+              <th>Destroyed</th>
               <th>Wins</th>
             </tr>
           </thead>
@@ -41,8 +48,8 @@ export function Results({ room, me, results, chat }: { room: RoomView; me: strin
                   </td>
                   <td className="mono">{r.kills}</td>
                   <td className="mono">{r.cellsDestroyed}</td>
-                  <td className="mono">{r.cellsLost}</td>
-                  <td className="mono">{Math.round(r.survivedSeconds)}s</td>
+                  <td className="mono total">{p?.totalKills ?? 0}</td>
+                  <td className="mono">{p?.totalDestroyed ?? 0}</td>
                   <td className="mono">{p?.wins ?? 0}</td>
                 </tr>
               );

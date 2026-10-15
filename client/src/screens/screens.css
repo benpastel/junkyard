@@ -371,3 +371,15 @@ table.results {
 .hull-picker button:disabled {
   opacity: 0.35;
 }
+
+/* Round and Total column groups. */
+.results tr.group th {
+  text-align: center;
+  padding-bottom: 0;
+  border-bottom: none;
+  color: var(--text);
+}
+
+.results .total {
+  border-left: 1px solid var(--line);
+}

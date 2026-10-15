@@ -27,6 +27,8 @@ export function SandboxDraft() {
         isBot: id !== ME,
         connected: true,
         wins: 0,
+        totalKills: 0,
+        totalDestroyed: 0,
       })),
     [],
   );

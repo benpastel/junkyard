@@ -12,6 +12,9 @@ export interface PlayerInfo {
   isBot: boolean;
   connected: boolean;
   wins: number;
+  /** Across every round in this room. */
+  totalKills: number;
+  totalDestroyed: number;
 }
 
 export interface RoomView {

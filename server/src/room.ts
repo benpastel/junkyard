@@ -38,6 +38,8 @@ interface Player {
   isBot: boolean;
   socket: WebSocket | null;
   wins: number;
+  totalKills: number;
+  totalDestroyed: number;
   /** Whether this player has a ship in the current draft / fight. */
   inRound: boolean;
   botNextActAt: number;
@@ -104,6 +106,8 @@ export class Room {
         isBot: false,
         socket,
         wins: 0,
+        totalKills: 0,
+        totalDestroyed: 0,
         inRound: false,
         botNextActAt: 0,
       };
@@ -154,6 +158,8 @@ export class Room {
       isBot: true,
       socket: null,
       wins: 0,
+      totalKills: 0,
+      totalDestroyed: 0,
       inRound: false,
       botNextActAt: 0,
     };
@@ -296,6 +302,12 @@ export class Room {
     }
     this.recorder = null;
     this.arena = null;
+    for (const r of rows) {
+      const p = this.players.get(r.playerId);
+      if (!p) continue;
+      p.totalKills += r.kills;
+      p.totalDestroyed += r.cellsDestroyed;
+    }
     const winner = rows.find((r) => r.place === 1);
     const winnerId = winner && rows.filter((r) => r.place === 1).length === 1 ? winner.playerId : null;
     if (winnerId) {
@@ -469,6 +481,8 @@ export class Room {
         isBot: p.isBot,
         connected: p.isBot || p.socket !== null,
         wins: p.wins,
+        totalKills: p.totalKills,
+        totalDestroyed: p.totalDestroyed,
       })),
     };
   }
