@@ -32,7 +32,7 @@ const GO_SECONDS = 0.6;
 export type CameraMode = "north" | "ship";
 /** Ship mode: how hard the view chases your heading and position, and how far it may lag. */
 const SHIP_CAM_STIFFNESS = 2.5;
-const SHIP_CAM_MAX_LAG = (25 * Math.PI) / 180;
+const SHIP_CAM_MAX_LAG = (40 * Math.PI) / 180;
 const SHIP_CAM_MAX_DRIFT = 2.5;
 /** Ship mode: dust spacing (one speck per cell this big), how far back it sits (1 = with the ships), brightness, streak length, trail length. */
 const DUST_CELL = 6;
