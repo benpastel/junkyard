@@ -1,6 +1,6 @@
 import { DIR_VECTORS, type Cell, type CellType, type Dir } from "../types.js";
 import type { Rng } from "../rng.js";
-import { openChecker } from "../cells.js";
+import { openChecker, overhangSquares, partOffset, workingDir } from "../cells.js";
 
 /** The 12 pentominoes, as (x, y) cells with y pointing down. */
 export const PENTOMINOES = {
@@ -54,65 +54,86 @@ export function placedCells(piece: Piece, x: number, y: number, rot: Dir, flip: 
 }
 
 /** Every piece carries exactly one kind of part. */
-const SPECIAL_WEIGHTS: [CellType, number][] = [
-  ["engine", 48],
-  ["laser", 24],
-  ["mirror", 14],
-  // Armor is switched off for now (its share moved to mirrors); the part still works if it shows up.
+/**
+ * What a piece's parts cost, and how likely each is to be picked when filling a piece's budget.
+ * "mirror" isn't a single cell: buying it turns all the piece's remaining plain cells to mirror.
+ * Armor and grapple are switched off for now (weight 0); their parts still work if they show up.
+ */
+const PART_COST: Partial<Record<CellType, number>> = { engine: 0.5, laser: 1, saw: 1, mirror: 1, grapple: 1, armor: 1 };
+const PART_WEIGHTS: [CellType, number][] = [
+  ["engine", 45],
+  ["laser", 25],
+  ["saw", 15],
+  ["mirror", 15],
   ["armor", 0],
-  ["saw", 10],
-  // Grapple is switched off for now: harder to use and weaker than lasers. The part still works.
   ["grapple", 0],
 ];
+/** Each piece carries this many points of parts (picked from these). */
+const PIECE_BUDGETS = [1.5, 2] as const;
 
-function pickSpecial(rng: Rng): CellType {
-  const total = SPECIAL_WEIGHTS.reduce((s, [, w]) => s + w, 0);
+function pickPart(rng: Rng, allowed: (t: CellType) => boolean): CellType | null {
+  const options = PART_WEIGHTS.filter(([t, w]) => w > 0 && allowed(t));
+  const total = options.reduce((s, [, w]) => s + w, 0);
+  if (total <= 0) return null;
   let r = rng.next() * total;
-  for (const [type, w] of SPECIAL_WEIGHTS) {
+  for (const [type, w] of options) {
     r -= w;
     if (r < 0) return type;
   }
-  return SPECIAL_WEIGHTS[0]![0];
+  return options[0]![0];
 }
 
 const DIRS: Dir[] = [0, 1, 2, 3];
-/** Chance an engine piece's second engine faces the same way as the first (otherwise a right angle). */
-const SAME_DIR_SECOND_ENGINE = 0.25;
 
 export function generatePiece(rng: Rng, id: string): Piece {
   const shape = rng.pick(PENTOMINO_NAMES);
   const coords = PENTOMINOES[shape];
   const cells: Cell[] = coords.map(([x, y]) => ({ x, y, type: "hull", dir: 0 }));
-  const special = pickSpecial(rng);
-  if (special === "mirror") {
-    // Every cell a mirror, so the piece's whole outer edge reflects.
-    return { id, shape, cells: cells.map((c) => ({ ...c, type: "mirror" })) };
+  let budget: number = rng.pick(PIECE_BUDGETS);
+  let mirrored = false;
+  // Squares just outside the piece that a part's overhang already uses (engine exhaust, laser
+  // barrel, saw blade): no two parts may share one, so their art never piles up.
+  const claimed = new Set<string>();
+  const failed = new Set<CellType>();
+
+  while (budget > 0) {
+    const type = pickPart(rng, (t) => (PART_COST[t] ?? Infinity) <= budget && !failed.has(t) && !(t === "mirror" && mirrored));
+    if (!type) break;
+    if (type === "mirror") {
+      mirrored = true;
+      budget -= PART_COST.mirror!;
+      continue;
+    }
+    // Engines on one piece never push in opposite directions.
+    const engineDirs = cells.filter((c) => c.type === "engine").map((c) => c.dir);
+    const slot = pickSpecialSlot(cells, type, rng, (d, c) => {
+      if (type === "engine" && engineDirs.some((e) => e === (((d + 2) % 4) as Dir))) return false;
+      return overhangKeys(c.x, c.y, type, d).every((k) => !claimed.has(k));
+    });
+    if (!slot) {
+      failed.add(type);
+      continue;
+    }
+    const [index, dir] = slot;
+    cells[index] = { ...cells[index]!, type, dir };
+    for (const k of overhangKeys(cells[index]!.x, cells[index]!.y, type, dir)) claimed.add(k);
+    budget -= PART_COST[type]!;
   }
-  if (special === "armor") {
-    // Armor protects the face the piece shows in one direction: every cell with nothing of
-    // the piece beyond it that way (a T facing up armors its top bar).
-    const dir = rng.pick(DIRS);
-    const v = DIR_VECTORS[dir];
-    const beyond = (c: Cell) => cells.some((o) => o !== c && (v.x !== 0 ? o.y === c.y && (o.x - c.x) * v.x > 0 : o.x === c.x && (o.y - c.y) * v.y > 0));
-    return { id, shape, cells: cells.map((c) => (beyond(c) ? c : { ...c, type: special, dir })) };
+  // The mirror goes on last, over whatever plain cells are left.
+  return { id, shape, cells: mirrored ? cells.map((c) => (c.type === "hull" ? { ...c, type: "mirror" } : c)) : cells };
+}
+
+/** The squares (as "x,y") outside a part's own cell that its art hangs over. */
+function overhangKeys(x: number, y: number, type: CellType, dir: Dir): string[] {
+  const w = workingDir(type, dir);
+  if (w === null) return [];
+  const f = DIR_VECTORS[w];
+  const keys = [`${x + f.x},${y + f.y}`];
+  for (const [fw, sd] of overhangSquares(type)) {
+    const o = partOffset(w, fw, sd);
+    keys.push(`${x + o.x},${y + o.y}`);
   }
-  const first = pickSpecialSlot(cells, special, rng, () => true);
-  if (!first) return { id, shape, cells };
-  cells[first[0]] = { ...cells[first[0]]!, type: special, dir: first[1] };
-  if (special === "engine") {
-    // A second engine: usually at right angles to the first, sometimes the same way, never opposed.
-    // Its exhaust must not empty into the same square as the first's, or the bells and flames pile up.
-    const d1 = first[1];
-    const nozzle1 = exhaustSquare(cells[first[0]]!.x, cells[first[0]]!.y, d1);
-    const apart = (c: Cell, d: Dir) => exhaustSquare(c.x, c.y, d) !== nozzle1;
-    const same = rng.chance(SAME_DIR_SECOND_ENGINE);
-    const allowed = (d: Dir, c: Cell) => apart(c, d) && (same ? d === d1 : d !== d1 && d !== (((d1 + 2) % 4) as Dir));
-    const second =
-      pickSpecialSlot(cells, "engine", rng, allowed) ??
-      pickSpecialSlot(cells, "engine", rng, (d, c) => apart(c, d) && d !== (((d1 + 2) % 4) as Dir));
-    if (second) cells[second[0]] = { ...cells[second[0]]!, type: "engine", dir: second[1] };
-  }
-  return { id, shape, cells };
+  return keys;
 }
 
 /** Chooses which cell carries the special part and which way it faces. */

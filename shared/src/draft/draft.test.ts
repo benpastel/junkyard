@@ -75,65 +75,33 @@ describe("hulls", () => {
 });
 
 describe("generatePiece", () => {
-  it("makes 5-cell pieces with exactly one kind of part; mirrors cover the piece, armor its face", () => {
+  it("fills each piece with 1.5-2 points of parts that all work and never overlap", () => {
+    const cost: Record<string, number> = { engine: 0.5, laser: 1, saw: 1 };
     const rng = new Rng(7);
-    let shields = 0;
-    for (let i = 0; i < 300; i++) {
+    let total = 0;
+    const n = 1000;
+    for (let i = 0; i < n; i++) {
       const p = generatePiece(rng, `p${i}`);
       expect(p.cells).toHaveLength(5);
-      const special = p.cells.filter((c) => c.type !== "hull");
-      expect(special.length).toBeGreaterThan(0);
-      if (special.some((c) => c.type === "mirror")) {
-        // Mirror pieces are mirror all over, so their whole outer edge reflects.
-        shields++;
-        expect(special).toHaveLength(5);
-        expect(special.every((c) => c.type === "mirror")).toBe(true);
-      } else if (special.some((c) => c.type === "armor")) {
-        shields++;
-        expect(new Set(special.map((c) => `${c.type}${c.dir}`)).size).toBe(1);
-        // Exactly the cells on the piece's face in that direction: one per row or column it spans.
-        const d = special[0]!.dir;
-        const lines = new Set(p.cells.map((c) => (d === 0 || d === 2 ? c.x : c.y)));
-        expect(special).toHaveLength(lines.size);
-      } else if (special[0]!.type === "engine") {
-        // One or two engines, never pushing in opposite directions.
-        expect(special.every((c) => c.type === "engine")).toBe(true);
-        expect(special.length).toBeGreaterThanOrEqual(1);
-        expect(special.length).toBeLessThanOrEqual(2);
-        if (special.length === 2) {
-          expect((special[0]!.dir - special[1]!.dir + 4) % 4).not.toBe(2);
-          // Their exhausts never empty into the same square (bells and flames would pile up).
-          const [e1, e2] = special as [Cell, Cell];
-          expect(exhaustSquare(e1.x, e1.y, e1.dir)).not.toBe(exhaustSquare(e2.x, e2.y, e2.dir));
-        }
-      } else {
-        expect(special).toHaveLength(1);
-      }
-      // No part is blocked by its own piece.
-      const isOpen = openChecker(p.cells);
-      for (const c of special) if (c.type !== "mirror" && c.type !== "armor") expect(isOpen(c)).toBe(true);
       for (const c of p.cells) expect(c.type).not.toBe("core");
+      const parts = p.cells.filter((c) => c.type !== "hull" && c.type !== "mirror");
+      const points = parts.reduce((sum, c) => sum + (cost[c.type] ?? 0), 0) + (p.cells.some((c) => c.type === "mirror") ? 1 : 0);
+      expect(points).toBeLessThanOrEqual(2);
+      expect(points).toBeGreaterThanOrEqual(1);
+      total += points;
+      // Every part works on the piece as it stands.
+      const isOpen = openChecker(p.cells);
+      for (const c of parts) expect(isOpen(c)).toBe(true);
+      // No two engines push in opposite directions; no two exhausts share a square.
+      const engines = parts.filter((c) => c.type === "engine");
+      for (const a of engines) for (const b of engines) if (a !== b) {
+        expect((a.dir - b.dir + 4) % 4).not.toBe(2);
+        expect(exhaustSquare(a.x, a.y, a.dir)).not.toBe(exhaustSquare(b.x, b.y, b.dir));
+      }
     }
-    expect(shields).toBeGreaterThan(0);
+    expect(total / n).toBeGreaterThan(1.6);
   });
 
-  it("gives most engine pieces a second engine, mostly at right angles", () => {
-    const rng = new Rng(21);
-    let pieces = 0;
-    let doubles = 0;
-    let rightAngles = 0;
-    for (let i = 0; i < 2000; i++) {
-      const engines = generatePiece(rng, `p${i}`).cells.filter((c) => c.type === "engine");
-      if (!engines.length) continue;
-      pieces++;
-      if (engines.length === 2) {
-        doubles++;
-        if ((engines[0]!.dir - engines[1]!.dir + 4) % 2 === 1) rightAngles++;
-      }
-    }
-    expect(doubles / pieces).toBeGreaterThan(0.9);
-    expect(rightAngles / doubles).toBeGreaterThan(0.6);
-  });
 });
 
 describe("Draft", () => {

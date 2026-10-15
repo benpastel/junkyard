@@ -30,14 +30,18 @@ export interface CellStyle {
 /**
  * For each cell of a ship (or piece), the sides a mirror strip is drawn on. Sides buried against
  * hull or other parts still show, since they start reflecting the moment whatever covers them
- * breaks off. Inside one mirror piece the shared edges are left plain; where two different mirror
- * pieces meet, the shared edge is drawn once (on the cell to its left or above it).
+ * breaks off. Edges inside one piece are left plain; where two different mirror pieces meet, the
+ * shared edge is drawn once (on the cell to its left or above it).
  */
 export function mirrorSidesOf(
   cells: readonly { x: number; y: number; type: CellType; piece?: number }[],
 ): (c: { x: number; y: number; piece?: number }) => number {
   const mirrors = new Map<string, number | undefined>();
-  for (const c of cells) if (c.type === "mirror") mirrors.set(`${c.x},${c.y}`, c.piece);
+  const pieceAt = new Map<string, number | undefined>();
+  for (const c of cells) {
+    pieceAt.set(`${c.x},${c.y}`, c.piece);
+    if (c.type === "mirror") mirrors.set(`${c.x},${c.y}`, c.piece);
+  }
   const NEIGHBOURS = [
     [0, -1],
     [1, 0],
@@ -48,7 +52,10 @@ export function mirrorSidesOf(
     let sides = 0;
     NEIGHBOURS.forEach(([dx, dy], side) => {
       const key = `${c.x + dx},${c.y + dy}`;
-      const draw = !mirrors.has(key) || (mirrors.get(key) !== c.piece && (side === 1 || side === 2));
+      // Inside one piece (mirror or a part sharing the piece) the edge stays plain, so the strips
+      // trace the piece's outline; against another piece's mirror, draw the shared edge once.
+      const samePiece = pieceAt.has(key) && pieceAt.get(key) === c.piece;
+      const draw = !samePiece && (!mirrors.has(key) || side === 1 || side === 2);
       if (draw) sides |= 1 << side;
     });
     return sides;

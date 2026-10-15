@@ -224,8 +224,11 @@ export function draftBotAction(draft: Draft, playerId: PlayerId, rng: Rng): Draf
   for (const { piece, from } of candidates) {
     const best = bestPlacement(view, piece, rng);
     if (!best) continue;
-    const special = piece.cells.find((c) => c.type !== "hull");
-    const score = best.score + (special ? typeValue(special.type, view.cells) : 0) + rng.next() * 2;
+    // Every part on the piece counts (a mirror coat once, however many cells it covers).
+    const parts = piece.cells.filter((c) => c.type !== "hull" && c.type !== "mirror").map((c) => c.type);
+    if (piece.cells.some((c) => c.type === "mirror")) parts.push("mirror");
+    const worth = parts.reduce((sum, t) => sum + typeValue(t, view.cells), 0);
+    const score = best.score + worth + rng.next() * 2;
     if (!choice || score > choice.score) choice = { piece, from, score };
   }
   // Nothing fits: reroll for a fresh hand.

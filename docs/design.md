@@ -32,7 +32,7 @@ Online multiplayer, fast-paced, round-based game:
   - **Mirror**: a mirror piece is mirror all over, so its whole outer edge reflects lasers (beams can bounce back at the shooter). A mirror cell reflects off any side a beam can reach; its strips are drawn on every side except those inside the same mirror piece (cells remember which placed piece they came from); where two different mirror pieces meet, the shared edge is drawn once. Buried edges stay visible and start working once uncovered.
   - **Armor**: silver plate that deflects collisions on that edge with no damage and a strong bounce.
   - A shield piece shields the whole face it shows in its direction: every cell with nothing of the piece beyond it that way (a T facing up shields its top bar).
-- Every piece carries exactly one kind of part; there are no plain-hull pieces. Engine pieces carry two engines (usually at right angles, sometimes the same way, never opposed, and never blowing into the same square).
+- Each piece carries **1.5 or 2 points** of parts in any combination: laser 1, saw 1, engine ½, mirror coat 1 (all its remaining plain cells become mirror). Parts never overlap each other's overhang squares, every part works on the piece as it stands, and engines on one piece never push opposite ways.
 - No part is ever generated blocked by its own piece (same full-line rule as in play).
 - Special cells have a facing that rotates with the piece.
 - **Damage is per cell**: single cells get destroyed / fall off. A piece is only a placement unit; after placement the ship is just a grid of cells.
