@@ -206,8 +206,11 @@ export function DraftScreen(props: {
           </div>
           <KeyButton title="Flip" keyLabel="F" icon={<FlipIcon />} onClick={toggleFlip} active={flip} />
           <span className="draft-tools-gap" />
-          <KeyButton title="Put back" keyLabel="Esc" icon={<DiscardIcon />} onClick={discard} disabled={!held} />
           <KeyButton title="New offers" keyLabel="R" icon={<DiceIcon />} onClick={reroll} active={view.dealing} disabled={view.dealing} />
+          {/* Only there while holding; hidden rather than removed so the row doesn't shift. */}
+          <span style={{ visibility: held ? "visible" : "hidden" }}>
+            <KeyButton title="Put back" keyLabel="Esc" icon={<DiscardIcon />} onClick={discard} />
+          </span>
         </div>
       </section>
 
