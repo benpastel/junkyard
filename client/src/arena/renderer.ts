@@ -144,10 +144,13 @@ export class ArenaRenderer {
     const S = (Math.min(width, height * 1.4) / VIEW_CELLS) * this.camera.zoom;
     const shakeX = this.shake > 0 ? (Math.sin(nowMs * 0.09) * this.shake * S) / 3 : 0;
     const shakeY = this.shake > 0 ? (Math.cos(nowMs * 0.11) * this.shake * S) / 3 : 0;
-    const toScreen = (x: number, y: number) => ({
-      x: width / 2 + (x - this.camera.x) * S + shakeX,
-      y: height / 2 + (y - this.camera.y) * S + shakeY,
-    });
+    const rc = Math.cos(this.viewRot);
+    const rs = Math.sin(this.viewRot);
+    const toScreen = (x: number, y: number) => {
+      const dx = x - this.camera.x;
+      const dy = y - this.camera.y;
+      return { x: width / 2 + (dx * rc - dy * rs) * S + shakeX, y: height / 2 + (dx * rs + dy * rc) * S + shakeY };
+    };
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.drawBackdrop(ctx, width, height, S);
@@ -320,6 +323,10 @@ export class ArenaRenderer {
 
   // ---------------------------------------------------------------- camera
 
+  /** Fixed turn of the whole view (radians), set from where your ship spawns. 0 for spectators. */
+  private viewRot = 0;
+  private viewRotSet = false;
+
   /** Arrow keys held, for panning the free camera once you have no ship. */
   private pan = { up: false, down: false, left: false, right: false };
 
@@ -334,6 +341,12 @@ export class ArenaRenderer {
    */
   private updateCamera(bodies: BodyView[], width: number, height: number, dt: number, ring: number) {
     const mine = this.me && !this.dead.has(this.me) ? bodies.find((b) => b.owner === this.me) : undefined;
+    // Turn the view once, so your spawn point sits at the bottom of the circle with your ship
+    // pointing up; it stays fixed after that.
+    if (this.viewRotSet === false && mine) {
+      this.viewRot = Math.PI / 2 - Math.atan2(mine.y, mine.x);
+      this.viewRotSet = true;
+    }
     if (mine) {
       this.camera = { x: mine.x, y: mine.y, zoom: 1 };
       this.cameraReady = true;
@@ -348,9 +361,12 @@ export class ArenaRenderer {
     const sx = (this.pan.right ? 1 : 0) - (this.pan.left ? 1 : 0);
     const sy = (this.pan.down ? 1 : 0) - (this.pan.up ? 1 : 0);
     if (sx || sy) {
+      // Screen directions back into world directions (undo the view's turn).
       const speed = (PAN_CELLS_PER_SECOND / this.camera.zoom) * dt;
-      this.camera.x += sx * speed;
-      this.camera.y += sy * speed;
+      const c = Math.cos(-this.viewRot);
+      const sn = Math.sin(-this.viewRot);
+      this.camera.x += (sx * c - sy * sn) * speed;
+      this.camera.y += (sx * sn + sy * c) * speed;
     }
     const leash = ring + PAN_LEASH_CELLS;
     const d = Math.hypot(this.camera.x, this.camera.y);
@@ -481,8 +497,8 @@ export class ArenaRenderer {
     ctx.fillRect(0, 0, w, h);
 
     const tile = 900;
-    const camX = this.camera.x;
-    const camY = this.camera.y;
+    const camX = this.camera.x * Math.cos(this.viewRot) - this.camera.y * Math.sin(this.viewRot);
+    const camY = this.camera.x * Math.sin(this.viewRot) + this.camera.y * Math.cos(this.viewRot);
     this.stars.forEach((layer, i) => {
       const depth = [0.15, 0.35, 0.6][i]!;
       const ox = -camX * S * depth;
@@ -549,8 +565,8 @@ export class ArenaRenderer {
       for (let i = 0; i <= N; i++) {
         const a = (i / N) * Math.PI * 2;
         const r = (radiusAt(a) + offset) * S;
-        const x = c.x + Math.cos(a) * r;
-        const y = c.y + Math.sin(a) * r;
+        const x = c.x + Math.cos(a + this.viewRot) * r;
+        const y = c.y + Math.sin(a + this.viewRot) * r;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -623,7 +639,7 @@ export class ArenaRenderer {
     const k = 0.7 + 0.3 * Math.sin(nowMs / 80);
     ctx.save();
     ctx.translate(p.x, p.y);
-    ctx.rotate(b.a);
+    ctx.rotate(b.a + this.viewRot);
     ctx.strokeStyle = NEON;
     ctx.shadowColor = NEON;
     ctx.shadowBlur = S * 0.5;
@@ -685,7 +701,7 @@ export class ArenaRenderer {
     const p = toScreen(b.x, b.y);
     ctx.save();
     ctx.translate(p.x, p.y);
-    ctx.rotate(b.a);
+    ctx.rotate(b.a + this.viewRot);
     const debris = !b.owner;
     // Wreckage (dead ships, broken-off chunks) is dark and see-through so it never reads as a live,
     // damaged ship, and fades out over its last second.
