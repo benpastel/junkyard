@@ -113,8 +113,13 @@ export function Board(props: {
         ghost,
         cell,
         (c) => ({ color, variant: cellVariant(c.x, c.y), inactive: ghostValid && !isOpen(c), time }),
-        () => {
-          ctx.fillStyle = ghostValid ? "rgba(127, 201, 107, 0.22)" : "rgba(224, 80, 58, 0.38)";
+        (c) => {
+          // Squares hanging off the hull get a solid red wash so they read as outside.
+          ctx.fillStyle = !insideHull(hullRows, c.x, c.y)
+            ? "rgba(150, 30, 20, 0.75)"
+            : ghostValid
+              ? "rgba(127, 201, 107, 0.22)"
+              : "rgba(224, 80, 58, 0.38)";
           ctx.fillRect(0, 0, cell, cell);
         },
       );
@@ -133,6 +138,8 @@ export function Board(props: {
         if (!inGhost.has(cellKey(c.x + 1, c.y))) (ctx.moveTo(x0 + cell, y0), ctx.lineTo(x0 + cell, y0 + cell));
       }
       ctx.stroke();
+      // The hull's edge stays visible through the piece, so you can see what's in bounds.
+      drawRim(ctx, hullRows, cell, "#ff9a4a", 2.5);
     }
   });
 
@@ -257,8 +264,18 @@ function drawBay(ctx: CanvasRenderingContext2D, hullRows: string[], cell: number
   }
   ctx.restore();
 
-  ctx.strokeStyle = "#8f4520";
-  ctx.lineWidth = 2;
+  drawRim(ctx, hullRows, cell, "#8f4520", 2);
+}
+
+function insideHull(hullRows: string[], x: number, y: number): boolean {
+  return (hullRows[y]?.[x] ?? ".") !== ".";
+}
+
+/** The rusty line around the hull's outer edge. */
+function drawRim(ctx: CanvasRenderingContext2D, hullRows: string[], cell: number, color: string, width: number) {
+  const inside = (x: number, y: number) => insideHull(hullRows, x, y);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
   ctx.beginPath();
   hullRows.forEach((row, y) =>
     [...row].forEach((_, x) => {
