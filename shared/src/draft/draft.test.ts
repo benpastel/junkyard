@@ -108,10 +108,10 @@ describe("generatePiece", () => {
 });
 
 describe("Draft", () => {
-  const core = hullCore("hauler");
+  const core = hullCore("skiff");
 
   it("deals five offers and seeds the ship with a core", () => {
-    const d = new Draft({ playerIds: ["a", "b"], hull: "hauler", seed: 1 });
+    const d = new Draft({ playerIds: ["a", "b"], hull: "skiff", seed: 1 });
     const v = d.view("a");
     expect(v.offers).toHaveLength(OFFER_COUNT);
     // The cockpit: four core cells laid out like the arrow keys around the hull's C.
@@ -120,7 +120,7 @@ describe("Draft", () => {
   });
 
   it("keeps the hand while you hold a piece; placing deals a fresh hand", () => {
-    const d = new Draft({ playerIds: ["a", "b"], hull: "hauler", seed: 2 });
+    const d = new Draft({ playerIds: ["a", "b"], hull: "skiff", seed: 2 });
     const hand = d.view("a").offers.map((p) => p.id);
     expect(d.apply("a", { type: "takeOffer", pieceId: hand[0]! })).toBeNull();
     expect(d.view("a").held?.id).toBe(hand[0]);
@@ -143,7 +143,7 @@ describe("Draft", () => {
   });
 
   it("a reroll empties the hand until the new one is dealt", () => {
-    const d = new Draft({ playerIds: ["a"], hull: "hauler", seed: 3 });
+    const d = new Draft({ playerIds: ["a"], hull: "skiff", seed: 3 });
     const hand = d.view("a").offers.map((p) => p.id);
     d.apply("a", { type: "takeOffer", pieceId: hand[0]! });
     expect(d.apply("a", { type: "reroll" })).toBeNull();
@@ -161,7 +161,7 @@ describe("Draft", () => {
 
   it("has no shared pool while it's switched off", () => {
     if (POOL_ENABLED) return;
-    const d = new Draft({ playerIds: ["a", "b"], hull: "hauler", seed: 4 });
+    const d = new Draft({ playerIds: ["a", "b"], hull: "skiff", seed: 4 });
     d.apply("a", { type: "takeOffer", pieceId: d.view("a").offers[0]!.id });
     d.apply("a", { type: "place", ...findValidSpot(d, "a") });
     d.apply("a", { type: "reroll" });
@@ -169,7 +169,7 @@ describe("Draft", () => {
   });
 
   it("rejects off-hull, overlapping and detached placements", () => {
-    const d = new Draft({ playerIds: ["a"], hull: "hauler", seed: 4 });
+    const d = new Draft({ playerIds: ["a"], hull: "skiff", seed: 4 });
     d.apply("a", { type: "takeOffer", pieceId: d.view("a").offers[0]!.id });
     expect(d.apply("a", { type: "place", x: -3, y: -3, rot: 0, flip: false })).toBe("Off the hull");
     expect(d.apply("a", { type: "place", x: core.x, y: core.y, rot: 0, flip: false })).toMatch(/Overlaps|Off the hull/);
@@ -240,7 +240,7 @@ describe("dead space and fitting offers", () => {
   });
 
   it("only ever offers pieces that fit, and fills up to just dead space", { timeout: 30000 }, () => {
-    for (const hull of ["hauler", "crab", "station"] as const) {
+    for (const hull of ["skiff", "crab", "station"] as const) {
       const d = new Draft({ playerIds: ["b"], hull, seed: 21 });
       const rng = new Rng(4);
       const buildable = buildableSet(d.view("b").hullRows);

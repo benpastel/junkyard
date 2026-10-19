@@ -10,7 +10,7 @@ const BOTS = ["bot1", "bot2", "bot3"];
 
 export function SandboxDraft() {
   const params = new URLSearchParams(location.search);
-  const hull = (params.get("hull") as HullId | null) ?? "hauler";
+  const hull = (params.get("hull") as HullId | null) ?? "skiff";
   const seed = Number(params.get("seed") ?? 1);
 
   const draft = useMemo(() => new Draft({ playerIds: [ME, ...BOTS], hull, seed }), [hull, seed]);

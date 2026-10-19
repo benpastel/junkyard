@@ -10,20 +10,21 @@ export interface HullDef {
 }
 
 export const HULLS: Record<HullId, HullDef> = {
-  hauler: {
-    id: "hauler",
-    name: "Hauler",
+  // Small and pointed: the quickest build
+  skiff: {
+    id: "skiff",
+    name: "Skiff",
     tier: "small",
     rows: [
-      "....#....",
-      "..#####..",
-      ".#######.",
-      ".#######.",
-      ".###C###.",
-      "#########",
-      "#########",
-      "#########",
-      "###...###",
+      ".....#.....",
+      "....###....",
+      "...#####...",
+      "...#####...",
+      "..#######..",
+      ".####C####.",
+      "###########",
+      "###########",
+      "####...####",
     ],
   },
   // Hammerhead shark: a wide bar across the nose
@@ -62,22 +63,6 @@ export const HULLS: Record<HullId, HullDef> = {
       "....###....",
     ],
   },
-  barge: {
-    id: "barge",
-    name: "Barge",
-    tier: "small",
-    rows: [
-      ".....#.....",
-      "....###....",
-      "...#####...",
-      "...#####...",
-      "..#######..",
-      ".####C####.",
-      "###########",
-      "###########",
-      "####...####",
-    ],
-  },
   // Twin hulls joined by a bridge
   catamaran: {
     id: "catamaran",
@@ -92,6 +77,23 @@ export const HULLS: Record<HullId, HullDef> = {
       "####...####",
       "###.....###",
       "###.....###",
+    ],
+  },
+  // A V of swept-back wings with nothing behind the cockpit
+  chevron: {
+    id: "chevron",
+    name: "Chevron",
+    tier: "small",
+    rows: [
+      "......#......",
+      "....#####....",
+      "...#######...",
+      "..####C####..",
+      ".#####.#####.",
+      "#####...#####",
+      "####.....####",
+      "###.......###",
+      "##.........##",
     ],
   },
   // Wide body with two forward pincers

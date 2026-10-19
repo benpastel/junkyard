@@ -1,5 +1,5 @@
 // Headless rounds: bots draft ships, then bots fight to the end. For tuning and catching edge cases.
-// Usage: npx tsx scripts/simulate.ts [rounds=10] [players=4] [hull=hauler|random] [idle=0|1|mixed]
+// Usage: npx tsx scripts/simulate.ts [rounds=10] [players=4] [hull=skiff|random] [idle=0|1|mixed]
 // idle=1: nobody steers or shoots, so the ring decides everything. mixed: half the ships idle.
 import { HULL_IDS, PLAYER_COLORS, Rng, type HullId } from "@ja/shared";
 import { Draft, draftBotAction } from "@ja/shared/draft";
@@ -7,7 +7,7 @@ import { Arena, TICK_HZ, arenaBotInput, initPhysics } from "@ja/shared/sim";
 
 const rounds = Number(process.argv[2] ?? 10);
 const players = Number(process.argv[3] ?? 4);
-const hullArg = process.argv[4] ?? "hauler";
+const hullArg = process.argv[4] ?? "skiff";
 const idleArg = process.argv[5] ?? "0";
 /** Bot draft actions per player: a 60s build at one action every ~2.25s. */
 const DRAFT_ACTIONS = 27;

@@ -25,7 +25,7 @@ await page.getByRole("button", { name: /new table/i }).click();
 await page.waitForSelector(".share-row");
 // New tables start with 3 bots.
 await page.getByRole("button", { name: "Frantic" }).click();
-await page.getByRole("button", { name: "Hauler" }).click();
+await page.getByRole("button", { name: "Skiff" }).click();
 await page.getByLabel("Chat message").fill("ready to scrap");
 await page.keyboard.press("Enter");
 await page.waitForTimeout(300);
@@ -48,14 +48,14 @@ await shot("04-draft");
 
 // Build: take offers and click around the core until each one lands.
 const board = await page.locator(".draft-board canvas").boundingBox();
-const cols = 9; // hauler hull
+const cols = 11; // skiff hull
 const PAD = 1; // board margin in cells (see Board.tsx)
 const cell = board.width / (cols + PAD * 2);
 board.x += PAD * cell;
 board.y += PAD * cell;
 const spots = [];
-for (let y = 0; y < cols; y++) for (let x = 0; x < cols; x++) spots.push([x, y]);
-spots.sort((a, b) => Math.hypot(a[0] - 4, a[1] - 4) - Math.hypot(b[0] - 4, b[1] - 4));
+for (let y = 0; y < 9; y++) for (let x = 0; x < cols; x++) spots.push([x, y]);
+spots.sort((a, b) => Math.hypot(a[0] - 5, a[1] - 5) - Math.hypot(b[0] - 5, b[1] - 5));
 let placed = 0;
 for (let piece = 0; piece < 8; piece++) {
   const offer = page.locator(".draft-offers .piece-card").first();

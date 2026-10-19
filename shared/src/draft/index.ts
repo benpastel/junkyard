@@ -155,7 +155,7 @@ export class Draft {
     for (const [id, other] of this.players) {
       if (id !== playerId) rivals.push({ playerId: id, hullRows: HULLS[other.hull].rows, cells: other.cells.slice() });
     }
-    const hull = p?.hull ?? "hauler";
+    const hull = p?.hull ?? "skiff";
     return {
       hull,
       hullRows: HULLS[hull].rows,

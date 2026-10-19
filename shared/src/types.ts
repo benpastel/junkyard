@@ -58,7 +58,7 @@ export const NO_INPUT: InputState = {
   grapple: false,
 };
 
-export const HULL_IDS = ["hauler", "hammerhead", "starfish", "barge", "catamaran", "crab", "trident", "wing", "panels", "strike", "station", "wedge", "manta", "saucer", "dreadnought"] as const;
+export const HULL_IDS = ["skiff", "hammerhead", "starfish", "catamaran", "chevron", "crab", "trident", "wing", "panels", "strike", "station", "wedge", "manta", "saucer", "dreadnought"] as const;
 export type HullId = (typeof HULL_IDS)[number];
 
 export const HULL_TIERS = ["small", "medium", "large"] as const;
