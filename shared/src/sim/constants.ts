@@ -22,8 +22,8 @@ export const CELL_HP: Record<CellType, number> = {
 /** Arena tuning. Times are in seconds, distances in cells (= world units), forces in mass·units/s². */
 export const SIM = {
   cellDensity: 1,
-  linearDamping: 0.4,
-  angularDamping: 1.2,
+  linearDamping: 1.0,
+  angularDamping: 3,
 
   engineForce: 65,
   engineRampSeconds: 0.15,
@@ -32,7 +32,7 @@ export const SIM = {
   laserCooldownSeconds: 2.0,
   /**
    * Just short of the nearest window edge from your ship: the arena view always shows at least
-   * VIEW_CELLS / 1.4 / 2 ≈ 13.6 cells each way (client/src/arena/renderer.ts). Keep them in step.
+   * VIEW_CELLS / 1.4 / 2 ≈ 15.7 cells each way (client/src/arena/renderer.ts). Keep them in step.
    */
   laserRange: 12,
   /** Hits dealt per laser shot. */

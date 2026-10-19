@@ -23,7 +23,7 @@ const BARREL_TIP = 0.97;
 /** Seconds the view lags behind the newest snapshot, so there's always a pair to interpolate between. */
 const RENDER_DELAY = 0.1;
 /** Visible width of the world at the default zoom, in cells. */
-const VIEW_CELLS = 38;
+const VIEW_CELLS = 44;
 /** Free-camera pan speed, and how far past the ring's edge it may wander. */
 const PAN_CELLS_PER_SECOND = 24;
 const PAN_LEASH_CELLS = 6;

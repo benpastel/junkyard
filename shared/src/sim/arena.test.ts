@@ -42,7 +42,7 @@ describe("arena", () => {
   it("lasers destroy cells and kill the target", () => {
     // Two ships spawn facing each other across the origin, out of laser range. Close in, then fire.
     const a = new Arena({ ships: [bp("a", ["i", "C", "^"]), bp("b", ["#", "C"])], seed: 1 });
-    run(a, 40, { a: { ...NO_INPUT, up: true } });
+    run(a, 70, { a: { ...NO_INPUT, up: true } });
     run(a, TICK_HZ * 8, { a: { ...NO_INPUT, laser: true } });
     const b = a.ship("b")!;
     expect(b.cellsLost).toBeGreaterThan(0);
@@ -145,7 +145,9 @@ describe("arena", () => {
   /** Squeezes two ships nose to nose with a fast-closing ring; returns each ship's first crush tick. */
   function squeeze(rowsA: string[], rowsB: string[]) {
     const saved = { ...SIM };
-    Object.assign(SIM, { ringDelaySeconds: 0, ringShrinkSeconds: 12 });
+    // The damping these scenarios were staged with, so the ships meet the same way whatever
+    // the flight tuning is.
+    Object.assign(SIM, { ringDelaySeconds: 0, ringShrinkSeconds: 12, linearDamping: 0.4, angularDamping: 1.2 });
     try {
       const a = new Arena({ ships: [bp("a", rowsA), bp("b", rowsB)], seed: 1 });
       const first: Record<string, number> = {};
