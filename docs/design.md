@@ -136,7 +136,7 @@ Expect ~50–100ms of input lag. Hide it with game feel:
 
 - Build screen on phones (< 720px wide): status bar (timer, Done, fullscreen), offers (smaller than the board), board, then the buttons at the bottom. A touched piece floats 1.2 squares above the finger. Sized with `100dvh` so the page never scrolls under a drag.
 - Fight on touch screens: a big copy of the cockpit's arrow keys bottom left (hold to fire; dead directions grey).
-- A compass rose (top right) turns with the view; north is the way your ship faced at the start.
+- A compass rose (top right) turns with the view; north is the way your ship faced at the start. Clicking it toggles the fixed-north view (the rose glows yellow while fixed); every fight starts ship-up.
 - While building, cockpit arrows with no engine yet carry a red X; hovering a piece that would add one clears it and lights the arrow.
 - Camera is ship-up only for now; the fixed-north view is still in the code behind `CAMERA_SWITCHING`.
 - Fullscreen: a button (top right of the fight, right column / phone status bar while building). No shortcut key, so it can't be hit by accident; Esc or the back gesture leaves. Hidden where unsupported (iPhone Safari).

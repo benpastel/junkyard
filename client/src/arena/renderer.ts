@@ -87,6 +87,11 @@ interface Star {
   b: number;
 }
 
+/** The compass rose's size and spot (top right, under the fullscreen button), in CSS pixels. */
+export const COMPASS_RADIUS = 40;
+export const COMPASS_MARGIN = 12;
+export const COMPASS_TOP = 62;
+
 export class ArenaRenderer {
   private readonly cellInfo = new Map<number, CellInfo>();
   private readonly shipInfo = new Map<PlayerId, { name: string; color: string; bodyId: number }>();
@@ -195,47 +200,53 @@ export class ArenaRenderer {
   /**
    * A compass rose in the top-right corner (under the fullscreen button). North is the way your
    * ship faced at the start, so as the view turns with your ship the rose shows how far round
-   * you've come.
+   * you've come. Clicking it (see ArenaScreen) switches to the fixed-north view, where it's lit.
    */
   private drawCompass(ctx: CanvasRenderingContext2D, w: number) {
-    const r = 26;
-    const cx = w - 12 - r;
-    const cy = 64 + r;
+    const r = COMPASS_RADIUS;
+    const cx = w - COMPASS_MARGIN - r;
+    const cy = COMPASS_TOP + r;
+    const fixed = this.cameraMode === "north";
     ctx.save();
     ctx.translate(cx, cy);
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(12, 14, 18, 0.6)";
+    ctx.fillStyle = fixed ? "rgba(42, 38, 24, 0.85)" : "rgba(12, 14, 18, 0.6)";
     ctx.fill();
-    ctx.strokeStyle = "rgba(160, 200, 230, 0.25)";
-    ctx.lineWidth = 1;
+    if (fixed) {
+      ctx.shadowColor = "rgba(224, 178, 58, 0.6)";
+      ctx.shadowBlur = 14;
+    }
+    ctx.strokeStyle = fixed ? "#e0b23a" : "rgba(160, 200, 230, 0.25)";
+    ctx.lineWidth = fixed ? 2.5 : 1;
     ctx.stroke();
+    ctx.shadowBlur = 0;
     ctx.rotate(this.viewRot - this.northRot);
     // Ticks every 45 degrees, then the four points; north is long and red.
     ctx.strokeStyle = "rgba(160, 200, 230, 0.35)";
     for (let i = 0; i < 8; i++) {
       const a = (i * Math.PI) / 4;
       ctx.beginPath();
-      ctx.moveTo(Math.sin(a) * (r - 5), -Math.cos(a) * (r - 5));
-      ctx.lineTo(Math.sin(a) * (r - 1), -Math.cos(a) * (r - 1));
+      ctx.moveTo(Math.sin(a) * (r - 7), -Math.cos(a) * (r - 7));
+      ctx.lineTo(Math.sin(a) * (r - 2), -Math.cos(a) * (r - 2));
       ctx.stroke();
     }
     for (let i = 0; i < 4; i++) {
       const north = i === 0;
-      const len = north ? r - 4 : r - 10;
+      const len = north ? r - 6 : r - 15;
       ctx.save();
       ctx.rotate((i * Math.PI) / 2);
       ctx.beginPath();
       ctx.moveTo(0, -len);
-      ctx.lineTo(4, 0);
-      ctx.lineTo(-4, 0);
+      ctx.lineTo(6, 0);
+      ctx.lineTo(-6, 0);
       ctx.closePath();
       ctx.fillStyle = north ? "#e0503a" : "rgba(200, 210, 220, 0.55)";
       ctx.fill();
       ctx.restore();
     }
     ctx.beginPath();
-    ctx.arc(0, 0, 2, 0, Math.PI * 2);
+    ctx.arc(0, 0, 3, 0, Math.PI * 2);
     ctx.fillStyle = "#c9ced4";
     ctx.fill();
     ctx.restore();

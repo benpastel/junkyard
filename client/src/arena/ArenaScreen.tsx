@@ -8,7 +8,7 @@ import {
 import { FullscreenButton } from "../ui/FullscreenButton";
 import { KeyButton } from "../ui/KeyButton";
 import { loadCameraMode, saveCameraMode } from "./cameraPref";
-import { ArenaRenderer, type CameraMode } from "./renderer";
+import { ArenaRenderer, COMPASS_MARGIN, COMPASS_RADIUS, COMPASS_TOP, type CameraMode } from "./renderer";
 import "./arena.css";
 
 /** Keyboard layout. Arrow keys fire engines facing that way; letters fire weapons. Lasers fire on their own. */
@@ -147,6 +147,15 @@ export function ArenaScreen(props: {
     <div className="arena">
       <canvas ref={canvasRef} className="arena-canvas" />
       <FullscreenButton className="arena-fullscreen" />
+      <button
+        type="button"
+        className={`arena-compass${camera === "north" ? " on" : ""}`}
+        aria-label={camera === "north" ? "Turn the view with your ship" : "Fix the view"}
+        aria-pressed={camera === "north"}
+        style={{ top: COMPASS_TOP, right: COMPASS_MARGIN, width: COMPASS_RADIUS * 2, height: COMPASS_RADIUS * 2 }}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={toggleCamera}
+      />
       <div className="arena-pips">
         {pips.map((p, i) => (
           <span
