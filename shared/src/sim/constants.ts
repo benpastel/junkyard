@@ -17,6 +17,7 @@ export const CELL_HP: Record<CellType, number> = {
   saw: HITS_TO_BREAK,
   mirror: HITS_TO_BREAK,
   armor: HITS_TO_BREAK,
+  rock: HITS_TO_BREAK,
 };
 
 /** Arena tuning. Times are in seconds, distances in cells (= world units), forces in mass·units/s². */
@@ -100,6 +101,24 @@ export const SIM = {
   stuckKnockbackSpeed: 5,
   /** Cells further than this beyond the ring's outer face are crushed. */
   outsideMargin: 1,
+
+  /**
+   * Asteroids: lumps of rock scattered through the arena at the start, drifting slowly. Lasers
+   * and saws chip them; hitting one fast hurts like any impact. About this many per square cell
+   * of the starting arena (~1.5 on a laptop screen's worth of space).
+   */
+  rocksPerArea: 0.0011,
+  rockMinRadius: 2.6,
+  rockMaxRadius: 3.8,
+  /** Keep rocks this far (plus their radius) from where ships spawn, and from each other. */
+  rockSpawnClearance: 9,
+  rockGap: 4,
+  rockMaxDrift: 0.8,
+  rockMaxSpin: 0.3,
+  rockLinearDamping: 0.05,
+  rockAngularDamping: 0.1,
+  /** Chunks knocked off a rock stay rock if at least this big; smaller ones are short-lived rubble. */
+  rockMinCells: 4,
 
   /** Power-up orb at the arena centre from the start, once per fight: grab it and your whole hull reflects lasers for a while. */
   /** Picked up when any cell centre comes this close to the orb. */

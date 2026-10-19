@@ -32,6 +32,12 @@ export interface InitShip {
   cells: InitCell[];
 }
 
+/** An asteroid at the start of the fight (owned by nobody, never despawns). */
+export interface InitRock {
+  bodyId: number;
+  cells: InitCell[];
+}
+
 export interface RingParams {
   startRadius: number;
   minRadius: number;
@@ -41,6 +47,7 @@ export interface RingParams {
 export interface ArenaInit {
   ships: InitShip[];
   ring: RingParams;
+  rocks: InitRock[];
   /** Ticks at the start during which everything is frozen while a countdown shows. */
   countdownTicks: number;
 }
@@ -70,6 +77,8 @@ export interface BodySnap {
   chg?: [number, number][];
   /** Present (1) while the power-up's mirror skin is on: every outer surface reflects lasers. */
   mir?: 1;
+  /** Present (1) on asteroids (rock that stays), as opposed to wreckage that fades. */
+  rock?: 1;
 }
 
 export interface HookSnap {

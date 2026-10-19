@@ -14,7 +14,7 @@ import {
   angleDiff,
 } from "@ja/shared/sim/view";
 import { openChecker } from "@ja/shared";
-import { NEON, cockpitOrigin, drawCellPart, drawCellPlate, drawCockpit, mirrorSidesOf, type CellStyle } from "../art/cells";
+import { NEON, cockpitOrigin, drawCellPart, drawCellPlate, drawCockpit, drawRockCell, mirrorSidesOf, type CellStyle } from "../art/cells";
 
 /** Where the engine bell ends and the laser barrel tip sits, in cells from the cell centre (see art/cells.ts). */
 const NOZZLE_END = 0.67;
@@ -66,8 +66,10 @@ export type Look = "current" | "sky" | "sky-fg" | "sky-grid" | "sky-half";
 const LOOKS: Look[] = ["current", "sky", "sky-fg", "sky-grid", "sky-half"];
 const LOOK: Look = (() => {
   const q = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("look");
-  return LOOKS.includes(q as Look) ? (q as Look) : "current";
+  return LOOKS.includes(q as Look) ? (q as Look) : "sky";
 })();
+/** How far the far sky slides (as a fraction of its radius) between the arena centre and the ring's start. */
+const SKY_SHIFT = 0.01;
 /** Foreground rocks: how much faster than the play plane they slide, and how sparse they are. */
 const FG_DEPTH = 1.8;
 const FG_CELL = 26;
@@ -176,6 +178,11 @@ export class ArenaRenderer {
       for (const c of s.cells) this.cellInfo.set(c.cid, { ...c, color: s.color });
       this.bodyCells.set(s.bodyId, { cells: s.cells.map((c) => c.cid), dmg: s.cells.map(() => 0) });
       for (const c of s.cells) this.cidBody.set(c.cid, s.bodyId);
+    }
+    for (const r of init.rocks ?? []) {
+      for (const c of r.cells) this.cellInfo.set(c.cid, { ...c, color: "#4a4540" });
+      this.bodyCells.set(r.bodyId, { cells: r.cells.map((c) => c.cid), dmg: r.cells.map(() => 0) });
+      for (const c of r.cells) this.cidBody.set(c.cid, r.bodyId);
     }
     for (let i = 0; i < 1400; i++) {
       const rr = Math.sqrt(this.fx());
@@ -751,8 +758,12 @@ export class ArenaRenderer {
   /** The whole far sky as one layer: the backdrop disc and its stars, turning with the view and never sliding. */
   private drawSky(ctx: CanvasRenderingContext2D, w: number, h: number) {
     const d = Math.hypot(w, h) * BACKDROP_SCALE;
+    // Very far, so it slides only a touch as you fly (in screen space, so it turns with the view).
+    const k = (-SKY_SHIFT * (d / 2)) / Math.max(1, this.init.ring.startRadius);
+    const c = Math.cos(this.viewRot);
+    const sn = Math.sin(this.viewRot);
     ctx.save();
-    ctx.translate(w / 2, h / 2);
+    ctx.translate(w / 2 + (this.camera.x * c - this.camera.y * sn) * k, h / 2 + (this.camera.x * sn + this.camera.y * c) * k);
     ctx.rotate(this.viewRot);
     const img = this.backdrop;
     if (img.complete && img.naturalWidth > 0) ctx.drawImage(img, -d / 2, -d / 2, d, d);
@@ -1099,7 +1110,19 @@ export class ArenaRenderer {
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(b.a + this.viewRot);
-    const debris = !b.owner;
+    // Asteroids stay solid; wreckage (and rubble chipped off rocks) fades.
+    const debris = !b.owner && !b.snap.rock;
+    const rockKeys = new Set<string>();
+    for (const cid of cells.cells) {
+      const c = this.cellInfo.get(cid);
+      if (c?.type === "rock") rockKeys.add(`${c.x},${c.y}`);
+    }
+    const rockOpen = (c: CellInfo) => [
+      !rockKeys.has(`${c.x},${c.y - 1}`),
+      !rockKeys.has(`${c.x + 1},${c.y}`),
+      !rockKeys.has(`${c.x},${c.y + 1}`),
+      !rockKeys.has(`${c.x - 1},${c.y}`),
+    ];
     // Wreckage (dead ships, broken-off chunks) is dark and see-through so it never reads as a live,
     // damaged ship, and fades out over its last second.
     if (debris) {
@@ -1134,9 +1157,11 @@ export class ArenaRenderer {
         const c = this.cellInfo.get(cid);
         if (!c) return;
         if (!pass && cockpit && c.type === "core") return;
+        if (!pass && c.type === "rock") return;
         ctx.save();
         ctx.translate((c.x - 0.5) * S, (c.y - 0.5) * S);
-        if (pass) pass(ctx, S, style(c, i));
+        if (pass && c.type === "rock") drawRockCell(ctx, S, Math.imul(c.cid, 2654435761) >>> 0, rockOpen(c));
+        else if (pass) pass(ctx, S, style(c, i));
         else drawCellPart(ctx, c.type, c.dir, S, style(c, i));
         ctx.restore();
       });

@@ -12,6 +12,7 @@ import {
   type ArenaSnapshot,
   type BodySnap,
   type HookSnap,
+  type InitRock,
   type InitShip,
 } from "./view.js";
 import type { ArenaSetup } from "./index.js";
@@ -52,7 +53,7 @@ export interface SimCell {
 
 export interface SimBody {
   id: number;
-  kind: "ship" | "debris";
+  kind: "ship" | "debris" | "rock";
   owner: PlayerId | null;
   rb: RigidBody | null;
   cells: SimCell[];
@@ -218,12 +219,91 @@ export class Arena {
       });
     });
     this.startedShips = this.ships.length;
+    const spawns = this.ships.map((s) => s.body.rb!.translation());
+    const rocks = this.spawnRocks(spawns, cid);
     this.buildWalls();
     this.initInfo = {
       ships: initShips,
       ring: { startRadius: this.ringStart, minRadius: SIM.ringMinRadius },
+      rocks,
       countdownTicks: this.countdownTicks,
     };
+  }
+
+  /**
+   * Scatters asteroids through the arena: lumpy discs of rock cells, clear of the spawn points,
+   * the centre and each other, drifting and turning slowly. Seeded, so replays match.
+   */
+  private spawnRocks(spawns: { x: number; y: number }[], firstCid: number): InitRock[] {
+    const out: InitRock[] = [];
+    const area = Math.PI * (this.ringStart * 0.85) ** 2;
+    const count = Math.round(area * SIM.rocksPerArea);
+    const placed: { x: number; y: number; r: number }[] = [];
+    let cid = firstCid;
+    for (let n = 0, tries = 0; n < count && tries < count * 60; tries++) {
+      const r = SIM.rockMinRadius + this.rng.next() * (SIM.rockMaxRadius - SIM.rockMinRadius);
+      const dist = Math.sqrt(this.rng.next()) * (this.ringStart * 0.85 - r);
+      const ang = this.rng.next() * Math.PI * 2;
+      const x = Math.cos(ang) * dist;
+      const y = Math.sin(ang) * dist;
+      if (Math.hypot(x, y) < r + 5) continue; // the power-up sits at the centre
+      if (spawns.some((p) => Math.hypot(p.x - x, p.y - y) < SIM.rockSpawnClearance + r)) continue;
+      if (placed.some((p) => Math.hypot(p.x - x, p.y - y) < p.r + r + SIM.rockGap)) continue;
+      placed.push({ x, y, r });
+      n++;
+      // A lumpy outline: the radius wobbles with a couple of random harmonics round the rim.
+      const h = [0, 1, 2].map(() => ({ k: 2 + Math.floor(this.rng.next() * 3), amp: 0.12 + this.rng.next() * 0.18, ph: this.rng.next() * 6.3 }));
+      const rimAt = (a: number) => r * (1 + h.reduce((s, q) => s + q.amp * Math.sin(q.k * a + q.ph), 0) * 0.5);
+      const inside = new Set<string>();
+      const R = Math.ceil(r * 1.4);
+      for (let gx = -R; gx <= R; gx++) for (let gy = -R; gy <= R; gy++) if (Math.hypot(gx, gy) <= rimAt(Math.atan2(gy, gx))) inside.add(`${gx},${gy}`);
+      // Only the part joined to the middle.
+      const keep: [number, number][] = [];
+      const stack: [number, number][] = [[0, 0]];
+      const seen = new Set(["0,0"]);
+      while (stack.length) {
+        const [px, py] = stack.pop()!;
+        keep.push([px, py]);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const k = `${px + dx},${py + dy}`;
+          if (inside.has(k) && !seen.has(k)) {
+            seen.add(k);
+            stack.push([px + dx, py + dy]);
+          }
+        }
+      }
+      // Trim thin spikes: cells hanging on by one side.
+      for (let pass = 0; pass < 2; pass++) {
+        const set = new Set(keep.map(([px, py]) => `${px},${py}`));
+        const n = (px: number, py: number) => [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => set.has(`${px + dx!},${py + dy!}`)).length;
+        const trimmed = keep.filter(([px, py]) => (px === 0 && py === 0) || n(px, py) >= 2);
+        keep.length = 0;
+        keep.push(...trimmed);
+      }
+      const drift = this.rng.next() * SIM.rockMaxDrift;
+      const da = this.rng.next() * Math.PI * 2;
+      const body = this.newBody("rock", null, x, y, this.rng.next() * Math.PI * 2, Math.cos(da) * drift, Math.sin(da) * drift, (this.rng.next() * 2 - 1) * SIM.rockMaxSpin);
+      const cells: SimCell[] = keep.map(([cx, cy]) => ({
+        cid: cid++,
+        x: cx,
+        y: cy,
+        type: "rock",
+        dir: 0,
+        piece: undefined,
+        hp: CELL_HP.rock,
+        maxHp: CELL_HP.rock,
+        alive: true,
+        collider: null,
+        blade: null,
+        body: null,
+        thrust: 0,
+        charge: 0,
+        cooldown: 0,
+      }));
+      for (const c of cells) this.attachCell(body, c);
+      out.push({ bodyId: body.id, cells: cells.map((c) => ({ cid: c.cid, x: c.x, y: c.y, type: c.type, dir: c.dir, piece: c.piece })) });
+    }
+    return out;
   }
 
   // ---------------------------------------------------------------- public API
@@ -365,6 +445,7 @@ export class Arena {
         const ship = this.shipOf(b);
         if (ship && ship.mirroredUntil > this.tickCount) s.mir = 1;
       }
+      if (b.kind === "rock") s.rock = 1;
       bodies.push(s);
     }
     const hooks: HookSnap[] = this.hooks.map((h) => ({ from: h.from.cid, to: h.to.cid, ox: r3(h.ox), oy: r3(h.oy) }));
@@ -435,8 +516,8 @@ export class Arena {
       .setRotation(a)
       .setLinvel(vx, vy)
       .setAngvel(w)
-      .setLinearDamping(SIM.linearDamping)
-      .setAngularDamping(kind === "ship" ? SIM.angularDamping : SIM.angularDamping * 0.3)
+      .setLinearDamping(kind === "rock" ? SIM.rockLinearDamping : SIM.linearDamping)
+      .setAngularDamping(kind === "ship" ? SIM.angularDamping : kind === "rock" ? SIM.rockAngularDamping : SIM.angularDamping * 0.3)
       .setCcdEnabled(true);
     const body: SimBody = {
       id: this.nextBodyId++,
@@ -581,14 +662,28 @@ export class Arena {
     }
 
     const groups = components(alive);
+    // A rock worn down below a chunk's size crumbles to rubble.
+    if (b.kind === "rock" && groups.length === 1 && alive.length < SIM.rockMinCells) {
+      this.spawnDebris(b, alive);
+      this.removeBody(b);
+      return;
+    }
     if (groups.length <= 1) return;
     let keep: SimCell[];
     if (ship) keep = groups.find((g) => g.some((c) => ship.cockpit.includes(c))) ?? groups[0]!;
     else keep = groups.reduce((a, g) => (g.length > a.length ? g : a));
-    for (const g of groups) if (g !== keep) this.spawnDebris(b, g);
+    for (const g of groups) {
+      if (g === keep) continue;
+      // Big chunks of a broken rock are rocks themselves; small bits are rubble.
+      this.spawnDebris(b, g, b.kind === "rock" && g.length >= SIM.rockMinCells ? "rock" : "debris");
+    }
+    if (b.kind === "rock" && keep.length < SIM.rockMinCells) {
+      this.spawnDebris(b, keep);
+      this.removeBody(b);
+    }
   }
 
-  private spawnDebris(from: SimBody, group: SimCell[]) {
+  private spawnDebris(from: SimBody, group: SimCell[], kind: "debris" | "rock" = "debris") {
     const rb = from.rb!;
     const t = rb.translation();
     const a = rb.rotation();
@@ -600,7 +695,7 @@ export class Arena {
     }
     const centroid = localToWorld(t.x, t.y, a, sx / group.length, sy / group.length);
     const v = rb.velocityAtPoint(centroid);
-    const d = this.newBody("debris", null, t.x, t.y, a, v.x, v.y, rb.angvel());
+    const d = this.newBody(kind, null, t.x, t.y, a, v.x, v.y, rb.angvel());
     for (const c of group) {
       this.detachCell(c);
       this.attachCell(d, c);

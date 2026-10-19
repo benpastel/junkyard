@@ -384,6 +384,40 @@ export function drawCockpit(ctx: CanvasRenderingContext2D, size: number, style: 
   ctx.restore();
 }
 
+const ROCK = ["#4a4540", "#443f3a", "#4d4842", "#403c38"];
+
+/**
+ * One cell of an asteroid, filling (0,0)-(size,size): rough stone that merges with its rock
+ * neighbours, with a dark rim only on the sides open to space (`open`: up, right, down, left).
+ */
+export function drawRockCell(ctx: CanvasRenderingContext2D, size: number, variant: number, open: readonly boolean[]) {
+  const v = Math.abs(variant);
+  ctx.save();
+  ctx.scale(size, size);
+  const d = pen(ctx);
+  const [up, right, down, left] = open;
+  // Outer corners (both sides open) are rounded off so the rock reads as stone, not plating.
+  // The dark rim is the outline; the stone is the same shape pulled in from the open sides.
+  const lip = 0.12;
+  const shape = (inset: number, fill: string) => {
+    const x0 = left ? inset : -0.02;
+    const y0 = up ? inset : -0.02;
+    const x1 = right ? 1 - inset : 1.02;
+    const y1 = down ? 1 - inset : 1.02;
+    const r = 0.5 - inset;
+    ctx.beginPath();
+    ctx.roundRect(x0, y0, x1 - x0, y1 - y0, [up && left ? r : 0, up && right ? r : 0, down && right ? r : 0, down && left ? r : 0]);
+    ctx.fillStyle = fill;
+    ctx.fill();
+  };
+  if (up || right || down || left) shape(0, "#25221f");
+  shape(lip, ROCK[v % ROCK.length]!);
+  if (v % 3 === 0) d.circle(0.3 + ((v >>> 2) % 5) * 0.1, 0.35 + ((v >>> 4) % 4) * 0.1, 0.14, "#36322e");
+  if (v % 5 === 1) d.circle(0.65, 0.6, 0.09, "#38342f");
+  d.circle(0.2 + ((v >>> 3) % 6) * 0.12, 0.75, 0.05, "#5a544c");
+  ctx.restore();
+}
+
 /** Darken (amount < 0) or lighten a #rrggbb colour. */
 function shade(hex: string, amount: number): string {
   const n = parseInt(hex.slice(1), 16);

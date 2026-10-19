@@ -10,6 +10,8 @@ beforeAll(async () => {
   SIM.countdownSeconds = 0;
   SIM.spawnMinRadius = 14;
   SIM.spawnRadiusPerShip = 4.5;
+  // An empty arena: asteroids get their own test below.
+  SIM.rocksPerArea = 0;
 });
 
 function bp(id: string, rows: string[]): ShipBlueprint {
@@ -325,5 +327,33 @@ describe("arena", () => {
     expect(res.map((r) => r.place)).toEqual([1, 2, 3, 4]);
     expect(ticks).toBeLessThan(TICK_HZ * 151);
     a.dispose();
+  });
+  it("scatters asteroids clear of the spawn points, and lasers chip them", () => {
+    const saved = SIM.rocksPerArea;
+    SIM.rocksPerArea = 0.0011;
+    try {
+      const ships = ["a", "b", "c", "d"].map((id) => bp(id, ["#C#", "^#^"]));
+      const a = new Arena({ ships, seed: 3 });
+      const rocks = a.bodies.filter((b) => b.kind === "rock");
+      expect(rocks.length).toBeGreaterThan(3);
+      expect(a.init().rocks.length).toBe(rocks.length);
+      for (const r of rocks) {
+        const p = r.rb!.translation();
+        for (const s of a.ships) {
+          const q = s.body.rb!.translation();
+          expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeGreaterThan(SIM.rockSpawnClearance);
+        }
+      }
+      // Every rock cell is a rock; damage one rock's middle row away and it splits or shrinks.
+      const r = rocks[0]!;
+      const before = r.cells.length;
+      const touched = new Set([r]);
+      for (const c of r.cells.filter((c) => c.y === 0)) (a as any).damageCell(c, 1, null, touched, "test");
+      (a as any).splitBody(r);
+      expect(r.cells.length).toBeLessThan(before);
+      a.dispose();
+    } finally {
+      SIM.rocksPerArea = saved;
+    }
   });
 });
