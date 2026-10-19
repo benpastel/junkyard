@@ -131,3 +131,10 @@ Expect ~50–100ms of input lag. Hide it with game feel:
 1. **Local arena sandbox.** Hard-coded ship layouts, Rapier in the browser, arrow keys fire engines, a dummy target. Tests whether the ships are fun to fly.
 2. Networking: move the sim to the server.
 3. Draft phase, bots, lobby, stats.
+
+## Phones and fullscreen
+
+- Build screen on phones (< 720px wide): status bar (timer, Done, fullscreen), offers (smaller than the board), board, then the buttons at the bottom. A touched piece floats 1.2 squares above the finger. Sized with `100dvh` so the page never scrolls under a drag.
+- Fight on touch screens: a big copy of the cockpit's arrow keys bottom left (hold to fire; dead directions grey).
+- Camera is ship-up only for now; the fixed-north view is still in the code behind `CAMERA_SWITCHING`.
+- Fullscreen: a button (top right of the fight, right column / phone status bar while building). No shortcut key, so it can't be hit by accident; Esc or the back gesture leaves. Hidden where unsupported (iPhone Safari).

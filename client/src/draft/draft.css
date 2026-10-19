@@ -345,3 +345,12 @@
 .draft.compact .draft-tools {
   order: 3;
 }
+
+.draft-fullscreen {
+  align-self: flex-end;
+}
+
+/* Done sits next to the fullscreen button at the right of the phone status bar. */
+.draft-status-bar .draft-timer {
+  margin-right: auto;
+}

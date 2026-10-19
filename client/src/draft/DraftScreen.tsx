@@ -17,6 +17,7 @@ import {
 import { BOARD_PAD, Board, type DragState } from "./Board";
 import { PIECE_PAD, PieceCanvas } from "./PieceCanvas";
 import { RivalShip } from "./RivalShip";
+import { FullscreenButton } from "../ui/FullscreenButton";
 import { KeyButton } from "../ui/KeyButton";
 import "./draft.css";
 
@@ -284,6 +285,7 @@ export function DraftScreen(props: {
       {compact && (
         <div className="draft-status-bar" ref={statusRef}>
           {status}
+          <FullscreenButton />
         </div>
       )}
       <section className="draft-hand">
@@ -388,6 +390,7 @@ export function DraftScreen(props: {
 
         {!compact && (
           <aside className="draft-side">
+            <FullscreenButton className="draft-fullscreen" />
             {POOL_ENABLED && (
               <section className="draft-pool-section">
                 <div className="draft-pool">

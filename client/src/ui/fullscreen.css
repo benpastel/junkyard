@@ -1,0 +1,18 @@
+.fullscreen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--text-dim);
+  background: rgba(12, 14, 18, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fullscreen-btn:hover {
+  color: var(--text);
+  border-color: var(--line-2);
+}
