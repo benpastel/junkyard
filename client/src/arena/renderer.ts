@@ -14,6 +14,7 @@ import {
   angleDiff,
 } from "@ja/shared/sim/view";
 import { openChecker } from "@ja/shared";
+import { SIM } from "@ja/shared/sim/constants";
 import { NEON, cockpitOrigin, drawCellPart, drawCellPlate, drawCockpit, drawRockCell, mirrorSidesOf, type CellStyle } from "../art/cells";
 
 /** Where the engine bell ends and the laser barrel tip sits, in cells from the cell centre (see art/cells.ts). */
@@ -255,6 +256,7 @@ export class ArenaRenderer {
     for (const b of bodies) if (b.owner) this.drawEngines(ctx, b, S, toScreen, nowMs);
     this.drawHooks(ctx, bodies, S, toScreen);
     for (const b of bodies) if (b.owner) this.drawCharge(ctx, b, S, toScreen, nowMs);
+    for (const b of bodies) if (b.owner) this.drawFlames(ctx, b, S, toScreen, nowMs);
     for (const b of bodies) if (b.snap.mir) this.drawMirrorSkin(ctx, b, S, toScreen, nowMs);
     this.drawBeams(ctx, S, toScreen);
     this.drawParticles(ctx, S, toScreen);
@@ -1110,6 +1112,7 @@ export class ArenaRenderer {
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(b.a + this.viewRot);
+    const hot = new Map(b.snap.hot ?? []);
     // Asteroids stay solid; wreckage (and rubble chipped off rocks) fades.
     const debris = !b.owner && !b.snap.rock;
     const rockKeys = new Set<string>();
@@ -1162,6 +1165,12 @@ export class ArenaRenderer {
         ctx.translate((c.x - 0.5) * S, (c.y - 0.5) * S);
         if (pass && c.type === "rock") drawRockCell(ctx, S, Math.imul(c.cid, 2654435761) >>> 0, rockOpen(c));
         else if (pass) pass(ctx, S, style(c, i));
+        // Cooking in a flame: glows hotter as it nears blowing.
+        const heat = pass ? hot.get(cid) : undefined;
+        if (heat) {
+          ctx.fillStyle = `rgba(255, ${Math.round(150 - heat * 10)}, 30, ${0.15 + (heat / 9) * 0.55})`;
+          ctx.fillRect(0, 0, S, S);
+        }
         else drawCellPart(ctx, c.type, c.dir, S, style(c, i));
         ctx.restore();
       });
@@ -1262,6 +1271,41 @@ export class ArenaRenderer {
       ctx.beginPath();
       ctx.arc(p.x, p.y, r * 2, 0, Math.PI * 2);
       ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /** Flamethrowers that are burning: a flickering cone out to SIM.flamerRange. */
+  private drawFlames(ctx: CanvasRenderingContext2D, b: BodyView, S: number, toScreen: (x: number, y: number) => { x: number; y: number }, nowMs: number) {
+    if (!b.snap.fl) return;
+    const half = (SIM.flamerHalfAngleDeg * Math.PI) / 180;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const cid of b.snap.fl) {
+      const c = this.cellInfo.get(cid);
+      if (!c) continue;
+      const dirA = (c.dir * Math.PI) / 2 + b.a;
+      const fwd = { x: Math.sin(dirA), y: -Math.cos(dirA) };
+      const base = localToWorld(b.x, b.y, b.a, c.x, c.y);
+      const o = toScreen(base.x + fwd.x * 0.75, base.y + fwd.y * 0.75);
+      const tip = toScreen(base.x + fwd.x * (0.75 + SIM.flamerRange), base.y + fwd.y * (0.75 + SIM.flamerRange));
+      const ang = Math.atan2(tip.y - o.y, tip.x - o.x);
+      const len = Math.hypot(tip.x - o.x, tip.y - o.y);
+      // A few overlapping tongues that wobble, so it reads as fire rather than a flat wedge.
+      for (let k = 0; k < 3; k++) {
+        const wob = Math.sin(nowMs * 0.02 + cid * 3 + k * 2.1) * 0.25 * half;
+        const l = len * (0.75 + 0.25 * Math.sin(nowMs * 0.031 + k * 1.7 + cid));
+        const g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, l);
+        g.addColorStop(0, "rgba(255,240,190,0.55)");
+        g.addColorStop(0.35, "rgba(255,150,40,0.35)");
+        g.addColorStop(1, "rgba(200,40,10,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(o.x, o.y);
+        ctx.arc(o.x, o.y, l, ang + wob - half, ang + wob + half);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
     ctx.restore();
   }

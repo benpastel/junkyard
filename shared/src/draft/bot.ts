@@ -81,6 +81,8 @@ function typeValue(type: CellType, ship: readonly Cell[]): number {
       return countType(ship, type) < 10 ? 1.5 : 0.6;
     case "saw":
       return countType(ship, "saw") < 1 ? 2 : 0.8;
+    case "flamer":
+      return countType(ship, "flamer") < 2 ? 2.5 : 1;
     case "grapple":
       return countType(ship, "grapple") < 1 ? 1.5 : 0.2;
     default:
@@ -155,6 +157,7 @@ function scorePlacement(p: Placement, ctx: ShipContext): number {
       }
       case "laser":
       case "saw":
+      case "flamer":
       case "grapple": {
         if (c.dir === 0) score += 3 - dy * 0.6;
         else if (c.dir === 2) score -= 2;

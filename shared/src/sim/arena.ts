@@ -49,6 +49,8 @@ export interface SimCell {
   charge: number;
   /** Lasers: seconds until the next shot is allowed. */
   cooldown: number;
+  /** Seconds of flame soaked up (see SIM.flameCookSeconds). */
+  heat: number;
 }
 
 export interface SimBody {
@@ -192,6 +194,7 @@ export class Arena {
         thrust: 0,
         charge: 0,
         cooldown: 0,
+        heat: 0,
       }));
       for (const c of cells) this.attachCell(body, c);
       const cockpit = cells.filter((c) => c.type === "core");
@@ -241,7 +244,8 @@ export class Arena {
     const placed: { x: number; y: number; r: number }[] = [];
     let cid = firstCid;
     for (let n = 0, tries = 0; n < count && tries < count * 60; tries++) {
-      const r = SIM.rockMinRadius + this.rng.next() * (SIM.rockMaxRadius - SIM.rockMinRadius);
+      // Mostly small and medium, the odd big one.
+      const r = SIM.rockMinRadius + this.rng.next() ** 2 * (SIM.rockMaxRadius - SIM.rockMinRadius);
       const dist = Math.sqrt(this.rng.next()) * (this.ringStart * 0.85 - r);
       const ang = this.rng.next() * Math.PI * 2;
       const x = Math.cos(ang) * dist;
@@ -299,6 +303,7 @@ export class Arena {
         thrust: 0,
         charge: 0,
         cooldown: 0,
+        heat: 0,
       }));
       for (const c of cells) this.attachCell(body, c);
       out.push({ bodyId: body.id, cells: cells.map((c) => ({ cid: c.cid, x: c.x, y: c.y, type: c.type, dir: c.dir, piece: c.piece })) });
@@ -356,6 +361,7 @@ export class Arena {
       const prev = this.prevInputs.get(ship.playerId) ?? NO_INPUT;
       this.applyEngines(ship, input);
       this.updateLasers(ship, input, touched);
+      this.updateFlamers(ship);
       if (input.grapple && !prev.grapple) this.toggleGrapple(ship);
       this.prevInputs.set(ship.playerId, { ...input });
     }
@@ -383,6 +389,7 @@ export class Arena {
       if (started) this.onCollision(h1, h2, pre, touched);
     });
     this.updateSaws(touched);
+    this.cookCells(touched);
     this.breakStuck(touched);
     this.eventQueue.drainContactForceEvents((e) => this.onPressure(e.collider1(), e.collider2(), e.totalForceMagnitude(), touched));
 
@@ -440,12 +447,17 @@ export class Arena {
             chg.push([c.cid, Math.max(1, Math.round(lvl * 9))]);
           }
         }
+        const fl = b.cells.filter((c) => c.alive && c.type === "flamer" && this.flamerBurning(c)).map((c) => c.cid);
+        if (fl.length) s.fl = fl;
         if (thr.length) s.thr = thr;
         if (chg.length) s.chg = chg;
         const ship = this.shipOf(b);
         if (ship && ship.mirroredUntil > this.tickCount) s.mir = 1;
       }
       if (b.kind === "rock") s.rock = 1;
+      const hot: [number, number][] = [];
+      for (const c of b.cells) if (c.alive && c.heat > 0) hot.push([c.cid, Math.max(1, Math.min(9, Math.round((c.heat / SIM.flameCookSeconds) * 9)))]);
+      if (hot.length) s.hot = hot;
       bodies.push(s);
     }
     const hooks: HookSnap[] = this.hooks.map((h) => ({ from: h.from.cid, to: h.to.cid, ox: r3(h.ox), oy: r3(h.oy) }));
@@ -796,6 +808,59 @@ export class Arena {
       this.damageCell(target, SIM.laserDamage, ship.playerId, touched, "laser");
       return;
     }
+  }
+
+  /** A flamer's on/off cadence, staggered per cell so a ship's flamers don't all pulse together. */
+  private flamerBurning(c: SimCell): boolean {
+    if (!this.isOpen(c)) return false;
+    const on = Math.round(SIM.flamerOnSeconds * TICK_HZ);
+    const cycle = on + Math.round(SIM.flamerOffSeconds * TICK_HZ);
+    return (this.tickCount + c.cid * 17) % cycle < on;
+  }
+
+  /** Cells in a flame this tick, and who is burning them. */
+  private flamed = new Map<SimCell, PlayerId>();
+  /** Cells holding some heat, so they can cool off. */
+  private warm = new Set<SimCell>();
+
+  private updateFlamers(ship: ShipRecord) {
+    const rb = ship.body.rb;
+    if (!rb) return;
+    for (const c of ship.body.cells) {
+      if (!c.alive || c.type !== "flamer" || !this.flamerBurning(c)) continue;
+      const o = this.cellWorld(c)!;
+      const d = this.cellWorldDir(c);
+      const start = { x: o.x + d.x * 0.5, y: o.y + d.y * 0.5 };
+      const half = (SIM.flamerHalfAngleDeg * Math.PI) / 180;
+      for (let i = 0; i < SIM.flamerRays; i++) {
+        const t = SIM.flamerRays > 1 ? i / (SIM.flamerRays - 1) - 0.5 : 0;
+        const a = t * 2 * half;
+        const dir = { x: d.x * Math.cos(a) - d.y * Math.sin(a), y: d.x * Math.sin(a) + d.y * Math.cos(a) };
+        // The flame ignores its own ship; anything else stops it.
+        const hit = this.world.castRay(new RAPIER.Ray(start, dir), SIM.flamerRange, true, undefined, undefined, undefined, rb);
+        if (!hit) continue;
+        const target = this.cellByCollider.get(hit.collider.handle);
+        if (target?.alive) this.flamed.set(target, ship.playerId);
+      }
+    }
+  }
+
+  /** Heats cells in a flame (blowing those that have cooked long enough) and cools the rest. */
+  private cookCells(touched: Set<SimBody>) {
+    for (const [c, attacker] of this.flamed) {
+      c.heat += DT;
+      this.warm.add(c);
+      if (c.heat >= SIM.flameCookSeconds) this.damageCell(c, c.hp, attacker, touched, "flame");
+    }
+    for (const c of this.warm) {
+      if (!c.alive) {
+        this.warm.delete(c);
+        continue;
+      }
+      if (!this.flamed.has(c)) c.heat = Math.max(0, c.heat - DT * SIM.flameCoolRate);
+      if (c.heat <= 0) this.warm.delete(c);
+    }
+    this.flamed.clear();
   }
 
   private toggleGrapple(ship: ShipRecord) {

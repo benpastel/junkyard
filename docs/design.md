@@ -35,12 +35,12 @@ Online multiplayer, fast-paced, round-based game:
 
 ## Pieces and cells
 
-- A piece is a pentomino of 5 **cells**. Most cells are plain hull; a piece may carry one (or more) special cells: engine, laser, grappling hook, saw, mirror, armor.
+- A piece is a pentomino of 5 **cells**. Most cells are plain hull; a piece may carry one (or more) special cells: engine, laser, flamethrower, grappling hook, saw, mirror, armor.
 - **Edge pieces** protect one edge (their `dir`):
   - **Mirror**: a mirror piece is mirror all over, so its whole outer edge reflects lasers (beams can bounce back at the shooter). A mirror cell reflects off any side a beam can reach; its strips are drawn on every side except those inside the same mirror piece (cells remember which placed piece they came from); where two different mirror pieces meet, the shared edge is drawn once. Buried edges stay visible and start working once uncovered.
   - **Armor**: silver plate that deflects collisions on that edge with no damage and a strong bounce.
   - A shield piece shields the whole face it shows in its direction: every cell with nothing of the piece beyond it that way (a T facing up shields its top bar).
-- Each piece carries **1.5 or 2 points** of parts in any combination: laser 1, saw 1, engine ½, mirror coat 1 (all its remaining plain cells become mirror). Parts never overlap each other's overhang squares, every part works on the piece as it stands, and engines on one piece never push opposite ways.
+- Each piece carries **1.5 or 2 points** of parts in any combination: laser 1, saw 1, flamethrower 1, engine ½, mirror coat 1 (all its remaining plain cells become mirror). Odds: engine 65, laser 20, saw 12, flamethrower 12; mirrors, armor and grapples are switched off (weight 0, code kept). Parts never overlap each other's overhang squares, every part works on the piece as it stands, and engines on one piece never push opposite ways.
 - No part is ever generated blocked by its own piece (same full-line rule as in play).
 - Special cells have a facing that rotates with the piece.
 - **Damage is per cell**: single cells get destroyed / fall off. A piece is only a placement unit; after placement the ship is just a grid of cells.
@@ -68,6 +68,7 @@ Online multiplayer, fast-paced, round-based game:
 - **Camera:** C (or the camera button, which names the current mode) flips between the fixed view and the ship-up view (prototype; remembered per browser). Both show a fading trail behind your ship and a distant dust layer.
 - Once every human in the fight is dead, it fast-forwards on its own.
 - **Controls bar:** the arena shows each key as a clickable button that lights while held; the draft uses the same buttons for rotate (Q/E), flip (F) and discard (Esc).
+  - flamethrowers (mid range: a ±15° cone out to 6 cells, sampled with 5 rays; on 1s / off 1s on their own, staggered per cell; an enemy cell blows after 0.8s of total flame, and heat drains at half that rate out of the flame; never burns its own ship). In bot fights a flamer part destroys ~1.7 enemy cells vs ~2.3 per laser and ~0.8 per saw.
   - lasers (ranged, raycasts; auto-firing, one shot every 2.0s, light knockback; range 13 cells, a little short of the window edge on a laptop screen)
   - collisions above a speed threshold break one cell on each side
   - **anti-stuck:** cells of two ships that stay touching for 5s explode, on both sides at once, and the blast shoves the two ships apart
@@ -137,7 +138,7 @@ Expect ~50–100ms of input lag. Hide it with game feel:
 - Build screen on phones (< 720px wide): status bar (timer, Done, fullscreen), offers (smaller than the board), board, then the buttons at the bottom. A touched piece floats 1.2 squares above the finger. Sized with `100dvh` so the page never scrolls under a drag.
 - Fight on touch screens: a big copy of the cockpit's arrow keys bottom left (hold to fire; dead directions grey). A phone button above it switches to tilt steering (experimental): how the phone is held when switched on counts as level; leaning more than 8° in any direction fires that way, with the angle picking one of eight 45° slices so diagonals fire two engine groups (tip the top away = up); a gauge with a dot shows the lean.
 - Backdrop (`?look=` to compare others; default `sky`): one far sky layer (landmark image + stars) that turns with the view and barely slides; dust on the play plane moves exactly with you.
-- Asteroids: lumpy rock bodies (rock cells) scattered at the start, ~1.5 per laptop screen of arena (`rocksPerArea`), clear of spawns and the centre, drifting slowly. Lasers and saws chip them, a fast collision costs both sides a cell like any impact, big broken chunks stay rock and small ones crumble to rubble.
+- Asteroids: lumpy rock bodies (rock cells), radius 1.5–3.8 weighted toward small, scattered at the start, about one per laptop screen of arena (`rocksPerArea`), clear of spawns and the centre, drifting slowly. Lasers and saws chip them, a fast collision costs both sides a cell like any impact, big broken chunks stay rock and small ones crumble to rubble.
 - Far backdrop images: one of five dark generated images (client/public/backgrounds, generator in tools/backgrounds) per fight, the same for everyone. A disc 1.3× the screen diagonal with landmarks round its edge; it turns with the view to show heading and slides only a few dozen pixels across the whole arena. `?bg=1..5` forces one.
 - A compass rose (top right) turns with the view; north is the way your ship faced at the start. Clicking it toggles the fixed-north view (the rose glows yellow while fixed); every fight starts ship-up.
 - While building, cockpit arrows with no engine yet carry a red X; hovering a piece that would add one clears it and lights the arrow.

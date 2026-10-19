@@ -13,6 +13,7 @@ export function workingDir(type: CellType, dir: Dir): Dir | null {
     case "laser":
     case "grapple":
     case "saw":
+    case "flamer":
     case "armor":
       return dir;
     default:

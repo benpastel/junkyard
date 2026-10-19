@@ -59,12 +59,14 @@ export function placedCells(piece: Piece, x: number, y: number, rot: Dir, flip: 
  * "mirror" isn't a single cell: buying it turns all the piece's remaining plain cells to mirror.
  * Armor and grapple are switched off for now (weight 0); their parts still work if they show up.
  */
-const PART_COST: Partial<Record<CellType, number>> = { engine: 0.5, laser: 1, saw: 1, mirror: 1, grapple: 1, armor: 1 };
+const PART_COST: Partial<Record<CellType, number>> = { engine: 0.5, laser: 1, saw: 1, flamer: 1, mirror: 1, grapple: 1, armor: 1 };
 const PART_WEIGHTS: [CellType, number][] = [
   ["engine", 65],
   ["laser", 20],
   ["saw", 12],
-  ["mirror", 12],
+  ["flamer", 12],
+  // Mirrors are off for now (weight 0); the code stays.
+  ["mirror", 0],
   ["armor", 0],
   ["grapple", 0],
 ];
@@ -162,7 +164,7 @@ function pickSpecialSlot(cells: Cell[], type: CellType, rng: Rng, allowed: (d: D
       if (!allowed(d, c)) continue;
       const trial = cells.map((o, k) => (k === i ? { ...o, type, dir: d } : o));
       if (!openChecker(trial)(trial[i]!)) continue;
-      if (type === "laser" || type === "saw" || type === "grapple") {
+      if (type === "laser" || type === "saw" || type === "flamer" || type === "grapple") {
         // Point outward along an arm: a tip cell, facing away from its one neighbour.
         if (isTip && !open(c, opposite(d))) slots.push([i, d]);
       } else {

@@ -27,6 +27,8 @@ export function parseShip(rows: string[]): Cell[] {
     "{": ["laser", 3],
     R: ["saw", 0],
     r: ["saw", 2],
+    F: ["flamer", 0],
+    f: ["flamer", 2],
     G: ["grapple", 0],
     g: ["grapple", 2],
   };
@@ -69,9 +71,9 @@ export const SANDBOX_SHIPS: { name: string; rows: string[] }[] = [
     ],
   },
   {
-    name: "Tiny",
+    name: "Torch",
     rows: [
-      "iki",
+      "FkF",
       "kCk",
       "^.^",
     ],

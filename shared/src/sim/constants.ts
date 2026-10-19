@@ -18,6 +18,7 @@ export const CELL_HP: Record<CellType, number> = {
   mirror: HITS_TO_BREAK,
   armor: HITS_TO_BREAK,
   rock: HITS_TO_BREAK,
+  flamer: HITS_TO_BREAK,
 };
 
 /** Arena tuning. Times are in seconds, distances in cells (= world units), forces in mass·units/s². */
@@ -42,6 +43,20 @@ export const SIM = {
   laserRecoil: 0.1,
   /** How many times one beam can bounce off mirrors. */
   laserMaxBounces: 3,
+
+  /**
+   * Flamethrower: fires on its own, on for a second, off for a second. The flame is a cone
+   * (sampled with a few rays) that heats whatever it touches; an enemy cell that has soaked up
+   * flameCookSeconds of fire blows. Heat drains away while the flame is off it.
+   */
+  flamerRange: 6,
+  flamerHalfAngleDeg: 15,
+  flamerRays: 5,
+  flamerOnSeconds: 1,
+  flamerOffSeconds: 1,
+  flameCookSeconds: 0.8,
+  /** Seconds of heat lost per second out of the flame. */
+  flameCoolRate: 0.5,
 
   grappleRange: 14,
   grappleMinLength: 2.5,
@@ -105,10 +120,10 @@ export const SIM = {
   /**
    * Asteroids: lumps of rock scattered through the arena at the start, drifting slowly. Lasers
    * and saws chip them; hitting one fast hurts like any impact. About this many per square cell
-   * of the starting arena (~1.5 on a laptop screen's worth of space).
+   * of the starting arena (about one on a laptop screen's worth of space).
    */
-  rocksPerArea: 0.0011,
-  rockMinRadius: 2.6,
+  rocksPerArea: 0.0008,
+  rockMinRadius: 1.5,
   rockMaxRadius: 3.8,
   /** Keep rocks this far (plus their radius) from where ships spawn, and from each other. */
   rockSpawnClearance: 9,
