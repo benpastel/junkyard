@@ -8,6 +8,24 @@ export const TILT_FULL = 25;
 
 type Dirs = Pick<InputState, "up" | "down" | "left" | "right">;
 
+/**
+ * Which engines a lean fires. Past the dead zone (in any direction), the lean's angle picks one
+ * of eight 45-degree slices: straight ones fire one way, diagonal ones fire both neighbours.
+ * Tip the top away from you (y < 0) to go forward.
+ */
+export function leanKeys(lean: { x: number; y: number }): Dirs {
+  const none = { up: false, down: false, left: false, right: false };
+  if (Math.hypot(lean.x, lean.y) < TILT_DEAD_ZONE) return none;
+  // 0 = up, then clockwise in eighths.
+  const slice = ((Math.round((Math.atan2(lean.x, -lean.y) / Math.PI) * 4) % 8) + 8) % 8;
+  return {
+    up: slice === 7 || slice === 0 || slice === 1,
+    right: slice === 1 || slice === 2 || slice === 3,
+    down: slice === 3 || slice === 4 || slice === 5,
+    left: slice === 5 || slice === 6 || slice === 7,
+  };
+}
+
 /** iPhones ask permission before a page can read tilt; it has to be asked from a tap. */
 export async function requestTiltPermission(): Promise<boolean> {
   const D = window.DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> } | undefined;
@@ -37,13 +55,7 @@ export function watchTilt(onChange: (lean: { x: number; y: number }, keys: Dirs)
     const raw = { x: e.gamma * c + e.beta * s, y: -e.gamma * s + e.beta * c };
     base ??= raw;
     const lean = { x: raw.x - base.x, y: raw.y - base.y };
-    onChange(lean, {
-      // Tip the top away from you to go forward.
-      up: lean.y < -TILT_DEAD_ZONE,
-      down: lean.y > TILT_DEAD_ZONE,
-      left: lean.x < -TILT_DEAD_ZONE,
-      right: lean.x > TILT_DEAD_ZONE,
-    });
+    onChange(lean, leanKeys(lean));
   };
   window.addEventListener("deviceorientation", handler);
   return () => window.removeEventListener("deviceorientation", handler);
