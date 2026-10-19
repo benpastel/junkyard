@@ -34,7 +34,7 @@ export const SIM = {
    * Just short of the nearest window edge from your ship: the arena view always shows at least
    * VIEW_CELLS / 1.4 / 2 ≈ 15.7 cells each way (client/src/arena/renderer.ts). Keep them in step.
    */
-  laserRange: 12,
+  laserRange: 13,
   /** Hits dealt per laser shot. */
   laserDamage: 1,
   laserKnockback: 0.4,
