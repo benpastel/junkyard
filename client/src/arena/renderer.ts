@@ -53,6 +53,24 @@ const BACKDROPS = ["1-four-landmarks", "2-gas-giant", "3-black-hole", "4-derelic
 const BACKDROP_SCALE = 1.3;
 /** How far the disc slides (as a fraction of its radius) when you go from the centre to the ring's start. */
 const BACKDROP_SHIFT = 0.02;
+
+/**
+ * Backdrop styles being compared (?look=...):
+ *   current   the backdrop disc, three mid-distance star layers, dust at half speed, dot grid
+ *   sky       one far sky (disc + stars) that only turns; dust on the play plane at full speed
+ *   sky-fg    sky, plus rare big dark rocks in the foreground sliding past faster than you
+ *   sky-grid  sky, plus faint grid lines on the play plane instead of dust
+ *   sky-half  sky, with the camera turning only half as far as your ship
+ */
+export type Look = "current" | "sky" | "sky-fg" | "sky-grid" | "sky-half";
+const LOOKS: Look[] = ["current", "sky", "sky-fg", "sky-grid", "sky-half"];
+const LOOK: Look = (() => {
+  const q = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("look");
+  return LOOKS.includes(q as Look) ? (q as Look) : "current";
+})();
+/** Foreground rocks: how much faster than the play plane they slide, and how sparse they are. */
+const FG_DEPTH = 1.8;
+const FG_CELL = 26;
 const backdropImages = new Map<string, HTMLImageElement>();
 function backdropImage(name: string): HTMLImageElement {
   let img = backdropImages.get(name);
@@ -140,6 +158,8 @@ export class ArenaRenderer {
 
   /** This fight's far backdrop. */
   private readonly backdrop: HTMLImageElement;
+  /** Stars on the far sky (look != current), in the backdrop disc's -1..1 coordinates. */
+  private readonly skyStars: { x: number; y: number; r: number; b: number }[] = [];
 
   constructor(
     private readonly init: ArenaInit,
@@ -156,6 +176,17 @@ export class ArenaRenderer {
       for (const c of s.cells) this.cellInfo.set(c.cid, { ...c, color: s.color });
       this.bodyCells.set(s.bodyId, { cells: s.cells.map((c) => c.cid), dmg: s.cells.map(() => 0) });
       for (const c of s.cells) this.cidBody.set(c.cid, s.bodyId);
+    }
+    for (let i = 0; i < 1400; i++) {
+      const rr = Math.sqrt(this.fx());
+      const a = this.fx() * Math.PI * 2;
+      const bright = this.fx() < 0.04;
+      this.skyStars.push({
+        x: rr * Math.cos(a),
+        y: rr * Math.sin(a),
+        r: bright ? 1.4 + this.fx() * 0.8 : 0.5 + this.fx() * 0.7,
+        b: bright ? 0.6 + this.fx() * 0.3 : 0.15 + this.fx() * 0.45,
+      });
     }
     this.stars = [0.15, 0.35, 0.6].map((depth, layer) => {
       const out: Star[] = [];
@@ -220,6 +251,7 @@ export class ArenaRenderer {
     for (const b of bodies) if (b.snap.mir) this.drawMirrorSkin(ctx, b, S, toScreen, nowMs);
     this.drawBeams(ctx, S, toScreen);
     this.drawParticles(ctx, S, toScreen);
+    if (LOOK === "sky-fg") this.drawForeground(ctx, width, height, S, toScreen);
     this.drawNames(ctx, bodies, S, toScreen);
     this.drawCountdown(ctx, bodies, S, toScreen, renderTick);
     this.drawOffscreen(ctx, bodies, width, height, S, toScreen);
@@ -521,7 +553,8 @@ export class ArenaRenderer {
       if (!this.cameraReady) this.camera = { x: mine.x, y: mine.y, zoom: 1 };
       // Spring toward "nose up" and onto the ship, lagging a little but never far.
       const k = 1 - Math.exp(-dt * SHIP_CAM_STIFFNESS);
-      const want = -mine.a;
+      // sky-half: the view turns only half as far as the ship does.
+      const want = LOOK === "sky-half" ? this.northRot + angleDiff(-mine.a, this.northRot) / 2 : -mine.a;
       let err = angleDiff(want, this.viewRot);
       this.viewRot += err * k;
       err = angleDiff(want, this.viewRot);
@@ -687,6 +720,10 @@ export class ArenaRenderer {
     g.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
+    if (LOOK !== "current") {
+      this.drawSky(ctx, w, h);
+      return;
+    }
     this.drawFarBackdrop(ctx, w, h);
 
     const tile = 900;
@@ -709,6 +746,55 @@ export class ArenaRenderer {
         }
       }
     });
+  }
+
+  /** The whole far sky as one layer: the backdrop disc and its stars, turning with the view and never sliding. */
+  private drawSky(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    const d = Math.hypot(w, h) * BACKDROP_SCALE;
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(this.viewRot);
+    const img = this.backdrop;
+    if (img.complete && img.naturalWidth > 0) ctx.drawImage(img, -d / 2, -d / 2, d, d);
+    for (const s of this.skyStars) {
+      ctx.fillStyle = `rgba(225,220,205,${s.b})`;
+      ctx.fillRect((s.x * d) / 2, (s.y * d) / 2, s.r, s.r);
+    }
+    ctx.restore();
+  }
+
+  /** Rare big dark rocks between you and the action, sliding past faster than you (sky-fg). */
+  private drawForeground(ctx: CanvasRenderingContext2D, w: number, h: number, S: number, toScreen: (x: number, y: number) => { x: number; y: number }) {
+    const depth = FG_DEPTH;
+    const cx = this.camera.x * depth;
+    const cy = this.camera.y * depth;
+    const half = Math.hypot(w, h) / 2 / S + FG_CELL;
+    // Layer coordinates slide depth times as fast as the world as the camera moves.
+    const layer = (x: number, y: number) => toScreen(x - cx + this.camera.x, y - cy + this.camera.y);
+    ctx.save();
+    ctx.filter = `blur(${Math.round(S * 0.5)}px)`;
+    ctx.fillStyle = "rgba(14, 12, 11, 0.7)";
+    for (let gx = Math.floor((cx - half) / FG_CELL); gx * FG_CELL < cx + half; gx++) {
+      for (let gy = Math.floor((cy - half) / FG_CELL); gy * FG_CELL < cy + half; gy++) {
+        const hsh = Math.imul(gx * 83492791 ^ gy * 2971215073, 2654435761) >>> 0;
+        if ((hsh & 7) > 2) continue;
+        const x = (gx + ((hsh >>> 3) & 1023) / 1024) * FG_CELL;
+        const y = (gy + ((hsh >>> 13) & 1023) / 1024) * FG_CELL;
+        // Nearer, so drawn bigger than a rock of the same size down on the play plane.
+        const r = (2.5 + ((hsh >>> 23) & 7) * 0.5) * depth;
+        ctx.beginPath();
+        for (let i = 0; i < 9; i++) {
+          const a = (i / 9) * Math.PI * 2;
+          const k = 0.7 + (((hsh >>> (i * 3)) & 7) / 7) * 0.4;
+          const p = layer(x + Math.cos(a) * r * k, y + Math.sin(a) * r * k);
+          if (i) ctx.lineTo(p.x, p.y);
+          else ctx.moveTo(p.x, p.y);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    ctx.restore();
   }
 
   private drawFarBackdrop(ctx: CanvasRenderingContext2D, w: number, h: number) {
@@ -740,8 +826,10 @@ export class ArenaRenderer {
     toScreen: (x: number, y: number) => { x: number; y: number },
     mine: BodyView | undefined,
   ) {
+    if (LOOK === "sky-grid") return;
     // A layer DUST_DEPTH as far as the action: it scrolls (and streaks) that much slower than you.
-    const depth = DUST_DEPTH;
+    // The sky looks put it on the play plane itself, so it slides past at exactly your speed.
+    const depth = LOOK === "current" ? DUST_DEPTH : 1;
     const cx = this.camera.x * depth;
     const cy = this.camera.y * depth;
     const cell = DUST_CELL;
@@ -800,6 +888,8 @@ export class ArenaRenderer {
   }
 
   private drawGrid(ctx: CanvasRenderingContext2D, w: number, h: number, S: number, toScreen: (x: number, y: number) => { x: number; y: number }) {
+    if (LOOK === "sky-grid") return this.drawGridLines(ctx, w, h, S, toScreen);
+    if (LOOK !== "current") return;
     const step = 5;
     const halfW = Math.hypot(w, h) / 2 / S + step;
     const halfH = halfW;
@@ -812,6 +902,32 @@ export class ArenaRenderer {
         ctx.fillRect(p.x - 1, p.y - 1, 2, 2);
       }
     }
+  }
+
+  /** Faint lines every few cells on the play plane (sky-grid). */
+  private drawGridLines(ctx: CanvasRenderingContext2D, w: number, h: number, S: number, toScreen: (x: number, y: number) => { x: number; y: number }) {
+    const step = 6;
+    const half = Math.hypot(w, h) / 2 / S + step;
+    const x0 = Math.floor((this.camera.x - half) / step) * step;
+    const y0 = Math.floor((this.camera.y - half) / step) * step;
+    ctx.save();
+    ctx.strokeStyle = "rgba(160, 175, 190, 0.07)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = x0; x < this.camera.x + half; x += step) {
+      const a = toScreen(x, this.camera.y - half);
+      const b = toScreen(x, this.camera.y + half);
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    for (let y = y0; y < this.camera.y + half; y += step) {
+      const a = toScreen(this.camera.x - half, y);
+      const b = toScreen(this.camera.x + half, y);
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
   /** Set when the fight is decided: who won, and confetti falling in screen space. */
