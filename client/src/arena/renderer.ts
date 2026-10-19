@@ -188,7 +188,57 @@ export class ArenaRenderer {
     this.drawNames(ctx, bodies, S, toScreen);
     this.drawCountdown(ctx, bodies, S, toScreen, renderTick);
     this.drawOffscreen(ctx, bodies, width, height, S, toScreen);
+    this.drawCompass(ctx, width);
     if (this.celebration) this.drawCelebration(ctx, width, height, nowMs, dt);
+  }
+
+  /**
+   * A compass rose in the top-right corner (under the fullscreen button). North is the way your
+   * ship faced at the start, so as the view turns with your ship the rose shows how far round
+   * you've come.
+   */
+  private drawCompass(ctx: CanvasRenderingContext2D, w: number) {
+    const r = 26;
+    const cx = w - 12 - r;
+    const cy = 64 + r;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(12, 14, 18, 0.6)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(160, 200, 230, 0.25)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.rotate(this.viewRot - this.northRot);
+    // Ticks every 45 degrees, then the four points; north is long and red.
+    ctx.strokeStyle = "rgba(160, 200, 230, 0.35)";
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4;
+      ctx.beginPath();
+      ctx.moveTo(Math.sin(a) * (r - 5), -Math.cos(a) * (r - 5));
+      ctx.lineTo(Math.sin(a) * (r - 1), -Math.cos(a) * (r - 1));
+      ctx.stroke();
+    }
+    for (let i = 0; i < 4; i++) {
+      const north = i === 0;
+      const len = north ? r - 4 : r - 10;
+      ctx.save();
+      ctx.rotate((i * Math.PI) / 2);
+      ctx.beginPath();
+      ctx.moveTo(0, -len);
+      ctx.lineTo(4, 0);
+      ctx.lineTo(-4, 0);
+      ctx.closePath();
+      ctx.fillStyle = north ? "#e0503a" : "rgba(200, 210, 220, 0.55)";
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.beginPath();
+    ctx.arc(0, 0, 2, 0, Math.PI * 2);
+    ctx.fillStyle = "#c9ced4";
+    ctx.fill();
+    ctx.restore();
   }
 
   /** A small arrow in its colour at the screen edge for every other ship that's out of view. */

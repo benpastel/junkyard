@@ -21,6 +21,12 @@ export function drawShipCells(
   cell: number,
   style: (c: Cell) => CellStyle,
   overPlate?: (c: Cell) => void,
+  cockpitOpts?: {
+    /** Cells to count engines from, if not just `cells` (e.g. with the piece being placed). */
+    engineCells?: readonly Cell[];
+    /** Red X on directions with no engine yet; arrows the engineCells add (over `cells`) glow. */
+    markMissing?: boolean;
+  },
 ) {
   const sides = mirrorSidesOf(cells);
   const styled = (c: Cell): CellStyle => ({ ...style(c), openSides: sides(c) });
@@ -43,14 +49,21 @@ export function drawShipCells(
   if (cockpit) {
     const core = cells.find((c) => c.type === "core")!;
     // Arrows with no working engine behind them yet are greyed out.
-    const isOpen = openChecker(cells);
-    let available = 0;
-    for (const c of cells) if (c.type === "engine" && isOpen(c)) available |= 1 << c.dir;
+    const available = engineDirs(cockpitOpts?.engineCells ?? cells);
+    const added = available & ~engineDirs(cells);
     ctx.save();
     ctx.translate(cockpit.x * cell, cockpit.y * cell);
-    drawCockpit(ctx, cell, { color: style(core).color, available });
+    drawCockpit(ctx, cell, { color: style(core).color, available, held: added, markMissing: cockpitOpts?.markMissing });
     ctx.restore();
   }
+}
+
+/** Bitmask of the dirs these cells have a working (uncovered) engine for. */
+function engineDirs(cells: readonly Cell[]): number {
+  const isOpen = openChecker(cells);
+  let dirs = 0;
+  for (const c of cells) if (c.type === "engine" && isOpen(c)) dirs |= 1 << c.dir;
+  return dirs;
 }
 
 /** Draws a set of cells (min x/y = 0) at `cell` CSS pixels per square, with room for overhangs. */

@@ -313,6 +313,8 @@ export interface CockpitStyle {
    * greyed out, and pressing one shows a red X instead of the glow.
    */
   available?: number;
+  /** Draw the red X on every dead arrow, held or not (the draft board, to flag missing engines). */
+  markMissing?: boolean;
 }
 
 // arrow centres in T units; the down arrow is smaller since the pilot crowds that lobe
@@ -363,7 +365,7 @@ export function drawCockpit(ctx: CanvasRenderingContext2D, size: number, style: 
     d.poly([[0, -s], [s * 0.95, s * 0.5], [-s * 0.95, s * 0.5]], !works ? "#262c33" : on ? "#fff" : "#3d6a8a");
     ctx.restore();
     // Pressing a key with nothing behind it: a red X over the dead arrow.
-    if (on && !works) {
+    if (!works && (on || style.markMissing)) {
       const x = 0.2 * a.k;
       d.line([[a.x - x, a.y - x], [a.x + x, a.y + x]], "#ff4a3d", 0.08);
       d.line([[a.x + x, a.y - x], [a.x - x, a.y + x]], "#ff4a3d", 0.08);

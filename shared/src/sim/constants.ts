@@ -29,7 +29,7 @@ export const SIM = {
   engineRampSeconds: 0.15,
 
   laserChargeSeconds: 0.25,
-  laserCooldownSeconds: 2.4,
+  laserCooldownSeconds: 2.0,
   /**
    * Just short of the nearest window edge from your ship: the arena view always shows at least
    * VIEW_CELLS / 1.4 / 2 ≈ 13.6 cells each way (client/src/arena/renderer.ts). Keep them in step.

@@ -68,7 +68,7 @@ Online multiplayer, fast-paced, round-based game:
 - **Camera:** C (or the camera button, which names the current mode) flips between the fixed view and the ship-up view (prototype; remembered per browser). Both show a fading trail behind your ship and a distant dust layer.
 - Once every human in the fight is dead, it fast-forwards on its own.
 - **Controls bar:** the arena shows each key as a clickable button that lights while held; the draft uses the same buttons for rotate (Q/E), flip (F) and discard (Esc).
-  - lasers (ranged, raycasts; auto-firing, one shot every 2.4s, light knockback; range 12 cells, just short of the window edge on a laptop screen)
+  - lasers (ranged, raycasts; auto-firing, one shot every 2.0s, light knockback; range 12 cells, just short of the window edge on a laptop screen)
   - collisions above a speed threshold break one cell on each side
   - **anti-stuck:** cells of two ships that stay touching for 5s explode, on both sides at once, and the blast shoves the two ships apart
   - **saw**: a spinning blade with its own round hitbox past the cell, sitting half on its block (hub on the cell edge), wide enough to reach the tile in front and both tiles diagonally in front; it cuts whatever it touches (one hit every 0.2s, at any speed) and takes no harm from it. Armor facing the blade turns it. It only works with its line and both front diagonals clear.
@@ -136,5 +136,7 @@ Expect ~50–100ms of input lag. Hide it with game feel:
 
 - Build screen on phones (< 720px wide): status bar (timer, Done, fullscreen), offers (smaller than the board), board, then the buttons at the bottom. A touched piece floats 1.2 squares above the finger. Sized with `100dvh` so the page never scrolls under a drag.
 - Fight on touch screens: a big copy of the cockpit's arrow keys bottom left (hold to fire; dead directions grey).
+- A compass rose (top right) turns with the view; north is the way your ship faced at the start.
+- While building, cockpit arrows with no engine yet carry a red X; hovering a piece that would add one clears it and lights the arrow.
 - Camera is ship-up only for now; the fixed-north view is still in the code behind `CAMERA_SWITCHING`.
 - Fullscreen: a button (top right of the fight, right column / phone status bar while building). No shortcut key, so it can't be hit by accident; Esc or the back gesture leaves. Hidden where unsupported (iPhone Safari).

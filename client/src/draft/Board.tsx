@@ -103,6 +103,9 @@ export function Board(props: {
         ctx.fillStyle = `rgba(255, 214, 150, ${0.55 * k})`;
         ctx.fillRect(0, 0, cell, cell);
       },
+      // Missing engine directions get a red X; a valid piece under the pointer that would add
+      // one clears its X and lights that arrow up.
+      { engineCells: ghost && ghostValid ? [...cells, ...ghost] : cells, markMissing: true },
     );
 
     if (ghost) {
