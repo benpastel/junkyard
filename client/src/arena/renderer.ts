@@ -52,7 +52,7 @@ const BACKDROPS = ["1-four-landmarks", "2-gas-giant", "3-black-hole", "4-derelic
 /** The disc's diameter as a multiple of the screen diagonal: landmarks sit near the screen edges. */
 const BACKDROP_SCALE = 1.3;
 /** How far the disc slides (as a fraction of its radius) when you go from the centre to the ring's start. */
-const BACKDROP_SHIFT = 0.12;
+const BACKDROP_SHIFT = 0.02;
 const backdropImages = new Map<string, HTMLImageElement>();
 function backdropImage(name: string): HTMLImageElement {
   let img = backdropImages.get(name);
