@@ -2,7 +2,7 @@
 // React components read state through useNet(); arena snapshots bypass React and go
 // straight to subscribers because they arrive 20 times a second.
 import { useSyncExternalStore } from "react";
-import type { ChatMessage, ClientMsg, PlayerId, RoomView, RoundResults, ServerMsg } from "@ja/shared";
+import type { ChatMessage, ClientMsg, PlayerId, RoomView, RoundResults, ServerMsg, TableSummary } from "@ja/shared";
 import type { DraftView } from "@ja/shared/draft";
 import type { ArenaInit, ArenaSnapshot } from "@ja/shared/sim";
 
@@ -18,6 +18,8 @@ export interface NetState {
   draft: DraftView | null;
   arenaInit: ArenaInit | null;
   results: RoundResults | null;
+  /** The lobby's list of tables, while watching it. */
+  tables: TableSummary[];
 }
 
 const SESSION_KEY = "ja.session";
@@ -40,6 +42,7 @@ class Net {
     draft: null,
     arenaInit: null,
     results: null,
+    tables: [],
   };
   private ws: WebSocket | null = null;
   private retries = 0;
@@ -49,6 +52,43 @@ class Net {
   private welcomed = false;
   private listeners = new Set<() => void>();
   private snapListeners = new Set<(s: ArenaSnapshot) => void>();
+
+  /** Connects without joining a table, to watch the lobby's table list. */
+  openLobby() {
+    this.refused = false;
+    this.welcomed = false;
+    const old = this.ws;
+    this.ws = null;
+    old?.close();
+    const ws = new WebSocket(wsUrl());
+    this.ws = ws;
+    this.set({ status: "connecting" });
+    ws.onopen = () => {
+      this.retries = 0;
+      this.set({ status: "open" });
+      this.send({ t: "lobby" });
+    };
+    ws.onmessage = (e) => this.receive(JSON.parse(e.data as string) as ServerMsg);
+    ws.onclose = () => {
+      if (this.ws !== ws) return;
+      if (this.retries >= MAX_RETRIES) {
+        this.set({ status: "closed" });
+        return;
+      }
+      this.retries++;
+      setTimeout(() => {
+        if (this.ws === ws) this.openLobby();
+      }, Math.min(4000, 300 * 2 ** this.retries));
+    };
+  }
+
+  /** Leaves the table for good and goes back to the lobby. */
+  quit() {
+    clearSession();
+    history.replaceState(null, "", location.pathname);
+    this.set({ playerId: null, room: null, chat: [], draft: null, arenaInit: null, results: null, error: null });
+    this.openLobby();
+  }
 
   connect(name: string, roomId: string | null) {
     this.refused = false;
@@ -120,6 +160,9 @@ class Net {
         });
         return;
       }
+      case "tables":
+        this.set({ tables: msg.tables });
+        return;
       case "chat":
         this.set({ chat: msg.messages });
         return;
@@ -168,6 +211,14 @@ function readSession(): Session | null {
     return JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? "null") as Session | null;
   } catch {
     return null;
+  }
+}
+
+function clearSession() {
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // Nothing stored to clear.
   }
 }
 

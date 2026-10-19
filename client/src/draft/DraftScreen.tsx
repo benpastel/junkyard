@@ -268,7 +268,7 @@ export function DraftScreen(props: {
           {rivals.length > 0 && (
             <div className="draft-rivals">
               {rivals.map((r) => (
-                <RivalShip key={r.playerId} hullRows={view.hullRows} cells={r.cells} color={r.info!.color} name={r.info!.name} />
+                <RivalShip key={r.playerId} hullRows={r.hullRows} cells={r.cells} color={r.info!.color} name={r.info!.name} />
               ))}
             </div>
           )}

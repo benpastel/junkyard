@@ -4,8 +4,8 @@ import type { ArenaInit } from "@ja/shared/sim/view";
 import { ArenaScreen, type FastForward } from "./arena/ArenaScreen";
 import { DraftScreen } from "./draft/DraftScreen";
 import { net, useNet } from "./net";
-import { Landing, storedName } from "./screens/Landing";
-import { Lobby } from "./screens/Lobby";
+import { Lobby, storedName } from "./screens/Lobby";
+import { Setup } from "./screens/Setup";
 import { Results } from "./screens/Results";
 import { Waiting } from "./screens/Waiting";
 
@@ -35,24 +35,26 @@ function Game() {
   const s = useNet();
   const roomParam = params.get("r")?.toUpperCase() ?? null;
 
-  // Returning to a room link with a remembered name (e.g. after a reload): rejoin straight away.
-  const autoJoined = useRef(false);
+  // A table link with a remembered name (e.g. after a reload) joins straight away; anything
+  // else shows the lobby's table list.
+  const started = useRef(false);
   useEffect(() => {
-    if (autoJoined.current) return;
-    autoJoined.current = true;
+    if (started.current) return;
+    started.current = true;
     const name = storedName();
     if (roomParam && name) net.connect(name, roomParam);
+    else net.openLobby();
   }, [roomParam]);
 
   const { room, playerId } = s;
   if (!room || !playerId) {
-    return <Landing roomId={roomParam} error={s.status === "closed" ? (s.error ?? "Disconnected") : s.error} />;
+    return <Lobby tables={s.tables} roomId={roomParam} error={s.status === "closed" ? (s.error ?? "Disconnected") : s.error} />;
   }
 
   let screen;
   switch (room.phase) {
-    case "lobby":
-      screen = <Lobby room={room} me={playerId} chat={s.chat} />;
+    case "setup":
+      screen = <Setup room={room} me={playerId} chat={s.chat} />;
       break;
     case "draft":
       screen = s.draft ? (

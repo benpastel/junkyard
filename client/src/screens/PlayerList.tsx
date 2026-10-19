@@ -1,12 +1,19 @@
 import type { PlayerInfo } from "@ja/shared";
 import { net } from "../net";
+import { HullOutline, RandomHull } from "./HullOutline";
 
-export function PlayerList({ players, hostId, me, canKick }: { players: PlayerInfo[]; hostId: string; me: string | null; canKick: boolean }) {
+export function PlayerList(props: { players: PlayerInfo[]; hostId: string; me: string | null; canKick: boolean; showHull?: boolean }) {
+  const { players, hostId, me, canKick, showHull } = props;
   return (
     <ul className="player-list">
       {players.map((p) => (
         <li key={p.id} className={p.connected ? "" : "disconnected"}>
           <span className="swatch" style={{ background: p.color }} />
+          {showHull && (
+            <span className="player-hull" title={p.hullChoice}>
+              {p.hullChoice === "random" ? <RandomHull size={22} /> : <HullOutline hull={p.hullChoice} size={22} />}
+            </span>
+          )}
           <span className="player-name">
             {p.name}
             {p.id === me && <span className="tag">you</span>}

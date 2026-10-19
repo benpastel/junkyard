@@ -75,10 +75,14 @@ export type BotSkill = (typeof BOT_SKILLS)[number];
 export interface RoomSettings {
   pace: Pace;
   botSkill: BotSkill;
-  hull: HullId;
+  /** Ship class: every player picks their own hull from this tier. */
+  tier: HullTier;
 }
 
-export const DEFAULT_SETTINGS: RoomSettings = { pace: "fast", hull: "hauler", botSkill: "medium" };
+export const DEFAULT_SETTINGS: RoomSettings = { pace: "fast", tier: "small", botSkill: "medium" };
+
+/** A player's ship pick for the next round: a hull of the room's tier, or a random one. */
+export type HullChoice = HullId | "random";
 
 export const PLAYER_COLORS = [
   "#e8743b",

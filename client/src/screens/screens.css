@@ -343,7 +343,7 @@ table.results {
 }
 
 .hull-picker button {
-  width: 112px;
+  width: 100px;
   font-size: 12px;
   letter-spacing: 0.04em;
   display: flex;
@@ -382,4 +382,64 @@ table.results {
 
 .results .total {
   border-left: 1px solid var(--line);
+}
+
+/* Lobby: every table */
+.table-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: min(640px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.table-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+  background: var(--panel);
+}
+
+.table-row:hover:not(:disabled) {
+  border-color: var(--rust);
+}
+
+.table-players {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 14px;
+}
+
+.table-player.bot {
+  opacity: 0.6;
+}
+
+.table-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.table-phase {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.table-phase.open {
+  color: var(--ok);
+}
+
+.player-hull {
+  display: inline-flex;
+  color: var(--text-dim);
 }

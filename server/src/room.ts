@@ -2,6 +2,7 @@ import type { WebSocket } from "ws";
 import {
   DEFAULT_SETTINGS,
   HULL_IDS,
+  HULL_TIERS,
   BOT_SKILLS,
   MAX_PLAYERS,
   PACES,
@@ -11,6 +12,9 @@ import {
   type BotSkill,
   type ChatMessage,
   type ClientMsg,
+  type HullChoice,
+  type HullId,
+  type HullTier,
   type InputState,
   type Phase,
   type PlayerId,
@@ -18,8 +22,9 @@ import {
   type RoomView,
   type RoundResults,
   type ServerMsg,
+  type TableSummary,
 } from "@ja/shared";
-import { Draft, REROLL_SECONDS, buildSeconds, draftBotAction, type DraftAction } from "@ja/shared/draft";
+import { Draft, HULLS, REROLL_SECONDS, buildSeconds, draftBotAction, type DraftAction } from "@ja/shared/draft";
 import { Arena, CELEBRATE_SECONDS, FAST_FORWARD_SPEED, FightRecorder, SIM, SNAPSHOT_EVERY, TICK_HZ, arenaBotInput, type ArenaSetup } from "@ja/shared/sim";
 import { saveRecording } from "./recordings.js";
 
@@ -40,6 +45,7 @@ interface Player {
   wins: number;
   totalKills: number;
   totalDestroyed: number;
+  hullChoice: HullChoice;
   /** Whether this player has a ship in the current draft / fight. */
   inRound: boolean;
   botNextActAt: number;
@@ -48,7 +54,7 @@ interface Player {
 export class Room {
   readonly id: string;
   private hostId: PlayerId = "";
-  private phase: Phase = "lobby";
+  private phase: Phase = "setup";
   private phaseEndsAt: number | null = null;
   private round = 0;
   private settings: RoomSettings = { ...DEFAULT_SETTINGS };
@@ -81,9 +87,13 @@ export class Room {
   /** Bots still to add once the room's first player has joined (so the creator is listed first). */
   private pendingBots: number;
 
-  constructor(id: string, defaultBots = 0) {
+  /** Called whenever the room's public state changes (the lobby's table list watches this). */
+  private readonly onChange: () => void;
+
+  constructor(id: string, defaultBots = 0, onChange: () => void = () => {}) {
     this.id = id;
     this.pendingBots = defaultBots;
+    this.onChange = onChange;
   }
 
   // ---------------------------------------------------------------- joining
@@ -108,12 +118,20 @@ export class Room {
         wins: 0,
         totalKills: 0,
         totalDestroyed: 0,
+        hullChoice: "random",
         inRound: false,
         botNextActAt: 0,
       };
       this.players.set(player.id, player);
       this.system(`${player.name} joined`);
       for (; this.pendingBots > 0; this.pendingBots--) this.addBot();
+    }
+    // Joining mid-build: start a ship of your own with whatever time is left.
+    // Mid-fight (or on the results) you watch until the next round.
+    if (this.phase === "draft" && this.draft && !this.draft.has(player.id)) {
+      player.inRound = true;
+      this.draft.addPlayer(player.id, this.resolveHull(player.hullChoice));
+      this.broadcastDraft();
     }
     if (!this.hostId || !this.players.get(this.hostId)?.socket) this.hostId = player.id;
     this.emptySince = null;
@@ -129,7 +147,7 @@ export class Room {
     const player = this.players.get(playerId);
     if (!player || player.socket !== socket) return;
     player.socket = null;
-    if (this.phase === "lobby") {
+    if (this.phase === "setup") {
       this.players.delete(playerId);
       this.system(`${player.name} left`);
     } else {
@@ -160,6 +178,7 @@ export class Room {
       wins: 0,
       totalKills: 0,
       totalDestroyed: 0,
+      hullChoice: "random",
       inRound: false,
       botNextActAt: 0,
     };
@@ -181,37 +200,47 @@ export class Room {
         return;
       }
       case "settings": {
-        if (!isHost || this.phase !== "lobby") return;
-        const { pace, hull, botSkill } = msg.settings;
+        if (!isHost || this.phase !== "setup") return;
+        const { pace, tier, botSkill } = msg.settings;
         if ((PACES as readonly string[]).includes(pace)) this.settings.pace = pace;
         if ((BOT_SKILLS as readonly string[]).includes(botSkill)) this.settings.botSkill = botSkill;
-        if ((HULL_IDS as readonly string[]).includes(hull)) this.settings.hull = hull;
+        if ((HULL_TIERS as readonly string[]).includes(tier) && tier !== this.settings.tier) {
+          this.settings.tier = tier;
+          // Picks from the old class don't carry over.
+          for (const p of this.players.values()) p.hullChoice = "random";
+        }
+        this.broadcastRoom();
+        return;
+      }
+      case "pickHull": {
+        // Applies to the next round, so it can change any time.
+        if (msg.hull !== "random" && !tierHulls(this.settings.tier).includes(msg.hull)) return;
+        player.hullChoice = msg.hull;
         this.broadcastRoom();
         return;
       }
       case "addBot": {
-        if (!isHost || this.phase !== "lobby") return;
+        if (!isHost || this.phase !== "setup") return;
         this.addBot();
         this.broadcastRoom();
         return;
       }
       case "removeBot": {
-        if (!isHost || this.phase !== "lobby") return;
+        if (!isHost || this.phase !== "setup") return;
         if (this.players.get(msg.playerId)?.isBot) this.players.delete(msg.playerId);
         this.broadcastRoom();
         return;
       }
-      case "start":
-      case "nextRound": {
-        const allowedFrom: Phase = msg.t === "start" ? "lobby" : "results";
-        if (!isHost || this.phase !== allowedFrom) return;
+      case "start": {
+        if (!isHost || this.phase !== "setup") return;
         if (this.players.size < 2) return this.send(player, { t: "error", message: "Need at least 2 players" });
         this.startDraft();
         return;
       }
-      case "toLobby": {
+      case "nextRound": {
         if (!isHost || this.phase !== "results") return;
-        this.setPhase("lobby", null);
+        this.setPhase("setup", null);
+        for (const p of this.players.values()) p.inRound = false;
         // Drop humans who disconnected during the game.
         for (const p of [...this.players.values()]) if (!p.isBot && !p.socket) this.players.delete(p.id);
         this.broadcastRoom();
@@ -257,12 +286,16 @@ export class Room {
       p.inRound = p.isBot || p.socket !== null;
       p.botNextActAt = Date.now() + this.draftBotDelay();
     }
+    const builders = [...this.players.values()].filter((p) => p.inRound);
+    const hulls: Partial<Record<PlayerId, HullId>> = {};
+    for (const p of builders) hulls[p.id] = this.resolveHull(p.hullChoice);
     this.draft = new Draft({
-      playerIds: [...this.players.values()].filter((p) => p.inRound).map((p) => p.id),
-      hull: this.settings.hull,
+      playerIds: builders.map((p) => p.id),
+      hull: tierHulls(this.settings.tier)[0]!,
+      hulls,
       seed: this.rng.int(2 ** 31),
     });
-    const seconds = buildSeconds(this.settings.pace, this.settings.hull);
+    const seconds = buildSeconds(this.settings.pace, tierHulls(this.settings.tier)[0]!);
     this.doneVotes.clear();
     this.setPhase("draft", seconds === null ? null : Date.now() + seconds * 1000);
     this.broadcastRoom();
@@ -321,6 +354,26 @@ export class Room {
     this.setPhase("results", null);
     this.broadcastRoom();
     this.broadcast({ t: "results", results: this.lastResults });
+  }
+
+  /** A player's pick for this round, with "random" (or a pick from another class) rolled within the tier. */
+  private resolveHull(choice: HullChoice): HullId {
+    const options = tierHulls(this.settings.tier);
+    return choice !== "random" && options.includes(choice) ? choice : this.rng.pick(options);
+  }
+
+  /** This table's row in the lobby list. */
+  summary(): TableSummary {
+    return {
+      id: this.id,
+      phase: this.phase,
+      round: this.round,
+      tier: this.settings.tier,
+      pace: this.settings.pace,
+      players: [...this.players.values()]
+        .filter((p) => p.isBot || p.socket)
+        .map((p) => ({ name: p.name, color: p.color, isBot: p.isBot })),
+    };
   }
 
   private setPhase(phase: Phase, endsAt: number | null) {
@@ -483,6 +536,8 @@ export class Room {
         wins: p.wins,
         totalKills: p.totalKills,
         totalDestroyed: p.totalDestroyed,
+        hullChoice: p.hullChoice,
+        inRound: p.inRound,
       })),
     };
   }
@@ -500,6 +555,7 @@ export class Room {
 
   private broadcastRoom() {
     this.broadcast({ t: "room", room: this.view() });
+    this.onChange();
   }
 
   private broadcastDraft() {
@@ -541,6 +597,10 @@ export class Room {
     const used = new Set([...this.players.values()].map((p) => p.color));
     return PLAYER_COLORS.find((c) => !used.has(c)) ?? PLAYER_COLORS[0];
   }
+}
+
+function tierHulls(tier: HullTier): HullId[] {
+  return HULL_IDS.filter((h) => HULLS[h].tier === tier);
 }
 
 function cleanName(name: string): string {

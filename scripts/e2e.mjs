@@ -21,10 +21,11 @@ await page.waitForTimeout(500);
 await shot("01-landing");
 
 await page.getByLabel("Name").fill("Benji");
-await page.getByRole("button", { name: /create room/i }).click();
+await page.getByRole("button", { name: /new table/i }).click();
 await page.waitForSelector(".share-row");
-// New rooms start with 3 bots.
+// New tables start with 3 bots.
 await page.getByRole("button", { name: "Frantic" }).click();
+await page.getByRole("button", { name: "Hauler" }).click();
 await page.getByLabel("Chat message").fill("ready to scrap");
 await page.keyboard.press("Enter");
 await page.waitForTimeout(300);
@@ -82,6 +83,16 @@ await page.waitForTimeout(1500);
 await page.keyboard.up("ArrowUp");
 await shot("06-arena");
 await page2.screenshot({ path: `${out}/06b-arena-friend.png` });
+
+// Someone new opens the site mid-fight: they see the table in the lobby and join as a spectator.
+const page3 = await (await browser.newContext({ viewport: { width: 1200, height: 800 } })).newPage();
+await page3.goto(base);
+await page3.getByLabel("Name").fill("Latecomer");
+await page3.waitForSelector(".table-row");
+await page3.screenshot({ path: `${out}/06c-lobby-tables.png` });
+await page3.locator(".table-row").first().click();
+await page3.waitForTimeout(2500);
+await page3.screenshot({ path: `${out}/06d-spectator.png` });
 await page.waitForTimeout(10000);
 await shot("07-arena-later");
 
@@ -90,7 +101,13 @@ await page.waitForTimeout(500);
 await shot("08-results");
 
 await page.getByRole("button", { name: /next round/i }).click();
-await page.waitForTimeout(2000);
-await shot("09-round-2-draft");
+await page.waitForSelector(".share-row");
+await page.waitForTimeout(500);
+await shot("09-round-2-setup");
+await page.getByRole("button", { name: /launch/i }).click();
+await page.waitForSelector(".draft-board");
+await page.waitForTimeout(1000);
+await shot("10-round-2-draft");
+await page3.screenshot({ path: `${out}/10b-latecomer-draft.png` });
 
 await browser.close();

@@ -36,7 +36,7 @@ export interface DraftView {
   full: boolean;
   /** The shared pool, oldest first (always empty while POOL_ENABLED is off). */
   pool: Piece[];
-  rivals: { playerId: PlayerId; cells: Cell[] }[];
+  rivals: { playerId: PlayerId; hullRows: string[]; cells: Cell[] }[];
 }
 
 export const OFFER_COUNT = 3;
@@ -50,6 +50,8 @@ export const POOL_ENABLED = false;
 export const REROLL_SECONDS = 1;
 
 interface PlayerDraft {
+  hull: HullId;
+  buildable: Set<string>;
   offers: Piece[];
   held: Piece | null;
   cells: Cell[];
@@ -59,23 +61,36 @@ interface PlayerDraft {
 }
 
 export class Draft {
-  readonly hull: HullId;
   private readonly rng: Rng;
-  private readonly buildable: Set<string>;
   private readonly players = new Map<PlayerId, PlayerDraft>();
   private pool: Piece[] = [];
   private nextId = 1;
 
-  constructor(opts: { playerIds: PlayerId[]; hull: HullId; seed: number }) {
-    this.hull = opts.hull;
+  /** Every player builds on `hull` unless `hulls` gives them their own. */
+  constructor(opts: { playerIds: PlayerId[]; hull: HullId; seed: number; hulls?: Partial<Record<PlayerId, HullId>> }) {
     this.rng = new Rng(opts.seed);
-    this.buildable = new Set(hullBuildable(opts.hull).map((p) => key(p.x, p.y)));
-    const core = hullCore(opts.hull);
-    for (const id of opts.playerIds) {
-      const p: PlayerDraft = { offers: [], held: null, cells: cockpitCells(core.x, core.y), dealing: false, full: false };
-      p.offers = this.dealOffers(p);
-      this.players.set(id, p);
-    }
+    for (const id of opts.playerIds) this.addPlayer(id, opts.hulls?.[id] ?? opts.hull);
+  }
+
+  /** Adds a builder (e.g. someone joining mid-draft) with an empty ship. */
+  addPlayer(id: PlayerId, hull: HullId) {
+    if (this.players.has(id)) return;
+    const core = hullCore(hull);
+    const p: PlayerDraft = {
+      hull,
+      buildable: new Set(hullBuildable(hull).map((q) => key(q.x, q.y))),
+      offers: [],
+      held: null,
+      cells: cockpitCells(core.x, core.y),
+      dealing: false,
+      full: false,
+    };
+    p.offers = this.dealOffers(p);
+    this.players.set(id, p);
+  }
+
+  has(id: PlayerId): boolean {
+    return this.players.has(id);
   }
 
   /** Returns null on success, or a short error message. */
@@ -102,7 +117,7 @@ export class Draft {
         if (!p.held) return "Not holding a piece";
         if (![0, 1, 2, 3].includes(action.rot)) return "Bad rotation";
         const cells = placedCells(p.held, action.x, action.y, action.rot, !!action.flip);
-        const err = placementError(this.buildable, p.cells, cells);
+        const err = placementError(p.buildable, p.cells, cells);
         if (err) return err;
         // Tag the cells with this placement so the art knows which neighbours share a piece.
         const piece = p.cells.length;
@@ -138,11 +153,12 @@ export class Draft {
     const p = this.players.get(playerId);
     const rivals: DraftView["rivals"] = [];
     for (const [id, other] of this.players) {
-      if (id !== playerId) rivals.push({ playerId: id, cells: other.cells.slice() });
+      if (id !== playerId) rivals.push({ playerId: id, hullRows: HULLS[other.hull].rows, cells: other.cells.slice() });
     }
+    const hull = p?.hull ?? "hauler";
     return {
-      hull: this.hull,
-      hullRows: HULLS[this.hull].rows,
+      hull,
+      hullRows: HULLS[hull].rows,
       cells: p ? p.cells.slice() : [],
       offers: p ? p.offers.slice() : [],
       held: p?.held ?? null,
@@ -171,7 +187,7 @@ export class Draft {
    * right now. If nothing fits any more, the ship is full: no hand, and it counts as done.
    */
   private dealOffers(p: PlayerDraft): Piece[] {
-    const shapes = fittingShapes(this.buildable, p.cells);
+    const shapes = fittingShapes(p.buildable, p.cells);
     p.full = shapes.length === 0;
     if (p.full) return [];
     return Array.from({ length: OFFER_COUNT }, () => generatePiece(this.rng, `p${this.nextId++}`, shapes));

@@ -29,6 +29,26 @@ const MIME: Record<string, string> = {
 await initPhysics();
 
 const rooms = new Map<string, Room>();
+/** Sockets on the lobby screen, sent the table list whenever it changes. */
+const lobbyWatchers = new Set<WebSocket>();
+let tablesQueued = false;
+
+function tablesMessage(): string {
+  const tables = [...rooms.values()].filter((r) => r.hasHumans()).map((r) => r.summary());
+  return JSON.stringify({ t: "tables", tables });
+}
+
+/** Tells the lobby about table changes, at most every quarter second. */
+function queueTables() {
+  if (tablesQueued) return;
+  tablesQueued = true;
+  setTimeout(() => {
+    tablesQueued = false;
+    if (lobbyWatchers.size === 0) return;
+    const data = tablesMessage();
+    for (const s of lobbyWatchers) if (s.readyState === s.OPEN) s.send(data);
+  }, 250);
+}
 
 const http = createServer(async (req, res) => {
   // Render's health check. Listening only starts once Rapier is initialised, so answering at all
@@ -66,8 +86,16 @@ wss.on("connection", (socket: WebSocket) => {
       return;
     }
 
+    if (msg.t === "lobby") {
+      if (room) return;
+      lobbyWatchers.add(socket);
+      socket.send(tablesMessage());
+      return;
+    }
+
     if (msg.t === "hello") {
       if (room) return;
+      lobbyWatchers.delete(socket);
       const code = msg.roomId?.toUpperCase();
       // Rooms live in memory, so a server restart forgets them. Asking for a code that doesn't
       // exist recreates it as a fresh lobby, which keeps shared links and reconnects working.
@@ -89,6 +117,7 @@ wss.on("connection", (socket: WebSocket) => {
   });
 
   socket.on("close", () => {
+    lobbyWatchers.delete(socket);
     if (room && playerId) room.leave(playerId, socket);
   });
 });
@@ -101,7 +130,7 @@ function createRoom(code?: string): Room {
   while (!code || rooms.has(code)) {
     code = Array.from({ length: 4 }, () => ROOM_CODE_LETTERS[Math.floor(Math.random() * ROOM_CODE_LETTERS.length)]).join("");
   }
-  const room = new Room(code, DEFAULT_BOTS);
+  const room = new Room(code, DEFAULT_BOTS, queueTables);
   rooms.set(code, room);
   return room;
 }
@@ -111,6 +140,7 @@ setInterval(() => {
     if (room.emptySince !== null && Date.now() - room.emptySince > EMPTY_ROOM_TTL_MS) {
       room.stop();
       rooms.delete(code);
+      queueTables();
     }
   }
 }, 30_000);

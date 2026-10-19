@@ -57,14 +57,14 @@ export function Results({ room, me, results, chat }: { room: RoomView; me: strin
           </tbody>
         </table>
 
-        {isHost && (
-          <div className="button-row">
+        <div className="button-row">
+          {isHost && (
             <button className="primary big" onClick={() => net.send({ t: "nextRound" })}>
               Next round
             </button>
-            <button onClick={() => net.send({ t: "toLobby" })}>Lobby</button>
-          </div>
-        )}
+          )}
+          <button onClick={() => net.quit()}>Quit</button>
+        </div>
       </div>
       <Chat messages={chat} players={room.players} />
     </div>

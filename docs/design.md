@@ -23,8 +23,15 @@ Online multiplayer, fast-paced, round-based game:
 - Offers come from an endless bag but only in shapes that fit somewhere on your ship right now. Empty pockets of fewer than 5 squares can never be filled and are hatched dark. Once nothing fits, your ship is full and counts as Done.
 - **Reroll** (R / hourglass): throw the hand away; 3 new offers arrive after a 1s wait, so you can't cycle for free.
 - The shared pool (unused offers go to a tray anyone can grab) is still in the code but switched off (POOL_ENABLED).
-- **Pace** (lobby): Frantic / Fast (default) / Strategic / Unlimited (no timer). A Done button in the draft starts the fight early once every connected human has clicked it (in Unlimited, that is the only way it starts). Build time scales with hull tier: small 25/40/60s, medium 35/60/90s, large 50/80/120s.
-- **Hulls**, three tiers of five: small (50–61 squares) Hauler, Hammerhead, Starfish, Barge, Catamaran; medium (71–84) Crab, Trident, Flying Wing, Panels, Strike; large (103–138) Station, Wedge, Manta, Saucer, Dreadnought. Every arm is at least 2 squares wide so pentominoes can reach it.
+- **Pace** (setup): Frantic / Fast (default) / Strategic / Unlimited (no timer). A Done button in the draft starts the fight early once every connected human has clicked it (in Unlimited, that is the only way it starts). Build time scales with hull tier: small 25/40/60s, medium 35/60/90s, large 50/80/120s.
+- **Hulls**, three classes of five, every hull in a class the same number of squares: small (60) Hauler, Hammerhead, Starfish, Barge, Catamaran; medium (80) Crab, Trident, Flying Wing, Panels, Strike; large (110) Station, Wedge, Manta, Saucer, Dreadnought. Every arm is at least 2 squares wide so pentominoes can reach it.
+- The host picks the **class**; each player picks their own hull within it (or Random, which bots always use), and can change it every round.
+
+## Tables
+
+- The **lobby** lists every table with a connected human (players, class, pace, phase); anyone with a name can create one or join any. A table link (`?r=CODE`) still joins directly.
+- A table's pre-round phase is **setup** (internal name): pick ships, host sets class / build time / bots, then Launch. Results' **Next round** (host) goes back to setup; **Quit** leaves for the lobby.
+- Joining mid-build starts your own ship with whatever time is left; joining mid-fight or on the results lets you watch until the next round.
 
 ## Pieces and cells
 
@@ -73,7 +80,7 @@ Online multiplayer, fast-paced, round-based game:
 
 ## Bots
 
-- Skill (lobby): **Easy / Medium (default) / Hard**.
+- Skill (setup): **Easy / Medium (default) / Hard**.
   - Building: hard bots take a draft action every 1.5–3s, medium 2.4–4.8s, easy 3.75–7.5s. This is the biggest difficulty lever: slower builders field smaller ships.
   - Flying: easy reacts slowest with the sloppiest aim; medium as before; hard aims steadier, goes after small nearby ships, side-steps enemy laser lines, and fights from the edge of laser range when outgunned.
   - Faster reactions measured worse (the thrust controller over-corrects), so hard thinks as often as medium.

@@ -1,9 +1,10 @@
 // Every message sent over the WebSocket, in both directions. JSON-encoded.
 import type { DraftAction, DraftView } from "./draft/index.js";
 import type { ArenaInit, ArenaSnapshot } from "./sim/index.js";
-import type { InputState, PlayerId, RoomSettings, RoundResultRow } from "./types.js";
+import type { HullChoice, HullTier, InputState, Pace, PlayerId, RoomSettings, RoundResultRow } from "./types.js";
 
-export type Phase = "lobby" | "draft" | "arena" | "results";
+/** A table's phases. "setup" is the pre-round table: pick ships and settings, then launch. */
+export type Phase = "setup" | "draft" | "arena" | "results";
 
 export interface PlayerInfo {
   id: PlayerId;
@@ -15,6 +16,20 @@ export interface PlayerInfo {
   /** Across every round in this room. */
   totalKills: number;
   totalDestroyed: number;
+  /** Ship pick for the next round. */
+  hullChoice: HullChoice;
+  /** Has a ship in the current round (false for someone who joined mid-fight). */
+  inRound: boolean;
+}
+
+/** One row of the lobby's table list. */
+export interface TableSummary {
+  id: string;
+  phase: Phase;
+  round: number;
+  tier: HullTier;
+  pace: Pace;
+  players: { name: string; color: string; isBot: boolean }[];
 }
 
 export interface RoomView {
@@ -46,8 +61,11 @@ export interface RoundResults {
 }
 
 export type ClientMsg =
-  /** First message on every connection. Omit roomId to create a new room. */
+  /** Watch the lobby's table list (until joining a table). */
+  | { t: "lobby" }
+  /** Join a table. Omit roomId to create a new one. */
   | { t: "hello"; name: string; roomId?: string; playerId?: PlayerId }
+  | { t: "pickHull"; hull: HullChoice }
   | { t: "chat"; text: string }
   | { t: "settings"; settings: RoomSettings }
   | { t: "addBot" }
@@ -57,10 +75,11 @@ export type ClientMsg =
   | { t: "input"; input: InputState }
   | { t: "fastForward"; on: boolean }
   | { t: "done"; on: boolean }
-  | { t: "nextRound" }
-  | { t: "toLobby" };
+  /** Host, from results: back to setup for the next round. */
+  | { t: "nextRound" };
 
 export type ServerMsg =
+  | { t: "tables"; tables: TableSummary[] }
   | { t: "welcome"; playerId: PlayerId; roomId: string }
   | { t: "room"; room: RoomView }
   | { t: "chat"; messages: ChatMessage[] }

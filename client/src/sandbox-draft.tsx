@@ -29,6 +29,8 @@ export function SandboxDraft() {
         wins: 0,
         totalKills: 0,
         totalDestroyed: 0,
+        hullChoice: "random",
+        inRound: true,
       })),
     [],
   );
