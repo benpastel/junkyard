@@ -9,6 +9,7 @@ import { FullscreenButton } from "../ui/FullscreenButton";
 import { KeyButton } from "../ui/KeyButton";
 import { loadCameraMode, saveCameraMode } from "./cameraPref";
 import { ArenaRenderer, COMPASS_MARGIN, COMPASS_RADIUS, COMPASS_TOP, type CameraMode } from "./renderer";
+import { TILT_DEAD_ZONE, TILT_FULL, requestTiltPermission, watchTilt } from "./tilt";
 import "./arena.css";
 
 /** Keyboard layout. Arrow keys fire engines facing that way; letters fire weapons. Lasers fire on their own. */
@@ -169,7 +170,7 @@ export function ArenaScreen(props: {
         <div className="arena-speed mono">{FAST_FORWARD_SPEED}×</div>
       )}
       {me && init.ships.some((s) => s.playerId === me) && (
-        <ArrowPad engines={engines} press={(k, d) => pressRef.current(k, d)} />
+        <TouchFlight engines={engines} press={(k, d) => pressRef.current(k, d)} />
       )}
       {(CAMERA_SWITCHING || fastForward) && (
         <div className="arena-controls">
@@ -211,6 +212,80 @@ export function ArenaScreen(props: {
             </div>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Touch screens: the arrow pad, or (toggled with the phone button) tilt steering with a gauge
+ * showing the lean. Turning tilt on takes the current angle as level.
+ */
+function TouchFlight({ engines, press }: { engines: number; press: (k: keyof InputState, down: boolean) => void }) {
+  const [tilt, setTilt] = useState(false);
+  const [lean, setLean] = useState({ x: 0, y: 0 });
+  const [held, setHeld] = useState(0);
+  const pressRef = useRef(press);
+  pressRef.current = press;
+
+  useEffect(() => {
+    if (!tilt) return;
+    const last: Record<string, boolean> = {};
+    const stop = watchTilt((l, keys) => {
+      setLean(l);
+      let mask = 0;
+      for (const { k, dir } of PAD_KEYS) {
+        const on = keys[k as "up" | "down" | "left" | "right"];
+        if (on) mask |= 1 << dir;
+        if (last[k] !== on) {
+          last[k] = on;
+          pressRef.current(k, on);
+        }
+      }
+      setHeld(mask);
+    });
+    return () => {
+      stop();
+      for (const { k } of PAD_KEYS) pressRef.current(k, false);
+      setHeld(0);
+      setLean({ x: 0, y: 0 });
+    };
+  }, [tilt]);
+
+  const toggle = async () => {
+    if (!tilt && !(await requestTiltPermission())) return;
+    setTilt(!tilt);
+  };
+
+  const g = (v: number) => Math.max(-1, Math.min(1, v / TILT_FULL)) * 40;
+  return (
+    <div className="touch-flight">
+      <button type="button" className={`tilt-toggle${tilt ? " on" : ""}`} aria-label="Tilt to steer" aria-pressed={tilt} onClick={toggle}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="8" y="3" width="9" height="16" rx="2" transform="rotate(18 12 12)" />
+          <path d="M3 17a9 9 0 0 0 4 4M21 7a9 9 0 0 0-4-4" />
+        </svg>
+      </button>
+      {tilt ? (
+        <div className="tilt-gauge">
+          <div className="tilt-zone" style={{ width: (TILT_DEAD_ZONE / TILT_FULL) * 80, height: (TILT_DEAD_ZONE / TILT_FULL) * 80 }} />
+          {PAD_KEYS.map(({ k, dir, rot }) => (
+            <svg
+              key={k}
+              className={`tilt-arrow${(held >> dir) & 1 ? " held" : ""}${(engines >> dir) & 1 ? "" : " dead"}`}
+              width="18"
+              height="18"
+              viewBox="0 0 20 20"
+              style={{ transform: `translate(-50%, -50%) rotate(${rot}deg) translateY(-46px)` }}
+              aria-hidden
+            >
+              <path d="M10 3 L17 14 L3 14 Z" fill="currentColor" />
+            </svg>
+          ))}
+          <div className="tilt-dot" style={{ transform: `translate(calc(-50% + ${g(lean.x)}px), calc(-50% + ${g(lean.y)}px))` }} />
+        </div>
+      ) : (
+        <ArrowPad engines={engines} press={press} />
       )}
     </div>
   );
