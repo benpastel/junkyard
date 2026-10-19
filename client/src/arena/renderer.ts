@@ -402,6 +402,9 @@ export class ArenaRenderer {
   /** Your ship's recent world positions, for the fading trail in ship mode. */
   private trail: { x: number; y: number; t: number }[] = [];
 
+  /** Bitmask of dirs your ship has a working engine for, as of the last frame drawn. */
+  myEngineDirs = 15;
+
   /** Arrow keys held, for panning the free camera once you have no ship. */
   private pan = { up: false, down: false, left: false, right: false };
 
@@ -916,10 +919,12 @@ export class ArenaRenderer {
     if (cockpit && b.owner) {
       ctx.save();
       ctx.translate((cockpit.x - 0.5) * S, (cockpit.y - 0.5) * S);
+      const available = this.engineDirs(cells.cells);
+      if (b.owner === this.me) this.myEngineDirs = available;
       drawCockpit(ctx, S, {
         color: this.shipInfo.get(b.owner)?.color ?? "#fff",
         held: this.heldKeys(b),
-        available: this.engineDirs(cells.cells),
+        available,
       });
       ctx.restore();
     }

@@ -86,3 +86,60 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
+
+/* Touch screens: the cockpit's arrow keys, big, bottom left. */
+.arena {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.arrow-pad {
+  display: none;
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  grid-template-areas:
+    ". up ."
+    "left down right";
+  grid-template-columns: repeat(3, 68px);
+  grid-template-rows: repeat(2, 68px);
+  gap: 6px;
+}
+
+@media (pointer: coarse) {
+  .arrow-pad {
+    display: grid;
+  }
+  /* The pad takes the bottom left, so the other buttons move right. */
+  .arena-controls {
+    left: auto;
+    right: 16px;
+    transform: none;
+  }
+}
+
+.arrow-key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: rgba(160, 200, 230, 0.75);
+  background: rgba(12, 18, 24, 0.55);
+  border: 1px solid rgba(160, 200, 230, 0.35);
+  border-radius: 10px;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.arrow-key.held {
+  color: #fff;
+  background: rgba(120, 190, 240, 0.35);
+  border-color: rgba(120, 190, 240, 0.8);
+}
+
+.arrow-key.dead {
+  color: rgba(120, 120, 120, 0.45);
+  border-color: rgba(120, 120, 120, 0.25);
+}

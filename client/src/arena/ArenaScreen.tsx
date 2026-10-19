@@ -20,6 +20,11 @@ export const KEYMAP: Record<string, keyof InputState> = {
 };
 
 const RESEND_MS = 100;
+/**
+ * The camera keeps your ship pointing (roughly) up. Switching to the fixed-north view (C, or the
+ * camera button) is turned off for now; set this to bring it back.
+ */
+const CAMERA_SWITCHING = false;
 
 export function ArenaScreen(props: {
   init: ArenaInit;
@@ -35,9 +40,17 @@ export function ArenaScreen(props: {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [pips, setPips] = useState<{ color: string; alive: boolean }[]>([]);
   const rendererRef = useRef<ArenaRenderer | null>(null);
-  const [camera, setCamera] = useState<CameraMode>(loadCameraMode);
+  const [camera, setCamera] = useState<CameraMode>(() =>
+    CAMERA_SWITCHING ? loadCameraMode() : "ship",
+  );
+  // Engine dirs your ship can push in, for greying out the on-screen arrows.
+  const [engines, setEngines] = useState(15);
+  const pressRef = useRef<(k: keyof InputState, down: boolean) => void>(
+    () => {},
+  );
   const toggleCamera = () => {
-    const next: CameraMode = (rendererRef.current?.cameraMode ?? camera) === "ship" ? "north" : "ship";
+    const next: CameraMode =
+      (rendererRef.current?.cameraMode ?? camera) === "ship" ? "north" : "ship";
     if (rendererRef.current) rendererRef.current.cameraMode = next;
     saveCameraMode(next);
     setCamera(next);
@@ -51,7 +64,7 @@ export function ArenaScreen(props: {
 
   useEffect(() => {
     const renderer = new ArenaRenderer(init, me);
-    renderer.cameraMode = loadCameraMode();
+    renderer.cameraMode = CAMERA_SWITCHING ? loadCameraMode() : "ship";
     rendererRef.current = renderer;
     const unsub = subscribe((s) => renderer.push(s));
     const canvas = canvasRef.current!;
@@ -77,6 +90,7 @@ export function ArenaScreen(props: {
         lastPips = key;
         setPips(p);
       }
+      setEngines(renderer.myEngineDirs);
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -96,6 +110,7 @@ export function ArenaScreen(props: {
       rendererRef.current?.setPan(keys);
       send();
     };
+    pressRef.current = press;
     const set = (e: KeyboardEvent, down: boolean) => {
       const k = KEYMAP[e.code];
       if (!k) return;
@@ -104,7 +119,8 @@ export function ArenaScreen(props: {
     };
     const onDown = (e: KeyboardEvent) => {
       if (e.code === FAST_FORWARD_KEY && !e.repeat) ffRef.current?.toggle();
-      if (e.code === CAMERA_KEY && !e.repeat) toggleCameraRef.current();
+      if (CAMERA_SWITCHING && e.code === CAMERA_KEY && !e.repeat)
+        toggleCameraRef.current();
       set(e, true);
     };
     const onUp = (e: KeyboardEvent) => set(e, false);
@@ -141,41 +157,112 @@ export function ArenaScreen(props: {
       {fastForward?.active && (
         <div className="arena-speed mono">{FAST_FORWARD_SPEED}×</div>
       )}
-      <div className="arena-controls">
-        <div className="arena-controls-group">
-          <KeyButton
-            title="Switch camera"
-            keyLabel="C"
-            icon={
-              <span className="cam-mode">
-                {camera === "ship" ? <ShipUpIcon /> : <FixedIcon />}
-                <span className="cam-label mono">{camera === "ship" ? "Ship-up" : "Fixed"}</span>
-              </span>
-            }
-            onClick={toggleCamera}
-          />
-        </div>
-        {fastForward && (
-          <div className="arena-controls-group">
-            <KeyButton
-              title="Fast-forward"
-              keyLabel="F"
-              icon={
-                <span className="ff-icon">
-                  <FastForwardIcon />
-                  {fastForward.needed > 1 && (
-                    <span className="ff-votes mono">
-                      {fastForward.votes}/{fastForward.needed}
+      {me && init.ships.some((s) => s.playerId === me) && (
+        <ArrowPad engines={engines} press={(k, d) => pressRef.current(k, d)} />
+      )}
+      {(CAMERA_SWITCHING || fastForward) && (
+        <div className="arena-controls">
+          {CAMERA_SWITCHING && (
+            <div className="arena-controls-group">
+              <KeyButton
+                title="Switch camera"
+                keyLabel="C"
+                icon={
+                  <span className="cam-mode">
+                    {camera === "ship" ? <ShipUpIcon /> : <FixedIcon />}
+                    <span className="cam-label mono">
+                      {camera === "ship" ? "Ship-up" : "Fixed"}
                     </span>
-                  )}
-                </span>
-              }
-              active={fastForward.voted || fastForward.active}
-              onClick={fastForward.toggle}
-            />
-          </div>
-        )}
-      </div>
+                  </span>
+                }
+                onClick={toggleCamera}
+              />
+            </div>
+          )}
+          {fastForward && (
+            <div className="arena-controls-group">
+              <KeyButton
+                title="Fast-forward"
+                keyLabel="F"
+                icon={
+                  <span className="ff-icon">
+                    <FastForwardIcon />
+                    {fastForward.needed > 1 && (
+                      <span className="ff-votes mono">
+                        {fastForward.votes}/{fastForward.needed}
+                      </span>
+                    )}
+                  </span>
+                }
+                active={fastForward.voted || fastForward.active}
+                onClick={fastForward.toggle}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const PAD_KEYS: {
+  k: keyof InputState;
+  dir: number;
+  area: string;
+  rot: number;
+}[] = [
+  { k: "up", dir: 0, area: "up", rot: 0 },
+  { k: "left", dir: 3, area: "left", rot: -90 },
+  { k: "down", dir: 2, area: "down", rot: 180 },
+  { k: "right", dir: 1, area: "right", rot: 90 },
+];
+
+/**
+ * Touch screens: the cockpit's arrow keys, big, in a corner. Hold to fire those engines; several
+ * fingers at once work. Arrows with no working engine behind them are greyed out.
+ */
+function ArrowPad({
+  engines,
+  press,
+}: {
+  engines: number;
+  press: (k: keyof InputState, down: boolean) => void;
+}) {
+  const [held, setHeld] = useState(0);
+  const set = (k: keyof InputState, dir: number, down: boolean) => {
+    press(k, down);
+    setHeld((h) => (down ? h | (1 << dir) : h & ~(1 << dir)));
+  };
+  return (
+    <div className="arrow-pad">
+      {PAD_KEYS.map(({ k, dir, area, rot }) => (
+        <button
+          key={k}
+          type="button"
+          aria-label={k}
+          className={`arrow-key${(held >> dir) & 1 ? " held" : ""}${(engines >> dir) & 1 ? "" : " dead"}`}
+          style={{ gridArea: area }}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.currentTarget.releasePointerCapture?.(e.pointerId);
+            set(k, dir, true);
+          }}
+          onPointerUp={() => set(k, dir, false)}
+          onPointerCancel={() => set(k, dir, false)}
+          onPointerLeave={() => set(k, dir, false)}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <svg
+            width="30"
+            height="30"
+            viewBox="0 0 20 20"
+            style={{ transform: `rotate(${rot}deg)` }}
+            aria-hidden
+          >
+            <path d="M10 3 L17 14 L3 14 Z" fill="currentColor" />
+          </svg>
+        </button>
+      ))}
     </div>
   );
 }
@@ -183,9 +270,22 @@ export function ArenaScreen(props: {
 /** Fixed view: a still frame with a ship turning inside it. */
 function FixedIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      aria-hidden
+    >
       <rect x="2" y="2" width="16" height="16" rx="2" />
-      <path d="M10 5.5 L13 13 L10 11.5 L7 13 Z" fill="currentColor" stroke="none" transform="rotate(35 10 10)" />
+      <path
+        d="M10 5.5 L13 13 L10 11.5 L7 13 Z"
+        fill="currentColor"
+        stroke="none"
+        transform="rotate(35 10 10)"
+      />
     </svg>
   );
 }
@@ -193,9 +293,28 @@ function FixedIcon() {
 /** Ship-up view: the ship stays pointing up while the frame turns round it. */
 function ShipUpIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
-      <rect x="2" y="2" width="16" height="16" rx="2" transform="rotate(-20 10 10)" />
-      <path d="M10 5.5 L13 13 L10 11.5 L7 13 Z" fill="currentColor" stroke="none" />
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      aria-hidden
+    >
+      <rect
+        x="2"
+        y="2"
+        width="16"
+        height="16"
+        rx="2"
+        transform="rotate(-20 10 10)"
+      />
+      <path
+        d="M10 5.5 L13 13 L10 11.5 L7 13 Z"
+        fill="currentColor"
+        stroke="none"
+      />
     </svg>
   );
 }
