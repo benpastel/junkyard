@@ -1,6 +1,19 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Dir, PlayerId, PlayerInfo } from "@ja/shared";
-import { POOL_ENABLED, transformCells, type DraftAction, type DraftView, type Piece } from "@ja/shared/draft";
+import {
+  POOL_ENABLED,
+  transformCells,
+  type DraftAction,
+  type DraftView,
+  type Piece,
+} from "@ja/shared/draft";
 import { BOARD_PAD, Board, type DragState } from "./Board";
 import { PIECE_PAD, PieceCanvas } from "./PieceCanvas";
 import { RivalShip } from "./RivalShip";
@@ -29,19 +42,29 @@ export function DraftScreen(props: {
   const [pending, setPending] = useState<Piece | null>(null);
   // The piece we just asked to place, hidden until the server confirms (or a new view arrives).
   const [placing, setPlacing] = useState<string | null>(null);
-  const drag = useRef<DragState>({ active: false, startX: 0, startY: 0, moved: false });
+  const drag = useRef<DragState>({
+    active: false,
+    startX: 0,
+    startY: 0,
+    moved: false,
+  });
 
   useEffect(() => setPlacing(null), [view]);
 
   // The offers stay put while you hold one, so a pick is still valid while it's among them.
   const pendingStillValid =
-    pending !== null && (view.offers.some((p) => p.id === pending.id) || view.pool.some((p) => p.id === pending.id));
+    pending !== null &&
+    (view.offers.some((p) => p.id === pending.id) ||
+      view.pool.some((p) => p.id === pending.id));
   const held0 = pendingStillValid ? pending : view.held;
   const held = held0 && held0.id === placing ? null : held0;
 
   const heldId = held?.id ?? null;
   const { rot, flip } = heldId ? orientOf(heldId) : UPRIGHT;
-  const heldShape = useMemo(() => (held ? transformCells(held.cells, rot, flip) : null), [held, rot, flip]);
+  const heldShape = useMemo(
+    () => (held ? transformCells(held.cells, rot, flip) : null),
+    [held, rot, flip],
+  );
   const heldBox = useRef({ w: 1, h: 1 });
   if (heldShape) heldBox.current = shapeBox(heldShape);
 
@@ -62,7 +85,10 @@ export function DraftScreen(props: {
   const rotate = useCallback(
     (by: 1 | -1) => {
       const { w, h } = heldBox.current;
-      if (heldId) setGrab((g) => (by === 1 ? { x: h - g.y, y: g.x } : { x: g.y, y: w - g.x }));
+      if (heldId)
+        setGrab((g) =>
+          by === 1 ? { x: h - g.y, y: g.x } : { x: g.y, y: w - g.x },
+        );
       turn((o) => ({ ...o, rot: ((o.rot + by + 4) % 4) as Dir }));
     },
     [heldId, turn],
@@ -80,7 +106,11 @@ export function DraftScreen(props: {
     setPending(null);
   }, [act, held]);
 
-  const take = (piece: Piece, from: "offer" | "pool", at: { x: number; y: number }) => {
+  const take = (
+    piece: Piece,
+    from: "offer" | "pool",
+    at: { x: number; y: number },
+  ) => {
     if (held?.id === piece.id) {
       discard();
       return;
@@ -88,7 +118,11 @@ export function DraftScreen(props: {
     setGrab(at);
     // Switching straight to another offer is fine; a pool piece has to be swapped back first.
     if (held && from === "pool") act({ type: "discard" });
-    act(from === "offer" ? { type: "takeOffer", pieceId: piece.id } : { type: "takePool", pieceId: piece.id });
+    act(
+      from === "offer"
+        ? { type: "takeOffer", pieceId: piece.id }
+        : { type: "takePool", pieceId: piece.id },
+    );
     setPending(piece);
   };
 
@@ -113,7 +147,11 @@ export function DraftScreen(props: {
   // Keyboard: Q / E rotate, F flips, Esc puts the piece back, R rerolls the offers.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
       const k = e.key.toLowerCase();
       if (k === "q") rotate(-1);
       else if (k === "e") rotate(1);
@@ -150,25 +188,86 @@ export function DraftScreen(props: {
     };
   }, [heldId, rotate]);
 
+  const status = (
+    <>
+      {endsAt !== null && <Timer endsAt={endsAt} />}
+      {done && (
+        <button
+          className={`draft-done${done.voted || view.full ? " on" : ""}`}
+          onClick={done.toggle}
+          disabled={view.full}
+        >
+          Done
+          {done.needed > 1 && (
+            <span className="mono">
+              {" "}
+              {done.votes}/{done.needed}
+            </span>
+          )}
+        </button>
+      )}
+    </>
+  );
+
   const rivals = view.rivals
     .map((r) => ({ ...r, info: players.find((p) => p.id === r.playerId) }))
     .filter((r) => r.info);
 
   // One scale for everything: the offers sit at the board's size, so a piece never resizes
-  // between being picked up and being placed.
+  // between being picked up and being placed. Phones (compact) are too narrow for three offers
+  // at board size, so there the offers are smaller and the piece grows as you lift it.
   const rootRef = useRef<HTMLDivElement>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
   const cols = view.hullRows[0]!.length;
   const rows = view.hullRows.length;
-  const [cell, setCell] = useState(32);
+  const [{ cell, offerCell, compact }, setLayout] = useState({
+    cell: 32,
+    offerCell: 32,
+    compact: false,
+  });
   useLayoutEffect(() => {
     const fit = () => {
       const r = rootRef.current!.getBoundingClientRect();
       const tools = toolsRef.current!.getBoundingClientRect().height;
-      const h = (r.height - 2 * EDGE - 2 * GAP - tools) / (OFFER_CELLS + rows + BOARD_PAD * 2);
-      const w = (r.width - 2 * EDGE - 2 * SIDE - 2 * GAP) / (cols + BOARD_PAD * 2);
-      const offersW = (r.width - 2 * EDGE - 2 * GAP) / (3 * (5 + PIECE_PAD * 2));
-      setCell(Math.max(14, Math.min(MAX_CELL, Math.floor(Math.min(h, w, offersW)))));
+      const offersW =
+        (r.width - 2 * EDGE - 2 * GAP) / (3 * (5 + PIECE_PAD * 2));
+      if (r.width < COMPACT_WIDTH) {
+        const status = statusRef.current?.getBoundingClientRect().height ?? 0;
+        const offer = Math.max(
+          10,
+          Math.floor(Math.min(offersW, (r.height * 0.22) / OFFER_CELLS)),
+        );
+        const h =
+          (r.height -
+            2 * EDGE -
+            3 * GAP -
+            tools -
+            status -
+            OFFER_CELLS * offer) /
+          (rows + BOARD_PAD * 2);
+        const w = (r.width - 2 * EDGE) / (cols + BOARD_PAD * 2);
+        const board = Math.max(
+          10,
+          Math.min(MAX_CELL, Math.floor(Math.min(h, w))),
+        );
+        setLayout({
+          cell: board,
+          offerCell: Math.min(offer, board),
+          compact: true,
+        });
+        return;
+      }
+      const h =
+        (r.height - 2 * EDGE - 2 * GAP - tools) /
+        (OFFER_CELLS + rows + BOARD_PAD * 2);
+      const w =
+        (r.width - 2 * EDGE - 2 * SIDE - 2 * GAP) / (cols + BOARD_PAD * 2);
+      const c = Math.max(
+        14,
+        Math.min(MAX_CELL, Math.floor(Math.min(h, w, offersW))),
+      );
+      setLayout({ cell: c, offerCell: c, compact: false });
     };
     fit();
     const ro = new ResizeObserver(fit);
@@ -177,9 +276,21 @@ export function DraftScreen(props: {
   }, [cols, rows]);
 
   return (
-    <div className="draft" ref={rootRef} style={{ padding: EDGE, gap: GAP }}>
+    <div
+      className={`draft${compact ? " compact" : ""}`}
+      ref={rootRef}
+      style={{ padding: EDGE, gap: GAP }}
+    >
+      {compact && (
+        <div className="draft-status-bar" ref={statusRef}>
+          {status}
+        </div>
+      )}
       <section className="draft-hand">
-        <div className="draft-offers" style={{ height: OFFER_CELLS * cell, gap: GAP }}>
+        <div
+          className="draft-offers"
+          style={{ height: OFFER_CELLS * offerCell, gap: GAP }}
+        >
           {view.dealing ? (
             <div className="draft-dealing">
               <HourglassIcon />
@@ -189,8 +300,12 @@ export function DraftScreen(props: {
               <PieceCard
                 key={p.id}
                 piece={p}
-                cells={transformCells(p.cells, orientOf(p.id).rot, orientOf(p.id).flip)}
-                cell={cell}
+                cells={transformCells(
+                  p.cells,
+                  orientOf(p.id).rot,
+                  orientOf(p.id).flip,
+                )}
+                cell={offerCell}
                 color={color}
                 held={held?.id === p.id}
                 onTake={(at) => take(p, "offer", at)}
@@ -201,34 +316,59 @@ export function DraftScreen(props: {
         </div>
         <div className="draft-tools" ref={toolsRef}>
           <div className="draft-rotate-pair">
-            <KeyButton title="Rotate counter-clockwise" keyLabel="Q" icon={<RotateIcon ccw />} onClick={() => rotate(-1)} />
-            <KeyButton title="Rotate clockwise" keyLabel="E" icon={<RotateIcon />} onClick={() => rotate(1)} />
+            <KeyButton
+              title="Rotate counter-clockwise"
+              keyLabel="Q"
+              icon={<RotateIcon ccw />}
+              onClick={() => rotate(-1)}
+            />
+            <KeyButton
+              title="Rotate clockwise"
+              keyLabel="E"
+              icon={<RotateIcon />}
+              onClick={() => rotate(1)}
+            />
           </div>
-          <KeyButton title="Flip" keyLabel="F" icon={<FlipIcon />} onClick={toggleFlip} active={flip} />
+          <KeyButton
+            title="Flip"
+            keyLabel="F"
+            icon={<FlipIcon />}
+            onClick={toggleFlip}
+            active={flip}
+          />
           <span className="draft-tools-gap" />
-          <KeyButton title="New offers" keyLabel="R" icon={<DiceIcon />} onClick={reroll} active={view.dealing} disabled={view.dealing} />
+          <KeyButton
+            title="New offers"
+            keyLabel="R"
+            icon={<DiceIcon />}
+            onClick={reroll}
+            active={view.dealing}
+            disabled={view.dealing}
+          />
           {/* Only there while holding; hidden rather than removed so the row doesn't shift. */}
           <span style={{ visibility: held ? "visible" : "hidden" }}>
-            <KeyButton title="Put back" keyLabel="Esc" icon={<DiscardIcon />} onClick={discard} />
+            <KeyButton
+              title="Put back"
+              keyLabel="Esc"
+              icon={<DiscardIcon />}
+              onClick={discard}
+            />
           </span>
         </div>
       </section>
 
-      <div className="draft-body" style={{ gridTemplateColumns: `${SIDE}px minmax(0, 1fr) ${SIDE}px`, gap: GAP }}>
-        <aside className="draft-side draft-status">
-          {endsAt !== null && <Timer endsAt={endsAt} />}
-          {done && (
-            <button className={`draft-done${done.voted || view.full ? " on" : ""}`} onClick={done.toggle} disabled={view.full}>
-              Done
-              {done.needed > 1 && (
-                <span className="mono">
-                  {" "}
-                  {done.votes}/{done.needed}
-                </span>
-              )}
-            </button>
-          )}
-        </aside>
+      <div
+        className="draft-body"
+        style={{
+          gridTemplateColumns: compact
+            ? "minmax(0, 1fr)"
+            : `${SIDE}px minmax(0, 1fr) ${SIDE}px`,
+          gap: GAP,
+        }}
+      >
+        {!compact && (
+          <aside className="draft-side draft-status">{status}</aside>
+        )}
 
         <main className="draft-main">
           <Board
@@ -246,36 +386,51 @@ export function DraftScreen(props: {
           />
         </main>
 
-        <aside className="draft-side">
-          {POOL_ENABLED && (
-            <section className="draft-pool-section">
-              <div className="draft-pool">
-                {view.pool.map((p) => (
-                  <PieceCard
-                    key={p.id}
-                    piece={p}
-                    cell={14}
-                    color={color}
-                    small
-                    held={held?.id === p.id}
-                    onTake={(at) => take(p, "pool", at)}
-                    drag={drag}
+        {!compact && (
+          <aside className="draft-side">
+            {POOL_ENABLED && (
+              <section className="draft-pool-section">
+                <div className="draft-pool">
+                  {view.pool.map((p) => (
+                    <PieceCard
+                      key={p.id}
+                      piece={p}
+                      cell={14}
+                      color={color}
+                      small
+                      held={held?.id === p.id}
+                      onTake={(at) => take(p, "pool", at)}
+                      drag={drag}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+            {rivals.length > 0 && (
+              <div className="draft-rivals">
+                {rivals.map((r) => (
+                  <RivalShip
+                    key={r.playerId}
+                    hullRows={r.hullRows}
+                    cells={r.cells}
+                    color={r.info!.color}
+                    name={r.info!.name}
                   />
                 ))}
               </div>
-            </section>
-          )}
-          {rivals.length > 0 && (
-            <div className="draft-rivals">
-              {rivals.map((r) => (
-                <RivalShip key={r.playerId} hullRows={r.hullRows} cells={r.cells} color={r.info!.color} name={r.info!.name} />
-              ))}
-            </div>
-          )}
-        </aside>
+            )}
+          </aside>
+        )}
       </div>
 
-      {heldShape && !overBoard && <FloatingPiece cells={heldShape} color={color} cell={cell} grab={grab} />}
+      {heldShape && !overBoard && (
+        <FloatingPiece
+          cells={heldShape}
+          color={color}
+          cell={cell}
+          grab={grab}
+        />
+      )}
     </div>
   );
 }
@@ -291,17 +446,39 @@ interface Orient {
 }
 const UPRIGHT: Orient = { rot: 0, flip: false };
 const MAX_CELL = 64;
+/** Narrower than this (phones), the layout stacks: status, offers, buttons, board. */
+const COMPACT_WIDTH = 720;
+/** On touch, a picked-up piece floats this many squares above the finger so it stays in view. */
+const TOUCH_LIFT = 1.2;
 /** Height of the offer row, in squares: room for a piece five squares tall. */
 const OFFER_CELLS = 5.6;
 
 function shapeBox(cells: readonly { x: number; y: number }[]) {
-  return { w: Math.max(...cells.map((c) => c.x)) + 1, h: Math.max(...cells.map((c) => c.y)) + 1 };
+  return {
+    w: Math.max(...cells.map((c) => c.x)) + 1,
+    h: Math.max(...cells.map((c) => c.y)) + 1,
+  };
 }
 
-const ICON = { width: 26, height: 26, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" } as const;
+const ICON = {
+  width: 26,
+  height: 26,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+} as const;
 
 // Rotate and flip show a little L before (faint) and after (solid).
-function MiniL(props: { x: number; y: number; turned?: boolean; mirror?: boolean; ghost?: boolean }) {
+function MiniL(props: {
+  x: number;
+  y: number;
+  turned?: boolean;
+  mirror?: boolean;
+  ghost?: boolean;
+}) {
   const s = 5;
   let cells: [number, number][] = [
     [0, 0],
@@ -315,7 +492,16 @@ function MiniL(props: { x: number; y: number; turned?: boolean; mirror?: boolean
   return (
     <g opacity={props.ghost ? 0.35 : 1}>
       {cells.map(([cx, cy]) => (
-        <rect key={`${cx},${cy}`} x={props.x + cx * s} y={props.y + cy * s} width={s - 1} height={s - 1} fill="currentColor" stroke="none" rx={0.6} />
+        <rect
+          key={`${cx},${cy}`}
+          x={props.x + cx * s}
+          y={props.y + cy * s}
+          width={s - 1}
+          height={s - 1}
+          fill="currentColor"
+          stroke="none"
+          rx={0.6}
+        />
       ))}
     </g>
   );
@@ -325,7 +511,11 @@ const GLYPH = { ...ICON, width: 36, height: 36, viewBox: "0 0 32 32" } as const;
 
 function RotateIcon({ ccw }: { ccw?: boolean }) {
   return (
-    <svg {...GLYPH} style={ccw ? { transform: "scaleX(-1)" } : undefined} aria-hidden>
+    <svg
+      {...GLYPH}
+      style={ccw ? { transform: "scaleX(-1)" } : undefined}
+      aria-hidden
+    >
       <MiniL x={2} y={13} ghost />
       <MiniL x={15} y={16} turned />
       <path d="M5 10C7 3 19 2 23 10" />
@@ -355,7 +545,14 @@ function DiceIcon() {
         [8.5, 15.5],
         [15.5, 15.5],
       ].map(([cx, cy]) => (
-        <circle key={`${cx},${cy}`} cx={cx} cy={cy} r={1.4} fill="currentColor" stroke="none" />
+        <circle
+          key={`${cx},${cy}`}
+          cx={cx}
+          cy={cy}
+          r={1.4}
+          fill="currentColor"
+          stroke="none"
+        />
       ))}
     </svg>
   );
@@ -400,15 +597,29 @@ function PieceCard(props: {
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.preventDefault();
-        drag.current = { active: true, startX: e.clientX, startY: e.clientY, moved: false };
+        drag.current = {
+          active: true,
+          startX: e.clientX,
+          startY: e.clientY,
+          moved: false,
+        };
         // Keep the grabbed spot under the pointer (clamped onto the piece's box).
         const { w, h } = shapeBox(cells);
         const canvas = e.currentTarget.querySelector("canvas");
         const r = canvas?.getBoundingClientRect();
         const at = r
-          ? { x: (e.clientX - r.left) / cell - PIECE_PAD, y: (e.clientY - r.top) / cell - PIECE_PAD }
+          ? {
+              x: (e.clientX - r.left) / cell - PIECE_PAD,
+              y: (e.clientY - r.top) / cell - PIECE_PAD,
+            }
           : { x: w / 2, y: h / 2 };
-        onTake({ x: clamp(at.x, 0.2, w - 0.2), y: clamp(at.y, 0.2, h - 0.2) });
+        // A finger would hide the piece, so on touch it's held from below, lifted above the finger.
+        if (e.pointerType === "touch") onTake({ x: w / 2, y: h + TOUCH_LIFT });
+        else
+          onTake({
+            x: clamp(at.x, 0.2, w - 0.2),
+            y: clamp(at.y, 0.2, h - 0.2),
+          });
       }}
     >
       {!held && <PieceCanvas cells={cells} cell={cell} color={color} />}
@@ -421,7 +632,12 @@ function clamp(v: number, lo: number, hi: number) {
 }
 
 /** The held piece, following the pointer when it isn't over the grid, at the board's scale. */
-function FloatingPiece(props: { cells: ReturnType<typeof transformCells>; color: string; cell: number; grab: { x: number; y: number } }) {
+function FloatingPiece(props: {
+  cells: ReturnType<typeof transformCells>;
+  color: string;
+  cell: number;
+  grab: { x: number; y: number };
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const { cell } = props;
   const ox = (PIECE_PAD + props.grab.x) * cell;
@@ -474,5 +690,9 @@ function Timer({ endsAt }: { endsAt: number }) {
   const left = Math.max(0, Math.ceil((endsAt - now) / 1000));
   const mm = Math.floor(left / 60);
   const ss = String(left % 60).padStart(2, "0");
-  return <div className={`draft-timer${left <= 10 ? " urgent" : ""}`}>{`${mm}:${ss}`}</div>;
+  return (
+    <div
+      className={`draft-timer${left <= 10 ? " urgent" : ""}`}
+    >{`${mm}:${ss}`}</div>
+  );
 }

@@ -1,7 +1,11 @@
 .draft {
   display: flex;
   flex-direction: column;
+  /* dvh: on phones 100vh is taller than what's visible, which made the page scroll mid-drag. */
   height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -297,4 +301,47 @@
 
 .draft-status .draft-timer {
   margin-bottom: 0;
+}
+
+/* Phones: timer and Done in a bar along the top; rivals are left out. */
+.draft-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.draft.compact .draft-timer {
+  font-size: 26px;
+}
+
+.draft.compact .draft-done {
+  padding: 6px 16px;
+  font-size: 14px;
+}
+
+.draft.compact .draft-tools .key-button {
+  width: 56px;
+}
+
+.draft.compact .piece-card,
+.draft.compact .draft-board canvas {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Phones: the buttons go to the bottom, in thumb reach. */
+.draft.compact .draft-hand {
+  display: contents;
+}
+
+.draft.compact .draft-offers {
+  order: 1;
+}
+
+.draft.compact .draft-body {
+  order: 2;
+}
+
+.draft.compact .draft-tools {
+  order: 3;
 }

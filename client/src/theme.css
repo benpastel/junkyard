@@ -21,6 +21,10 @@
   box-sizing: border-box;
 }
 
+html {
+  background: var(--bg);
+}
+
 html,
 body,
 #root {

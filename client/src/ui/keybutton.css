@@ -52,3 +52,10 @@
   color: var(--hazard);
   border-color: var(--hazard);
 }
+
+/* No keyboard on touch screens, so no keycaps. */
+@media (pointer: coarse) {
+  .key-button kbd {
+    display: none;
+  }
+}
