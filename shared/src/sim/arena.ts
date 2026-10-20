@@ -126,6 +126,11 @@ export class Arena {
   /** Set on the tick the fight is decided; from then on the ring stops and nothing takes damage. */
   private endedAt: number | null = null;
   private finalResults: RoundResultRow[] | null = null;
+  /**
+   * Who won, once the fight is decided: the last ship still flying, or null for a draw (everyone
+   * went down). Placings still rank a draw by who lasted longest, so don't read the winner off those.
+   */
+  winner: PlayerId | null = null;
   /** Optional debug log of everything that breaks and why. Unset in normal play (zero cost). */
   onLog: ((line: string) => void) | null = null;
   private readonly bounceCooldown = new Map<SimBody, number>();
@@ -393,6 +398,7 @@ export class Arena {
       this.finalResults = this.computeResults();
       const winners = this.finalResults.filter((r) => r.place === 1 && this.ship(r.playerId)?.alive);
       const winner = winners.length === 1 ? winners[0]!.playerId : null;
+      this.winner = winner;
       this.events.push({ e: "over", winner });
       this.log(`fight over: ${winner ?? "nobody"} wins`);
     }

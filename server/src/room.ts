@@ -341,8 +341,8 @@ export class Room {
       p.totalKills += r.kills;
       p.totalDestroyed += r.cellsDestroyed;
     }
-    const winner = rows.find((r) => r.place === 1);
-    const winnerId = winner && rows.filter((r) => r.place === 1).length === 1 ? winner.playerId : null;
+    // The arena's call: a draw (everyone down) has no winner even though someone placed first.
+    const winnerId = arena.winner;
     if (winnerId) {
       const p = this.players.get(winnerId);
       if (p) {

@@ -356,4 +356,32 @@ describe("arena", () => {
       SIM.rocksPerArea = saved;
     }
   });
+  it("everyone going down together is a draw, with no winner", () => {
+    const a = new Arena({ ships: [bp("a", ["#C#"]), bp("b", ["#C#"])], seed: 1 });
+    run(a, 2);
+    const touched = new Set<any>();
+    for (const id of ["a", "b"]) {
+      const ship = a.ship(id)!;
+      for (const c of ship.cockpit) (a as any).damageCell(c, c.hp, null, touched, "test");
+    }
+    for (const b of touched) (a as any).splitBody(b);
+    run(a, 1);
+    expect(a.over).toBe(true);
+    expect(a.winner).toBe(null);
+    // Placings still rank the draw (one of them is first), but that is not a win.
+    expect(a.results().some((r) => r.place === 1)).toBe(true);
+    a.dispose();
+  });
+
+  it("the last ship flying is the winner", () => {
+    const a = new Arena({ ships: [bp("a", ["#C#"]), bp("b", ["#C#"])], seed: 1 });
+    run(a, 2);
+    const touched = new Set<any>();
+    for (const c of a.ship("b")!.cockpit) (a as any).damageCell(c, c.hp, null, touched, "test");
+    for (const b of touched) (a as any).splitBody(b);
+    run(a, 1);
+    expect(a.winner).toBe("a");
+    a.dispose();
+  });
+
 });
