@@ -13,6 +13,12 @@ export interface DragState {
 }
 
 const FLASH_MS = 320;
+
+/**
+ * Whether a touch currently drives the held piece: only a touch that began on an offer or on the
+ * board does. Taps elsewhere (the rotate buttons) must not drag the piece over to the finger.
+ */
+export const touchTrack = { on: false };
 /** Margin around the hull, in cells, so parts overhanging the outer squares aren't clipped. */
 export const BOARD_PAD = 1;
 const PAD = BOARD_PAD;
@@ -174,6 +180,7 @@ export function Board(props: {
   useEffect(track, [track, anchorAt, rot, flip, held]);
   useEffect(() => {
     const move = (e: PointerEvent) => {
+      if (e.pointerType === "touch" && !touchTrack.on) return;
       pointer.current = { x: e.clientX, y: e.clientY };
       track();
       const d = drag.current;
@@ -185,6 +192,7 @@ export function Board(props: {
       const fromBoard = downOnBoard.current;
       d.active = false;
       downOnBoard.current = false;
+      if (e.pointerType === "touch") touchTrack.on = false;
       if (e.button !== 0 || !(fromDrag || fromBoard)) return;
       const { held, rot, flip, anchorAt, onPlace } = latest.current;
       const a = anchorAt(e.clientX, e.clientY);
@@ -204,7 +212,14 @@ export function Board(props: {
     <div
       className="draft-board"
       onPointerDown={(e) => {
-        if (e.button === 0) downOnBoard.current = true;
+        if (e.button !== 0) return;
+        downOnBoard.current = true;
+        if (e.pointerType === "touch") {
+          touchTrack.on = true;
+          // A touch has no hover: put the piece where the finger lands straight away.
+          pointer.current = { x: e.clientX, y: e.clientY };
+          track();
+        }
       }}
     >
       <canvas ref={canvasRef} className={held && hover ? "holding" : undefined} />

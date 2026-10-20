@@ -222,7 +222,8 @@ export function ArenaScreen(props: {
  * showing the lean. Turning tilt on takes the current angle as level.
  */
 function TouchFlight({ engines, press }: { engines: number; press: (k: keyof InputState, down: boolean) => void }) {
-  const [tilt, setTilt] = useState(false);
+  // Starts the way you flew last time.
+  const [tilt, setTilt] = useState(loadTiltPref);
   const [lean, setLean] = useState({ x: 0, y: 0 });
   const [held, setHeld] = useState(0);
   const pressRef = useRef(press);
@@ -231,7 +232,14 @@ function TouchFlight({ engines, press }: { engines: number; press: (k: keyof Inp
   useEffect(() => {
     if (!tilt) return;
     const last: Record<string, boolean> = {};
+    // Remembered tilt can't ask for permission without a tap (iPhone): if no readings come,
+    // fall back to the pad for now; the button asks again.
+    let heard = false;
+    const fallback = setTimeout(() => {
+      if (!heard) setTilt(false);
+    }, 1500);
     const stop = watchTilt((l, keys) => {
+      heard = true;
       setLean(l);
       let mask = 0;
       for (const { k, dir } of PAD_KEYS) {
@@ -245,6 +253,7 @@ function TouchFlight({ engines, press }: { engines: number; press: (k: keyof Inp
       setHeld(mask);
     });
     return () => {
+      clearTimeout(fallback);
       stop();
       for (const { k } of PAD_KEYS) pressRef.current(k, false);
       setHeld(0);
@@ -254,6 +263,7 @@ function TouchFlight({ engines, press }: { engines: number; press: (k: keyof Inp
 
   const toggle = async () => {
     if (!tilt && !(await requestTiltPermission())) return;
+    saveTiltPref(!tilt);
     setTilt(!tilt);
   };
 
@@ -289,6 +299,24 @@ function TouchFlight({ engines, press }: { engines: number; press: (k: keyof Inp
       )}
     </div>
   );
+}
+
+const TILT_PREF = "ja.tilt";
+
+function loadTiltPref(): boolean {
+  try {
+    return localStorage.getItem(TILT_PREF) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveTiltPref(on: boolean) {
+  try {
+    localStorage.setItem(TILT_PREF, on ? "1" : "0");
+  } catch {
+    // Just won't be remembered.
+  }
 }
 
 const PAD_KEYS: {

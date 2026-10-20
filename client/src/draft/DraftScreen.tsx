@@ -14,7 +14,7 @@ import {
   type DraftView,
   type Piece,
 } from "@ja/shared/draft";
-import { BOARD_PAD, Board, type DragState } from "./Board";
+import { BOARD_PAD, Board, touchTrack, type DragState } from "./Board";
 import { PIECE_PAD, PieceCanvas } from "./PieceCanvas";
 import { RivalShip } from "./RivalShip";
 import { FullscreenButton } from "../ui/FullscreenButton";
@@ -451,8 +451,7 @@ const UPRIGHT: Orient = { rot: 0, flip: false };
 const MAX_CELL = 64;
 /** Narrower than this (phones), the layout stacks: status, offers, buttons, board. */
 const COMPACT_WIDTH = 720;
-/** On touch, a picked-up piece floats this many squares above the finger so it stays in view. */
-const TOUCH_LIFT = 1.2;
+
 /** Height of the offer row, in squares: room for a piece five squares tall. */
 const OFFER_CELLS = 5.6;
 
@@ -600,6 +599,7 @@ function PieceCard(props: {
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.preventDefault();
+        if (e.pointerType === "touch") touchTrack.on = true;
         drag.current = {
           active: true,
           startX: e.clientX,
@@ -616,13 +616,10 @@ function PieceCard(props: {
               y: (e.clientY - r.top) / cell - PIECE_PAD,
             }
           : { x: w / 2, y: h / 2 };
-        // A finger would hide the piece, so on touch it's held from below, lifted above the finger.
-        if (e.pointerType === "touch") onTake({ x: w / 2, y: h + TOUCH_LIFT });
-        else
-          onTake({
-            x: clamp(at.x, 0.2, w - 0.2),
-            y: clamp(at.y, 0.2, h - 0.2),
-          });
+        onTake({
+          x: clamp(at.x, 0.2, w - 0.2),
+          y: clamp(at.y, 0.2, h - 0.2),
+        });
       }}
     >
       {!held && <PieceCanvas cells={cells} cell={cell} color={color} />}
@@ -652,7 +649,10 @@ function FloatingPiece(props: {
       el.style.transform = `translate(${x - ox}px, ${y - oy}px)`;
     };
     place(lastPointer.x, lastPointer.y);
-    const move = (e: PointerEvent) => place(e.clientX, e.clientY);
+    const move = (e: PointerEvent) => {
+      if (e.pointerType === "touch" && !touchTrack.on) return;
+      place(e.clientX, e.clientY);
+    };
     window.addEventListener("pointermove", move);
     return () => window.removeEventListener("pointermove", move);
   }, [ox, oy]);
@@ -664,16 +664,16 @@ function FloatingPiece(props: {
   );
 }
 
+/** Where the held piece is being held: the mouse, or a touch that is dragging it (see touchTrack). */
 const lastPointer = { x: -1000, y: -1000 };
 if (typeof window !== "undefined") {
-  window.addEventListener("pointermove", (e) => {
+  const track = (e: PointerEvent) => {
+    if (e.pointerType === "touch" && !touchTrack.on) return;
     lastPointer.x = e.clientX;
     lastPointer.y = e.clientY;
-  });
-  window.addEventListener("pointerdown", (e) => {
-    lastPointer.x = e.clientX;
-    lastPointer.y = e.clientY;
-  });
+  };
+  window.addEventListener("pointermove", track);
+  window.addEventListener("pointerdown", track);
 }
 
 export interface DoneVote {

@@ -354,3 +354,8 @@
 .draft-status-bar .draft-timer {
   margin-right: auto;
 }
+
+/* Phones: the board sits right under the offers; any spare height goes below it. */
+.draft.compact .draft-board {
+  align-items: flex-start;
+}

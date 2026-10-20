@@ -10,9 +10,12 @@
   background: var(--panel-2);
 }
 
-.key-button:hover:not(:disabled) {
-  color: var(--hazard);
-  border-color: var(--hazard);
+/* Only where there's a real hover: on touch screens it would stick after a tap. */
+@media (hover: hover) {
+  .key-button:hover:not(:disabled) {
+    color: var(--hazard);
+    border-color: var(--hazard);
+  }
 }
 
 .key-button.active {
