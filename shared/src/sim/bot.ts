@@ -260,7 +260,7 @@ function pickFoe(arena: Arena, me: ShipRecord, pos: { x: number; y: number }, sc
   let best: Foe | null = null;
   let bestScore = Infinity;
   for (const s of arena.ships) {
-    if (s === me || !s.alive || !s.body.rb) continue;
+    if (s === me || !s.alive || !s.body.rb || arena.allied(me, s)) continue;
     const t = s.body.rb.worldCom();
     const sc = score(Math.hypot(t.x - pos.x, t.y - pos.y), s);
     if (sc < bestScore) {
@@ -278,7 +278,8 @@ function aliveCells(s: ShipRecord): number {
 /** Unit vector sideways out of the line of the nearest enemy laser aimed at us, if any. */
 function laserDodge(arena: Arena, me: ShipRecord, pos: { x: number; y: number }): { x: number; y: number } | null {
   for (const s of arena.ships) {
-    if (s === me || !s.alive) continue;
+    // Teammates' beams only matter when they can hurt.
+    if (s === me || !s.alive || (arena.allied(me, s) && !arena.friendlyFire)) continue;
     for (const c of s.body.cells) {
       if (c.type !== "laser" || !c.alive || !arena.isOpen(c)) continue;
       const from = arena.cellWorld(c);

@@ -72,6 +72,8 @@ export interface SimBody {
 
 export interface ShipRecord {
   playerId: PlayerId;
+  /** Team games: index into TEAMS; null in a free-for-all. */
+  team: number | null;
   body: SimBody;
   /** The cockpit's core cells (one, or four laid out like the arrow keys). Lose any and you lose them all. */
   cockpit: SimCell[];
@@ -132,6 +134,10 @@ export class Arena {
    * went down). Placings still rank a draw by who lasted longest, so don't read the winner off those.
    */
   winner: PlayerId | null = null;
+  /** Team games: the team left flying once the fight is decided (winner stays null), or null for a draw. */
+  winnerTeam: number | null = null;
+  /** Team games: whether teammates' lasers, saws and rams hurt each other. */
+  readonly friendlyFire: boolean;
   /** Optional debug log of everything that breaks and why. Unset in normal play (zero cost). */
   onLog: ((line: string) => void) | null = null;
   private readonly bounceCooldown = new Map<SimBody, number>();
@@ -151,7 +157,8 @@ export class Arena {
   private nextBodyId = 1;
   private snapCount = 0;
   private readonly initInfo: ArenaInit;
-  private readonly startedShips: number;
+  /** Sides at the start: teams in a team game, otherwise ships. */
+  private readonly startedSides: number;
 
   /** The special arena this is, if any (tutorials). */
   readonly scenario: Scenario | null;
@@ -166,6 +173,7 @@ export class Arena {
     this.rng = new Rng(setup.seed);
     this.scenario = setup.scenario ?? null;
     this.sheepTotal = this.scenario?.sheep ?? 0;
+    this.friendlyFire = setup.friendlyFire ?? true;
     this.world = new RAPIER.World({ x: 0, y: 0 });
     this.world.timestep = DT;
     // Extra solver iterations keep jammed-together ships stable when the ring squeezes them.
@@ -213,6 +221,7 @@ export class Arena {
       const cockpit = cells.filter((c) => c.type === "core");
       const rec: ShipRecord = {
         playerId: bp.playerId,
+        team: bp.team ?? null,
         body,
         cockpit: cockpit.length ? cockpit : [cells[0]!],
         alive: cells.length > 0,
@@ -232,9 +241,10 @@ export class Arena {
         name: bp.name,
         color: bp.color,
         cells: cells.map((c) => ({ cid: c.cid, x: c.x, y: c.y, type: c.type, dir: c.dir, piece: c.piece })),
+        ...(bp.team !== undefined ? { team: bp.team } : {}),
       });
     });
-    this.startedShips = this.ships.length;
+    this.startedSides = sides(this.ships).size;
     const spawns = this.ships.map((s) => s.body.rb!.translation());
     const rocks = this.scenario?.rocks === false ? [] : this.spawnRocks(spawns, cid);
     cid += rocks.reduce((n, r) => n + r.cells.length, 0);
@@ -497,12 +507,17 @@ export class Arena {
     if (this.fightSeconds >= (this.scenario?.maxSeconds ?? SIM.maxSeconds)) return true;
     // Rounding up sheep: done once they're all in (or the ship is lost).
     if (this.sheepTotal) return this.sheep.length === 0 || alive === 0;
-    if (this.startedShips >= 2) return alive <= 1;
+    if (this.startedSides >= 2) return sides(this.aliveShips).size <= 1;
     return alive === 0;
   }
 
   ship(playerId: PlayerId): ShipRecord | undefined {
     return this.shipByPlayer.get(playerId);
+  }
+
+  /** Two different ships on the same team. */
+  allied(a: ShipRecord | undefined, b: ShipRecord | undefined): boolean {
+    return !!a && !!b && a !== b && a.team !== null && a.team === b.team;
   }
 
   hasHooks(playerId: PlayerId): boolean {
@@ -562,12 +577,23 @@ export class Arena {
     if (this.endedAt === null && this.decided) {
       this.endedAt = this.tickCount;
       this.finalResults = this.computeResults();
-      const winners = this.finalResults.filter((r) => r.place === 1 && this.ship(r.playerId)?.alive);
-      const winner = winners.length === 1 ? winners[0]!.playerId : null;
+      const teamGame = this.ships.some((s) => s.team !== null);
+      // A free-for-all is won by the last ship flying (or, on time, the biggest one left); a team
+      // game by the team still flying (or, on time, the team with the most cells left).
+      const top = this.finalResults.find((r) => r.place === 1 && this.ship(r.playerId)?.alive);
+      const winner = !teamGame && top ? top.playerId : null;
+      let winnerTeam: number | null = null;
+      if (teamGame) {
+        const cellsLeft = new Map<number, number>();
+        for (const s of this.aliveShips) if (s.team !== null) cellsLeft.set(s.team, (cellsLeft.get(s.team) ?? 0) + aliveCells(s));
+        const ranked = [...cellsLeft].sort((x, y) => y[1] - x[1]);
+        if (ranked.length && (ranked.length === 1 || ranked[0]![1] > ranked[1]![1])) winnerTeam = ranked[0]![0];
+      }
       this.winner = winner;
+      this.winnerTeam = winnerTeam;
       this.finishedSeconds = this.fightSeconds;
-      this.events.push({ e: "over", winner });
-      this.log(`fight over: ${winner ?? "nobody"} wins`);
+      this.events.push(teamGame ? { e: "over", winner, team: winnerTeam } : { e: "over", winner });
+      this.log(`fight over: ${winner ?? (winnerTeam !== null ? `team ${winnerTeam}` : "nobody")} wins`);
     }
     if (this.tickCount % 10 === 0) this.crushOutside(touched);
 
@@ -647,6 +673,7 @@ export class Arena {
       cellsDestroyed: s.cellsDestroyed,
       cellsLost: s.cellsLost,
       survivedSeconds: Math.round((Math.max(0, (s.deathTick ?? this.tickCount) - this.countdownTicks) / TICK_HZ) * 10) / 10,
+      ...(s.team !== null ? { team: s.team } : {}),
     }));
   }
 
@@ -785,7 +812,11 @@ export class Arena {
     if (!c.alive || amount <= 0 || this.endedAt !== null) return;
     const body = c.body;
     const ship = this.shipOf(body);
-    if (ship && attacker && attacker !== ship.playerId) ship.lastDamager = attacker;
+    // Teammates: no harm at all without friendly fire; with it, harm but no credit (kills, destroyed).
+    const ally = !!attacker && this.allied(ship, this.shipByPlayer.get(attacker));
+    if (ally && !this.friendlyFire) return;
+    const enemy = !!ship && !!attacker && attacker !== ship.playerId && !ally;
+    if (enemy) ship!.lastDamager = attacker;
     c.hp -= amount;
     if (body) body.dirty = true;
     if (c.hp > 0) return;
@@ -798,7 +829,7 @@ export class Arena {
     }
     if (ship) {
       ship.cellsLost++;
-      if (attacker && attacker !== ship.playerId) {
+      if (enemy) {
         const a = this.shipByPlayer.get(attacker);
         if (a) a.cellsDestroyed++;
       }
@@ -944,9 +975,14 @@ export class Arena {
     let exclude: RigidBody | undefined = rb;
     let excludeCollider: Collider | undefined = undefined;
     rb.applyImpulseAtPoint({ x: -d.x * SIM.laserRecoil, y: -d.y * SIM.laserRecoil }, o, true);
+    // Without friendly fire, beams pass straight through teammates.
+    const passThrough =
+      this.friendlyFire || ship.team === null
+        ? undefined
+        : (col: Collider) => !this.allied(ship, this.shipOf(this.cellByCollider.get(col.handle)?.body ?? null));
 
     for (let bounce = 0; bounce <= SIM.laserMaxBounces; bounce++) {
-      const hit = this.world.castRayAndGetNormal(new RAPIER.Ray(start, d), range, true, undefined, undefined, excludeCollider, exclude);
+      const hit = this.world.castRayAndGetNormal(new RAPIER.Ray(start, d), range, true, undefined, undefined, excludeCollider, exclude, passThrough);
       const toi = hit ? hit.timeOfImpact : range;
       const end = { x: start.x + d.x * toi, y: start.y + d.y * toi };
       this.events.push({ e: "shot", from: c.cid, x1: r3(start.x), y1: r3(start.y), x2: r3(end.x), y2: r3(end.y), hit: !!hit });
@@ -1313,6 +1349,11 @@ function pointVel(p: PreVel, at: { x: number; y: number }) {
   const rx = at.x - p.cx;
   const ry = at.y - p.cy;
   return { x: p.vx - p.w * ry, y: p.vy + p.w * rx };
+}
+
+/** The sides still in it: teams in a team game, otherwise each ship. */
+function sides(ships: ShipRecord[]): Set<string> {
+  return new Set(ships.map((s) => (s.team !== null ? `t${s.team}` : `p${s.playerId}`)));
 }
 
 function aliveCells(s: ShipRecord): number {

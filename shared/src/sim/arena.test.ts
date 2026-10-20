@@ -373,6 +373,44 @@ describe("arena", () => {
     a.dispose();
   });
 
+  describe("teams", () => {
+    // Two ships spawn facing each other; a's laser fires at b once it closes in.
+    const fight = (teamB: number, friendlyFire?: boolean) => {
+      const a = new Arena({
+        ships: [{ ...bp("a", ["i", "C", "^"]), team: 0 }, { ...bp("b", ["#", "C"]), team: teamB }],
+        seed: 1,
+        ...(friendlyFire !== undefined ? { friendlyFire } : {}),
+      });
+      run(a, 70, { a: { ...NO_INPUT, up: true } });
+      run(a, TICK_HZ * 8);
+      return a;
+    };
+
+    it("without friendly fire, a teammate's laser passes through and does no harm", () => {
+      const a = fight(0, false);
+      expect(a.ship("b")!.cellsLost).toBe(0);
+      a.dispose();
+    });
+
+    it("friendly fire is on by default: teammates hurt each other, but earn no credit for it", () => {
+      const a = fight(0);
+      expect(a.ship("b")!.alive).toBe(false);
+      expect(a.ship("a")!.cellsDestroyed).toBe(0);
+      expect(a.ship("a")!.kills).toBe(0);
+      a.dispose();
+    });
+
+    it("the team left flying wins", () => {
+      const a = fight(1);
+      expect(a.over).toBe(true);
+      expect(a.winner).toBe(null);
+      expect(a.winnerTeam).toBe(0);
+      expect(a.ship("a")!.kills).toBe(1);
+      expect(a.results().map((r) => r.team)).toEqual([0, 1]);
+      a.dispose();
+    });
+  });
+
   it("the last ship flying is the winner", () => {
     const a = new Arena({ ships: [bp("a", ["#C#"]), bp("b", ["#C#"])], seed: 1 });
     run(a, 2);

@@ -33,6 +33,14 @@ Online multiplayer, fast-paced, round-based game:
 - A table's pre-round phase is **setup** (internal name): pick ships, host sets class / build time / bots, then Launch. Results' **Next round** (host) goes back to setup; **Quit** leaves for the lobby.
 - Joining mid-build starts your own ship with whatever time is left; joining mid-fight or on the results lets you watch until the next round.
 
+## Teams
+
+- Setup's **Mode** is Free-for-all or Teams (host). Teams reveals **Friendly fire** (On by default) and splits the crew into Orange and Blue; newcomers join the smaller team, ⇄ moves a player (yourself, or anyone as host). Launch needs a player on each team.
+- In a team game everyone is drawn in a shade of their team's colour (`TEAMS` in `shared/src/types.ts`), so allies read as one family in a fight.
+- The fight ends when one team is left; every member of it gets the win, shot down or not. On time, the team with more cells left wins.
+- Friendly fire off: lasers pass through teammates, and saws and rams between them do nothing. On: they hurt, but earn no kill or destroyed credit. Bots never target teammates.
+- Results group pilots by team (winner first) under a row with the team's round kills and destroyed.
+
 ## Pieces and cells
 
 - A piece is a pentomino of 5 **cells**. Most cells are plain hull; a piece may carry one (or more) special cells: engine, laser, grappling hook, saw, mirror, armor.

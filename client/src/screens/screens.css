@@ -372,6 +372,27 @@ table.results {
   opacity: 0.35;
 }
 
+/* Team games: the crew split by team. */
+.teams {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.team h4 {
+  margin: 0 0 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.results tr.team-row td {
+  font-weight: 600;
+  border-top: 1px solid var(--line-2);
+}
+
 /* Round and Total column groups. */
 .results tr.group th {
   text-align: center;

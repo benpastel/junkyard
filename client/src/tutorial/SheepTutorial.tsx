@@ -17,7 +17,7 @@ const HULL = "skiff";
 const RESULT_DELAY_MS = 1800;
 
 const PLAYERS: PlayerInfo[] = [
-  { id: ME, name: "You", color: COLOR, isBot: false, connected: true, wins: 0, totalKills: 0, totalDestroyed: 0, hullChoice: HULL, inRound: true },
+  { id: ME, name: "You", color: COLOR, isBot: false, connected: true, wins: 0, totalKills: 0, totalDestroyed: 0, hullChoice: HULL, inRound: true, team: 0 },
 ];
 
 export function SheepTutorial() {

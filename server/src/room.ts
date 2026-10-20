@@ -9,6 +9,7 @@ import {
   NO_INPUT,
   PLAYER_COLORS,
   Rng,
+  TEAMS,
   type BotSkill,
   type ChatMessage,
   type ClientMsg,
@@ -48,6 +49,8 @@ interface Player {
   hullChoice: HullChoice;
   /** Whether this player has a ship in the current draft / fight. */
   inRound: boolean;
+  /** Index into TEAMS (used when the table plays teams). */
+  team: number;
   botNextActAt: number;
 }
 
@@ -120,6 +123,7 @@ export class Room {
         totalDestroyed: 0,
         hullChoice: "random",
         inRound: false,
+        team: this.smallerTeam(),
         botNextActAt: 0,
       };
       this.players.set(player.id, player);
@@ -129,6 +133,7 @@ export class Room {
     // Joining mid-build: start a ship of your own with whatever time is left.
     // Mid-fight (or on the results) you watch until the next round.
     if (this.phase === "draft" && this.draft && !this.draft.has(player.id)) {
+      if (!existing) player.team = this.smallerTeam(true);
       player.inRound = true;
       this.draft.addPlayer(player.id, this.resolveHull(player.hullChoice));
       this.broadcastDraft();
@@ -180,6 +185,7 @@ export class Room {
       totalDestroyed: 0,
       hullChoice: "random",
       inRound: false,
+      team: this.smallerTeam(),
       botNextActAt: 0,
     };
     this.players.set(bot.id, bot);
@@ -201,8 +207,10 @@ export class Room {
       }
       case "settings": {
         if (!isHost || this.phase !== "setup") return;
-        const { pace, tier, botSkill } = msg.settings;
+        const { pace, tier, botSkill, teams, friendlyFire } = msg.settings;
         if ((PACES as readonly string[]).includes(pace)) this.settings.pace = pace;
+        if (typeof teams === "boolean") this.settings.teams = teams;
+        if (typeof friendlyFire === "boolean") this.settings.friendlyFire = friendlyFire;
         if ((BOT_SKILLS as readonly string[]).includes(botSkill)) this.settings.botSkill = botSkill;
         if ((HULL_TIERS as readonly string[]).includes(tier) && tier !== this.settings.tier) {
           this.settings.tier = tier;
@@ -216,6 +224,14 @@ export class Room {
         // Applies to the next round, so it can change any time.
         if (msg.hull !== "random" && !tierHulls(this.settings.tier).includes(msg.hull)) return;
         player.hullChoice = msg.hull;
+        this.broadcastRoom();
+        return;
+      }
+      case "setTeam": {
+        if (this.phase !== "setup" || (msg.playerId !== playerId && !isHost)) return;
+        const target = this.players.get(msg.playerId);
+        if (!target || !Number.isInteger(msg.team) || msg.team < 0 || msg.team >= TEAMS.length) return;
+        target.team = msg.team;
         this.broadcastRoom();
         return;
       }
@@ -234,6 +250,7 @@ export class Room {
       case "start": {
         if (!isHost || this.phase !== "setup") return;
         if (this.players.size < 2) return this.send(player, { t: "error", message: "Need at least 2 players" });
+        if (this.settings.teams && !this.bothTeamsManned()) return this.send(player, { t: "error", message: "Both teams need a player" });
         this.startDraft();
         return;
       }
@@ -307,9 +324,15 @@ export class Room {
     const draft = this.draft!;
     const ships = [...this.players.values()]
       .filter((p) => p.inRound)
-      .map((p) => ({ playerId: p.id, name: p.name, color: p.color, cells: draft.blueprintCells(p.id) }));
+      .map((p) => ({
+        playerId: p.id,
+        name: p.name,
+        color: this.colorOf(p),
+        cells: draft.blueprintCells(p.id),
+        ...(this.settings.teams ? { team: p.team } : {}),
+      }));
     this.draft = null;
-    this.arenaSetup = { ships, seed: this.rng.int(2 ** 31) };
+    this.arenaSetup = { ships, seed: this.rng.int(2 ** 31), ...(this.settings.teams ? { friendlyFire: this.settings.friendlyFire } : {}) };
     this.recorder = new FightRecorder();
     this.arena = new Arena(this.arenaSetup);
     this.arenaInputs = {};
@@ -343,6 +366,7 @@ export class Room {
     }
     // The arena's call: a draw (everyone down) has no winner even though someone placed first.
     const winnerId = arena.winner;
+    const winnerTeam = arena.winnerTeam;
     if (winnerId) {
       const p = this.players.get(winnerId);
       if (p) {
@@ -350,7 +374,13 @@ export class Room {
         this.system(`${p.name} wins round ${this.round}`);
       }
     }
-    this.lastResults = { round: this.round, winnerId, rows };
+    // A team win counts for everyone on the team, shot down or not.
+    if (winnerTeam !== null) {
+      for (const r of rows) if (r.team === winnerTeam) this.players.get(r.playerId)!.wins++;
+      this.system(`${TEAMS[winnerTeam]!.name} wins round ${this.round}`);
+    }
+    const teams = rows.some((r) => r.team !== undefined);
+    this.lastResults = { round: this.round, winnerId, rows, ...(teams ? { teams, winnerTeam } : {}) };
     this.setPhase("results", null);
     this.broadcastRoom();
     this.broadcast({ t: "results", results: this.lastResults });
@@ -370,9 +400,10 @@ export class Room {
       round: this.round,
       tier: this.settings.tier,
       pace: this.settings.pace,
+      teams: this.settings.teams,
       players: [...this.players.values()]
         .filter((p) => p.isBot || p.socket)
-        .map((p) => ({ name: p.name, color: p.color, isBot: p.isBot })),
+        .map((p) => ({ name: p.name, color: this.colorOf(p), isBot: p.isBot })),
     };
   }
 
@@ -530,7 +561,7 @@ export class Room {
       players: [...this.players.values()].map((p) => ({
         id: p.id,
         name: p.name,
-        color: p.color,
+        color: this.colorOf(p),
         isBot: p.isBot,
         connected: p.isBot || p.socket !== null,
         wins: p.wins,
@@ -538,6 +569,7 @@ export class Room {
         totalDestroyed: p.totalDestroyed,
         hullChoice: p.hullChoice,
         inRound: p.inRound,
+        team: p.team,
       })),
     };
   }
@@ -591,6 +623,26 @@ export class Room {
 
   private newPlayerId(): PlayerId {
     return `p${this.nextPlayerNum++}`;
+  }
+
+  /** The team with fewer players (of those in the round, if asked), for a newcomer. Ties go to the first. */
+  private smallerTeam(inRound = false): number {
+    const counts = TEAMS.map(() => 0);
+    for (const p of this.players.values()) if (!inRound || p.inRound) counts[p.team]!++;
+    return counts.indexOf(Math.min(...counts));
+  }
+
+  private bothTeamsManned(): boolean {
+    const players = [...this.players.values()].filter((p) => p.isBot || p.socket);
+    return TEAMS.every((_, t) => players.some((p) => p.team === t));
+  }
+
+  /** A player's colour: their own, or in a team game a shade of their team's (by join order). */
+  private colorOf(player: Player): string {
+    if (!this.settings.teams) return player.color;
+    const mates = [...this.players.values()].filter((p) => p.team === player.team);
+    const shades = TEAMS[player.team]!.shades;
+    return shades[mates.indexOf(player) % shades.length]!;
   }
 
   private freeColor(): string {

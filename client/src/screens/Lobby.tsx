@@ -76,6 +76,7 @@ export function Lobby({ tables, roomId, error }: { tables: TableSummary[]; roomI
                 </span>
                 <span className="table-meta mono">
                   {TIER_LABELS[t.tier]} · {PACE_LABELS[t.pace]}
+                  {t.teams && " · Teams"}
                 </span>
                 <span className={`table-phase mono${t.phase === "setup" ? " open" : ""}`}>{PHASE_LABELS[t.phase]}</span>
               </button>

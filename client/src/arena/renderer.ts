@@ -14,7 +14,7 @@ import {
   type SheepSnap,
   angleDiff,
 } from "@ja/shared/sim/view";
-import { openChecker } from "@ja/shared";
+import { TEAMS, openChecker } from "@ja/shared";
 import { NEON, cockpitOrigin, drawCellPart, drawCellPlate, drawCockpit, drawHazardSaw, drawRockCell, mirrorSidesOf, type CellStyle } from "../art/cells";
 import { drawSheep } from "../art/sheep";
 import { HAZARD_SAW } from "@ja/shared/sim/scenarios";
@@ -217,7 +217,9 @@ export class ArenaRenderer {
 
   /** Alive ship colours in spawn order; dead ones are null. */
   shipPips(): { color: string; alive: boolean }[] {
-    return this.init.ships.map((s) => ({ color: s.color, alive: !this.dead.has(s.playerId) }));
+    // Team games: grouped by team.
+    const ships = [...this.init.ships].sort((a, b) => (a.team ?? 0) - (b.team ?? 0));
+    return ships.map((s) => ({ color: s.color, alive: !this.dead.has(s.playerId) }));
   }
 
   draw(ctx: CanvasRenderingContext2D, width: number, height: number, dpr: number) {
@@ -518,7 +520,7 @@ export class ArenaRenderer {
 
     // Tutorials show their own result; just the confetti here.
     if (this.init.scenario) return;
-    const info = cel.winner ? this.shipInfo.get(cel.winner) : null;
+    const info = cel.winner ? this.shipInfo.get(cel.winner) : cel.team !== null ? TEAMS[cel.team] : null;
     const text = info ? `${info.name} wins` : "Draw";
     const age = (nowMs - cel.start) / 1000;
     const pop = Math.min(1, age / 0.25);
@@ -747,7 +749,7 @@ export class ArenaRenderer {
         this.burst(e.x, e.y, 3 + e.power, "#c9ced4", 3 + e.power * 0.5, 0.25);
         break;
       case "over":
-        this.celebration = { winner: e.winner, start: performance.now(), confetti: null };
+        this.celebration = { winner: e.winner, team: e.team ?? null, start: performance.now(), confetti: null };
         break;
       case "sheep":
         this.particles.push({ kind: "ring", x: e.x, y: e.y, vx: 0, vy: 0, life: 0.45, max: 0.45, size: 2.2, color: "#f4efe2", rot: 0, vr: 0 });
@@ -1032,7 +1034,7 @@ export class ArenaRenderer {
   }
 
   /** Set when the fight is decided: who won, and confetti falling in screen space. */
-  private celebration: { winner: PlayerId | null; start: number; confetti: Confetti[] | null } | null = null;
+  private celebration: { winner: PlayerId | null; team: number | null; start: number; confetti: Confetti[] | null } | null = null;
 
   /** Bounce dents travelling round the rubber ring: angle, strength, seconds left. */
   private wobbles: { a: number; power: number; life: number }[] = [];

@@ -8,6 +8,8 @@ export interface ArenaSetup {
   seed: number;
   /** A tutorial (or other special arena) instead of a normal fight. */
   scenario?: Scenario;
+  /** Team games: whether teammates can hurt each other. Default true. */
+  friendlyFire?: boolean;
 }
 
 export * from "./view.js";

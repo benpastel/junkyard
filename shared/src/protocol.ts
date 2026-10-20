@@ -20,6 +20,8 @@ export interface PlayerInfo {
   hullChoice: HullChoice;
   /** Has a ship in the current round (false for someone who joined mid-fight). */
   inRound: boolean;
+  /** Index into TEAMS. Kept in a free-for-all too, so turning teams on starts from a fair split. */
+  team: number;
 }
 
 /** One row of the lobby's table list. */
@@ -29,6 +31,7 @@ export interface TableSummary {
   round: number;
   tier: HullTier;
   pace: Pace;
+  teams: boolean;
   players: { name: string; color: string; isBot: boolean }[];
 }
 
@@ -57,6 +60,10 @@ export interface ChatMessage {
 export interface RoundResults {
   round: number;
   winnerId: PlayerId | null;
+  /** Team games: the winning team (winnerId is null then), or null for a draw. */
+  winnerTeam?: number | null;
+  /** Whether this round was a team game. */
+  teams?: boolean;
   rows: RoundResultRow[];
 }
 
@@ -66,6 +73,8 @@ export type ClientMsg =
   /** Join a table. Omit roomId to create a new one. */
   | { t: "hello"; name: string; roomId?: string; playerId?: PlayerId }
   | { t: "pickHull"; hull: HullChoice }
+  /** Move a player to a team: yourself, or anyone if you're the host. Setup only. */
+  | { t: "setTeam"; playerId: PlayerId; team: number }
   | { t: "chat"; text: string }
   | { t: "settings"; settings: RoomSettings }
   | { t: "addBot" }

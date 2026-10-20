@@ -37,6 +37,8 @@ export interface ShipBlueprint {
   name: string;
   color: string;
   cells: Cell[];
+  /** Team game: index into TEAMS. Teammates share a side; absent in a free-for-all. */
+  team?: number;
 }
 
 /** Keys held this tick. Clients send these; the sim consumes them. */
@@ -77,9 +79,13 @@ export interface RoomSettings {
   botSkill: BotSkill;
   /** Ship class: every player picks their own hull from this tier. */
   tier: HullTier;
+  /** Team game instead of a free-for-all. */
+  teams: boolean;
+  /** Team games: whether teammates' lasers, saws and rams hurt each other. */
+  friendlyFire: boolean;
 }
 
-export const DEFAULT_SETTINGS: RoomSettings = { pace: "fast", tier: "small", botSkill: "medium" };
+export const DEFAULT_SETTINGS: RoomSettings = { pace: "fast", tier: "small", botSkill: "medium", teams: false, friendlyFire: true };
 
 /** A player's ship pick for the next round: a hull of the room's tier, or a random one. */
 export type HullChoice = HullId | "random";
@@ -97,6 +103,15 @@ export const PLAYER_COLORS = [
 
 export const MAX_PLAYERS = PLAYER_COLORS.length;
 
+/**
+ * The two sides of a team game. In a team game each player is shown in a shade of their team's
+ * colour (in join order), so allies read as one family in a fight.
+ */
+export const TEAMS = [
+  { name: "Orange", color: "#e8743b", shades: ["#e8743b", "#e6b43c", "#d9474a", "#f08a7a", "#b85a2a", "#f2c88a", "#c23a6a", "#e89a3b"] },
+  { name: "Blue", color: "#5a8fe6", shades: ["#5a8fe6", "#4fb3bf", "#8a7ce0", "#7cc8ef", "#3a6ab0", "#9adbd0", "#a0a8f0", "#4fa0d0"] },
+] as const;
+
 /** One row of the post-round results table. */
 export interface RoundResultRow {
   playerId: PlayerId;
@@ -106,4 +121,6 @@ export interface RoundResultRow {
   cellsDestroyed: number;
   cellsLost: number;
   survivedSeconds: number;
+  /** Team games: the player's team. */
+  team?: number;
 }

@@ -2,8 +2,17 @@ import type { PlayerInfo } from "@ja/shared";
 import { net } from "../net";
 import { HullOutline, RandomHull } from "./HullOutline";
 
-export function PlayerList(props: { players: PlayerInfo[]; hostId: string; me: string | null; canKick: boolean; showHull?: boolean }) {
-  const { players, hostId, me, canKick, showHull } = props;
+export function PlayerList(props: {
+  players: PlayerInfo[];
+  hostId: string;
+  me: string | null;
+  canKick: boolean;
+  showHull?: boolean;
+  /** Team games: a button on each row this viewer may move to the other team. */
+  swapTeam?: (p: PlayerInfo) => void;
+}) {
+  const { players, hostId, me, canKick, showHull, swapTeam } = props;
+  const canSwap = (p: PlayerInfo) => !!swapTeam && (p.id === me || me === hostId);
   return (
     <ul className="player-list">
       {players.map((p) => (
@@ -21,6 +30,11 @@ export function PlayerList(props: { players: PlayerInfo[]; hostId: string; me: s
             {p.isBot && <span className="tag">bot</span>}
           </span>
           {p.wins > 0 && <span className="wins mono">{"★".repeat(Math.min(p.wins, 5))}{p.wins > 5 ? p.wins : ""}</span>}
+          {canSwap(p) && (
+            <button className="icon-btn" aria-label={`Switch ${p.name}'s team`} onClick={() => swapTeam!(p)}>
+              ⇄
+            </button>
+          )}
           {canKick && p.isBot && (
             <button className="icon-btn" aria-label={`Remove ${p.name}`} onClick={() => net.send({ t: "removeBot", playerId: p.id })}>
               ×

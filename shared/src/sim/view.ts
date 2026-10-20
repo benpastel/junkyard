@@ -30,6 +30,8 @@ export interface InitShip {
   name: string;
   color: string;
   cells: InitCell[];
+  /** Team games: index into TEAMS. */
+  team?: number;
 }
 
 /** An asteroid at the start of the fight (owned by nobody, never despawns). */
@@ -109,7 +111,7 @@ export type ArenaEvent =
   /** A sheep was collected. */
   | { e: "sheep"; x: number; y: number }
   /** The fight is decided. null winner = nobody left. */
-  | { e: "over"; winner: PlayerId | null };
+  | { e: "over"; winner: PlayerId | null; team?: number | null };
 
 export interface SheepSnap {
   id: number;
