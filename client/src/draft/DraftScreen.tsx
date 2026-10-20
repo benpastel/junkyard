@@ -385,6 +385,7 @@ export function DraftScreen(props: {
             drag={drag}
             onHoverChange={setOverBoard}
             onPlace={place}
+            onGrab={setGrab}
           />
         </main>
 
@@ -432,6 +433,8 @@ export function DraftScreen(props: {
           color={color}
           cell={cell}
           grab={grab}
+          drag={drag}
+          onGrab={setGrab}
         />
       )}
     </div>
@@ -637,9 +640,38 @@ function FloatingPiece(props: {
   color: string;
   cell: number;
   grab: { x: number; y: number };
+  drag: React.MutableRefObject<DragState>;
+  /** A touch picked the piece up again from where it was left, at this spot (cells from its top-left). */
+  onGrab: (at: { x: number; y: number }) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const { cell } = props;
+  const latest = useRef(props);
+  latest.current = props;
+
+  // Left off the board after a touch drag: dragging it again picks it back up from that spot.
+  // (It ignores pointers itself, so catch the touch first, before whatever is underneath.)
+  useEffect(() => {
+    const down = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      const { cells, cell, drag, onGrab } = latest.current;
+      const r = ref.current!.getBoundingClientRect();
+      const px = (e.clientX - r.left) / cell - PIECE_PAD;
+      const py = (e.clientY - r.top) / cell - PIECE_PAD;
+      // Anywhere in the piece's box (plus a little) counts.
+      const slack = 0.35;
+      const { w, h } = shapeBox(cells);
+      if (px < -slack || px > w + slack || py < -slack || py > h + slack) return;
+      e.stopPropagation();
+      lastPointer.x = e.clientX;
+      lastPointer.y = e.clientY;
+      onGrab({ x: px, y: py });
+      touchTrack.on = true;
+      drag.current = { active: true, startX: e.clientX, startY: e.clientY, moved: false };
+    };
+    window.addEventListener("pointerdown", down, { capture: true });
+    return () => window.removeEventListener("pointerdown", down, { capture: true });
+  }, []);
   const ox = (PIECE_PAD + props.grab.x) * cell;
   const oy = (PIECE_PAD + props.grab.y) * cell;
 

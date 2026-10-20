@@ -13,6 +13,8 @@ export interface DragState {
 }
 
 const FLASH_MS = 320;
+/** How far (in squares) the piece may be from a spot it fits and still snap to it. */
+const SNAP_SLACK = 1.2;
 
 /**
  * Whether a touch currently drives the held piece: only a touch that began on an offer or on the
@@ -37,8 +39,10 @@ export function Board(props: {
   drag: MutableRefObject<DragState>;
   onHoverChange: (over: boolean) => void;
   onPlace: (x: number, y: number) => void;
+  /** A touch picked the held piece back up off the board, at this spot (cells from its top-left). */
+  onGrab: (at: { x: number; y: number }) => void;
 }) {
-  const { hullRows, cells, held, rot, flip, grab, cell, color, drag, onHoverChange, onPlace } = props;
+  const { hullRows, cells, held, rot, flip, grab, cell, color, drag, onHoverChange, onPlace, onGrab } = props;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // The grid square the held piece's top-left would land on.
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
@@ -152,19 +156,52 @@ export function Board(props: {
     }
   });
 
-  // The square under the held piece's top-left, snapped to the nearest one, or null when the
-  // pointer is off the board.
+  // Where the held piece's top-left lands, or null when the pointer is off the board. Forgiving:
+  // of the grid spots within SNAP_SLACK squares of where the piece actually is, the nearest one
+  // it fits in wins; only if none fits does it show the nearest spot (in red).
   const anchorAt = useCallback(
     (clientX: number, clientY: number) => {
       const r = canvasRef.current!.getBoundingClientRect();
       if (clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) return null;
-      return {
-        x: Math.round((clientX - r.left) / cell - PAD - grab.x),
-        y: Math.round((clientY - r.top) / cell - PAD - grab.y),
-      };
+      const fx = (clientX - r.left) / cell - PAD - grab.x;
+      const fy = (clientY - r.top) / cell - PAD - grab.y;
+      const near = { x: Math.round(fx), y: Math.round(fy) };
+      const { held, rot, flip, cells } = latest.current;
+      if (!held) return near;
+      let best: { x: number; y: number } | null = null;
+      let bestD = Infinity;
+      for (let dx = -2; dx <= 2; dx++) {
+        for (let dy = -2; dy <= 2; dy++) {
+          const ax = near.x + dx;
+          const ay = near.y + dy;
+          const d = Math.hypot(ax - fx, ay - fy);
+          if (d > SNAP_SLACK || d >= bestD) continue;
+          if (placementError(buildable.current, cells, placedCells(held, ax, ay, rot, flip)) !== null) continue;
+          best = { x: ax, y: ay };
+          bestD = d;
+        }
+      }
+      return best ?? near;
     },
     [cell, grab, cols, rows],
   );
+
+  /** Where on the held piece (cells from its top-left) a point is, if it's on the piece as drawn. */
+  const pieceSpotAt = (clientX: number, clientY: number) => {
+    if (!held || !hover) return null;
+    const r = canvasRef.current!.getBoundingClientRect();
+    const px = (clientX - r.left) / cell - PAD;
+    const py = (clientY - r.top) / cell - PAD;
+    // Anywhere in the piece's box (plus a little) counts, so a fingertip doesn't have to be exact.
+    const slack = 0.35;
+    const ghost = placedCells(held, hover.x, hover.y, rot, flip);
+    const on =
+      px >= Math.min(...ghost.map((c) => c.x)) - slack &&
+      px <= Math.max(...ghost.map((c) => c.x)) + 1 + slack &&
+      py >= Math.min(...ghost.map((c) => c.y)) - slack &&
+      py <= Math.max(...ghost.map((c) => c.y)) + 1 + slack;
+    return on ? { x: px - hover.x, y: py - hover.y } : null;
+  };
 
   // Pointer tracking is on window so drags from the offers land here too.
   const pointer = useRef<{ x: number; y: number } | null>(null);
@@ -193,7 +230,8 @@ export function Board(props: {
       d.active = false;
       downOnBoard.current = false;
       if (e.pointerType === "touch") touchTrack.on = false;
-      if (e.button !== 0 || !(fromDrag || fromBoard)) return;
+      // Touch places only at the end of a drag; with a mouse, a click on the board places too.
+      if (e.button !== 0 || !(fromDrag || (fromBoard && e.pointerType !== "touch"))) return;
       const { held, rot, flip, anchorAt, onPlace } = latest.current;
       const a = anchorAt(e.clientX, e.clientY);
       if (!held || !a) return;
@@ -213,13 +251,19 @@ export function Board(props: {
       className="draft-board"
       onPointerDown={(e) => {
         if (e.button !== 0) return;
-        downOnBoard.current = true;
         if (e.pointerType === "touch") {
+          // Touch only ever moves the piece by dragging it: a touch on the held piece picks it
+          // up from that spot (so it doesn't jump); a tap anywhere else does nothing.
+          const at = pieceSpotAt(e.clientX, e.clientY);
+          if (!at) return;
+          onGrab(at);
+          downOnBoard.current = true;
           touchTrack.on = true;
-          // A touch has no hover: put the piece where the finger lands straight away.
+          drag.current = { active: true, startX: e.clientX, startY: e.clientY, moved: false };
           pointer.current = { x: e.clientX, y: e.clientY };
-          track();
+          return;
         }
+        downOnBoard.current = true;
       }}
     >
       <canvas ref={canvasRef} className={held && hover ? "holding" : undefined} />
