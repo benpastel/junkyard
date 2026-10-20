@@ -211,25 +211,6 @@ const PARTS: Partial<Record<CellType, (d: Pen, s: CellStyle, dir: Dir) => void>>
     }
   },
 
-  // flamethrower: a fat fuel tank feeding a wide flared nozzle. On the draft board a tongue of
-  // fire says what it does; in a fight only the pilot light shows (the flame is drawn while it fires).
-  flamer(d, s) {
-    d.rect(0.16, 0.36, 0.68, 0.56, DARK);
-    d.circle(0.5, 0.63, 0.28, "#9a4a2a");
-    d.arc(0.5, 0.63, 0.2, PI * 1.1, PI * 1.45, "rgba(255,220,190,.35)", 0.05);
-    d.rect(0.22, 0.78, 0.56, 0.07, TAPE);
-    d.poly([[0.4, 0.38], [0.6, 0.38], [0.74, -0.32], [0.26, -0.32]], METAL_DARK);
-    d.poly([[0.45, 0.3], [0.55, 0.3], [0.64, -0.26], [0.36, -0.26]], "#2a2d33");
-    if (s.inactive) return;
-    // Same signal as engines: the arena passes thrusting: false, the draft board leaves it out.
-    if (s.thrusting ?? true) {
-      d.poly([[0.3, -0.32], [0.5, -0.95], [0.7, -0.32]], HOT);
-      d.poly([[0.39, -0.32], [0.5, -0.68], [0.61, -0.32]], YEL);
-    } else {
-      d.circle(0.5, -0.36, 0.07 + 0.02 * Math.sin((s.time ?? 0) * 30 + (s.variant ?? 0)), "#7ec8ff");
-    }
-  },
-
   // coil gun: copper rings on a long barrel, glowing tip
   laser(d, s) {
     d.rect(0.25, 0.58, 0.5, 0.32, DARK);

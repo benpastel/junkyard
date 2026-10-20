@@ -18,7 +18,7 @@ export const DIR_VECTORS: Record<Dir, { x: number; y: number }> = {
   3: { x: -1, y: 0 },
 };
 
-export const CELL_TYPES = ["core", "hull", "engine", "laser", "grapple", "saw", "mirror", "armor", "rock", "flamer"] as const;
+export const CELL_TYPES = ["core", "hull", "engine", "laser", "grapple", "saw", "mirror", "armor", "rock"] as const;
 export type CellType = (typeof CELL_TYPES)[number];
 
 /** One grid cell of a ship, in integer grid coordinates. */

@@ -356,17 +356,4 @@ describe("arena", () => {
       SIM.rocksPerArea = saved;
     }
   });
-  it("a flamethrower cooks what sits in its flame, never its own ship", () => {
-    const a = new Arena({ ships: [bp("a", ["F", "C"]), bp("b", ["###", "#C#", "###"])], seed: 1 });
-    // Park b just in front of a's nozzle (a faces the centre from straight above it).
-    const pa = a.ship("a")!.body.rb!.translation();
-    a.ship("b")!.body.rb!.setTranslation({ x: pa.x, y: pa.y + 5 }, true);
-    a.ship("b")!.body.rb!.setLinvel({ x: 0, y: 0 }, true);
-    run(a, TICK_HZ * 3);
-    expect(a.ship("b")!.cellsLost).toBeGreaterThan(0);
-    expect(a.ship("a")!.cellsLost).toBe(0);
-    expect(a.ship("a")!.cellsDestroyed).toBe(a.ship("b")!.cellsLost);
-    a.dispose();
-  });
-
 });

@@ -79,7 +79,7 @@ describe("hulls", () => {
 
 describe("generatePiece", () => {
   it("fills each piece with 1.5-2 points of parts that all work and never overlap", () => {
-    const cost: Record<string, number> = { engine: 0.5, laser: 1, saw: 1, flamer: 1 };
+    const cost: Record<string, number> = { engine: 0.5, laser: 1, saw: 1 };
     const rng = new Rng(7);
     let total = 0;
     const n = 1000;

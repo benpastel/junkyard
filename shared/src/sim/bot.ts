@@ -19,8 +19,6 @@ const bots = new WeakMap<Arena, Map<PlayerId, BotState>>();
 /** Distances (cells) the bot keeps from its target: lasers in range, a saw while it turns, unarmed well clear. */
 const BOT_LASER_HOLD = 8;
 const BOT_SAW_HOLD = 6;
-/** Inside flamethrower reach (SIM.flamerRange) with a little room. */
-const BOT_FLAMER_HOLD = 4;
 const BOT_UNARMED_HOLD = 12;
 /** A saw this close to pointing at the target (radians) is lined up enough to charge in. */
 const SAW_CHARGE_ANGLE = 0.35;
@@ -94,12 +92,11 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
   const lasers = cells.filter((c) => c.type === "laser" && arena.isOpen(c));
   const grapples = cells.filter((c) => c.type === "grapple" && arena.isOpen(c));
   const saws = cells.filter((c) => c.type === "saw" && arena.isOpen(c));
-  const flamers = cells.filter((c) => c.type === "flamer" && arena.isOpen(c));
 
   if (st.rng.chance(0.3)) st.aimNoise = (st.rng.next() - 0.5) * st.skill.aimNoise;
 
   // Which local direction should face the enemy.
-  const aimCells = lasers.length ? lasers : flamers.length ? flamers : saws.length ? saws : grapples;
+  const aimCells = lasers.length ? lasers : saws.length ? saws : grapples;
   const aimDir = dominantDir(aimCells.map((c) => c.dir));
   const aimLocal = Math.atan2(DIR_VECTORS[aimDir].y, DIR_VECTORS[aimDir].x);
 
@@ -119,7 +116,7 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
     // Outgunned hard bots fight from the edge of laser range instead.
     const outgunned = st.skill.standoff && foe !== null && aliveCells(me) < aliveCells(foe.ship) * OUTGUNNED;
     const laserHold = outgunned ? SIM.laserRange - 1.5 : Math.min(BOT_LASER_HOLD, SIM.laserRange - 4);
-    const preferred = sawLinedUp && !outgunned ? 0 : saws.length ? BOT_SAW_HOLD : lasers.length ? laserHold : flamers.length ? BOT_FLAMER_HOLD : BOT_UNARMED_HOLD;
+    const preferred = sawLinedUp && !outgunned ? 0 : saws.length ? BOT_SAW_HOLD : lasers.length ? laserHold : BOT_UNARMED_HOLD;
     // Ease off on the way in so it settles at its distance instead of overshooting into you.
     // A lined-up saw charges in flat out: that's the whole point of it.
     const speed = sawLinedUp ? 7 : dist > preferred + 3 ? Math.min(7, (dist - preferred) * 0.6) : dist < preferred - 3 ? -4 : 0;
