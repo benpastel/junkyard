@@ -72,8 +72,19 @@ const PART_WEIGHTS: [CellType, number][] = [
 /** Each piece carries this many points of parts (picked from these). */
 const PIECE_BUDGETS = [1.5, 2] as const;
 
-function pickPart(rng: Rng, allowed: (t: CellType) => boolean): CellType | null {
-  const options = PART_WEIGHTS.filter(([t, w]) => w > 0 && allowed(t));
+/** What a piece may carry and how much: the normal mix, or a tutorial's restricted one. */
+export interface PieceRules {
+  weights: readonly (readonly [CellType, number])[];
+  budgets: readonly number[];
+}
+
+export const DEFAULT_PIECE_RULES: PieceRules = { weights: PART_WEIGHTS, budgets: PIECE_BUDGETS };
+
+/** Tutorial: engines only, one or two per piece. */
+export const ENGINES_ONLY: PieceRules = { weights: [["engine", 1]], budgets: [0.5, 1] };
+
+function pickPart(rng: Rng, allowed: (t: CellType) => boolean, weights: PieceRules["weights"]): CellType | null {
+  const options = weights.filter(([t, w]) => w > 0 && allowed(t));
   const total = options.reduce((s, [, w]) => s + w, 0);
   if (total <= 0) return null;
   let r = rng.next() * total;
@@ -87,11 +98,11 @@ function pickPart(rng: Rng, allowed: (t: CellType) => boolean): CellType | null 
 const DIRS: Dir[] = [0, 1, 2, 3];
 
 /** A random piece; pass `shapes` to draw its shape only from those (e.g. ones that fit). */
-export function generatePiece(rng: Rng, id: string, shapes: readonly PentominoName[] = PENTOMINO_NAMES): Piece {
+export function generatePiece(rng: Rng, id: string, shapes: readonly PentominoName[] = PENTOMINO_NAMES, rules: PieceRules = DEFAULT_PIECE_RULES): Piece {
   const shape = rng.pick(shapes);
   const coords = PENTOMINOES[shape];
   const cells: Cell[] = coords.map(([x, y]) => ({ x, y, type: "hull", dir: 0 }));
-  let budget: number = rng.pick(PIECE_BUDGETS);
+  let budget: number = rng.pick(rules.budgets);
   let mirrored = false;
   // Squares just outside the piece that a part's overhang already uses (engine exhaust, laser
   // barrel, saw blade): no two parts may share one, so their art never piles up.
@@ -99,7 +110,7 @@ export function generatePiece(rng: Rng, id: string, shapes: readonly PentominoNa
   const failed = new Set<CellType>();
 
   while (budget > 0) {
-    const type = pickPart(rng, (t) => (PART_COST[t] ?? Infinity) <= budget && !failed.has(t) && !(t === "mirror" && mirrored));
+    const type = pickPart(rng, (t) => (PART_COST[t] ?? Infinity) <= budget && !failed.has(t) && !(t === "mirror" && mirrored), rules.weights);
     if (!type) break;
     if (type === "mirror") {
       mirrored = true;

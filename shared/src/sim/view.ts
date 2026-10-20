@@ -48,6 +48,10 @@ export interface ArenaInit {
   ships: InitShip[];
   ring: RingParams;
   rocks: InitRock[];
+  /** Set for a tutorial / special arena (see Scenario). */
+  scenario?: string;
+  /** Sheep to collect, when the scenario has any. */
+  sheepTotal?: number;
   /** Ticks at the start during which everything is frozen while a countdown shows. */
   countdownTicks: number;
 }
@@ -79,6 +83,8 @@ export interface BodySnap {
   mir?: 1;
   /** Present (1) on asteroids (rock that stays), as opposed to wreckage that fades. */
   rock?: 1;
+  /** Present (1) on a free-floating saw blade (scenarios). */
+  haz?: 1;
 }
 
 export interface HookSnap {
@@ -100,8 +106,18 @@ export type ArenaEvent =
   /** A ship bounced off the rubber ring. */
   | { e: "bounce"; x: number; y: number; power: number }
   | { e: "pickup"; playerId: PlayerId }
+  /** A sheep was collected. */
+  | { e: "sheep"; x: number; y: number }
   /** The fight is decided. null winner = nobody left. */
   | { e: "over"; winner: PlayerId | null };
+
+export interface SheepSnap {
+  id: number;
+  x: number;
+  y: number;
+  /** Lazy spin, radians. */
+  a: number;
+}
 
 /** Periodic state broadcast. */
 export interface ArenaSnapshot {
@@ -112,6 +128,8 @@ export interface ArenaSnapshot {
   /** Whether the power-up orb is sitting at the centre. */
   powerup: boolean;
   bodies: BodySnap[];
+  /** Sheep still floating about (scenarios only). */
+  sheep?: SheepSnap[];
   hooks: HookSnap[];
   events: ArenaEvent[];
 }

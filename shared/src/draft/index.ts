@@ -2,7 +2,7 @@ import type { Cell, Dir, HullId, PlayerId } from "../types.js";
 import { Rng } from "../rng.js";
 import { cockpitCells } from "../cells.js";
 import { hullBuildable, hullCore, HULLS } from "./hulls.js";
-import { generatePiece, placedCells, type Piece } from "./pieces.js";
+import { DEFAULT_PIECE_RULES, generatePiece, placedCells, type Piece, type PieceRules } from "./pieces.js";
 import { cellKey as key, fittingShapes, placementError } from "./rules.js";
 
 export * from "./hulls.js";
@@ -65,10 +65,12 @@ export class Draft {
   private readonly players = new Map<PlayerId, PlayerDraft>();
   private pool: Piece[] = [];
   private nextId = 1;
+  private readonly rules: PieceRules;
 
-  /** Every player builds on `hull` unless `hulls` gives them their own. */
-  constructor(opts: { playerIds: PlayerId[]; hull: HullId; seed: number; hulls?: Partial<Record<PlayerId, HullId>> }) {
+  /** Every player builds on `hull` unless `hulls` gives them their own. `pieces` restricts what pieces carry (tutorials). */
+  constructor(opts: { playerIds: PlayerId[]; hull: HullId; seed: number; hulls?: Partial<Record<PlayerId, HullId>>; pieces?: PieceRules }) {
     this.rng = new Rng(opts.seed);
+    this.rules = opts.pieces ?? DEFAULT_PIECE_RULES;
     for (const id of opts.playerIds) this.addPlayer(id, opts.hulls?.[id] ?? opts.hull);
   }
 
@@ -190,7 +192,7 @@ export class Draft {
     const shapes = fittingShapes(p.buildable, p.cells);
     p.full = shapes.length === 0;
     if (p.full) return [];
-    return Array.from({ length: OFFER_COUNT }, () => generatePiece(this.rng, `p${this.nextId++}`, shapes));
+    return Array.from({ length: OFFER_COUNT }, () => generatePiece(this.rng, `p${this.nextId++}`, shapes, this.rules));
   }
 
   /** Nothing fits on this player's ship any more. */

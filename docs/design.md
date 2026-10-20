@@ -143,3 +143,10 @@ Expect ~50–100ms of input lag. Hide it with game feel:
 - While building, cockpit arrows with no engine yet carry a red X; hovering a piece that would add one clears it and lights the arrow.
 - Camera is ship-up only for now; the fixed-north view is still in the code behind `CAMERA_SWITCHING`.
 - Fullscreen: a button (top right of the fight, right column / phone status bar while building). No shortcut key, so it can't be hit by accident; Esc or the back gesture leaves. Hidden where unsupported (iPhone Safari).
+
+## Tutorials
+
+- Scenarios (`shared/src/sim/scenarios.ts`) change a fight's rules: fixed ring size, no asteroids or power-up, sheep to collect, floating saws, no time limit. A tutorial runs entirely in the browser (no server), like the sandboxes; more tutorials (or a campaign) are new scenarios plus a screen.
+- **Sheep round-up** (lobby button, `?tutorial=sheep`): build on a Skiff with engine-only pieces (one or two engines each, no timer; Done launches), then collect 12 sheep in spacesuits around a still ring of radius 42 while 5 floating saws drift about. Touching a sheep with any part of the ship collects it; the clock (after the 3-2-1) stops when the last one is in. Saws cut the ship like any saw and nothing breaks them; lose the cockpit and it's "Ship lost". The best time is kept per browser and shown on the lobby button.
+- Sheep are not physics bodies, so nothing can hurt them: they drift, ease away from saws inside 5.5 cells (harder the closer) and never come within 2 cells of a blade's centre, and turn back from the ring. Off-screen sheep get small white edge arrows.
+- `node scripts/check-tutorial.mjs` plays it in a browser (dev-only `window.__tutorialArena` hook) and screenshots the result.

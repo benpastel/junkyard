@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { InputState, PlayerId } from "@ja/shared";
 import {
   FAST_FORWARD_SPEED,
@@ -35,8 +35,10 @@ export function ArenaScreen(props: {
   sendInput: (i: InputState) => void;
   /** Fast-forward vote; omitted when this viewer has no vote. */
   fastForward?: FastForward;
+  /** Extra overlay (tutorials: sheep counter, clock, result card). */
+  hud?: ReactNode;
 }) {
-  const { init, me, subscribe, sendInput, fastForward } = props;
+  const { init, me, subscribe, sendInput, fastForward, hud } = props;
   const ffRef = useRef(fastForward);
   ffRef.current = fastForward;
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -148,6 +150,7 @@ export function ArenaScreen(props: {
     <div className="arena">
       <canvas ref={canvasRef} className="arena-canvas" />
       <FullscreenButton className="arena-fullscreen" />
+      {hud}
       <button
         type="button"
         className={`arena-compass${camera === "north" ? " on" : ""}`}

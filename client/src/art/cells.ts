@@ -418,6 +418,40 @@ export function drawRockCell(ctx: CanvasRenderingContext2D, size: number, varian
   ctx.restore();
 }
 
+/**
+ * A free-floating saw blade (tutorial hazard), centred on (0,0) with radius r px: a big toothed
+ * disc with a warning glow, spun by `angle`.
+ */
+export function drawHazardSaw(ctx: CanvasRenderingContext2D, r: number, angle: number) {
+  ctx.save();
+  const glow = ctx.createRadialGradient(0, 0, r * 0.6, 0, 0, r * 1.5);
+  glow.addColorStop(0, "rgba(224, 80, 58, 0.35)");
+  glow.addColorStop(1, "rgba(224, 80, 58, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 1.5, 0, PI * 2);
+  ctx.fill();
+  ctx.rotate(angle);
+  ctx.scale(r, r);
+  const d = pen(ctx);
+  const n = 10;
+  const pts: [number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i * 2 * PI) / n;
+    const b = a + (PI / n) * 1.6;
+    pts.push([Math.cos(a) * 0.68, Math.sin(a) * 0.68], [Math.cos(b) * 1, Math.sin(b) * 1]);
+  }
+  d.poly(pts, METAL);
+  d.circle(0, 0, 0.62, "#8d939b");
+  d.arc(0, 0, 0.48, 0, PI * 2, "#e0503a", 0.08);
+  for (let i = 0; i < 5; i++) {
+    const a = (i * 2 * PI) / 5;
+    d.circle(Math.cos(a) * 0.3, Math.sin(a) * 0.3, 0.07, "#5a6068");
+  }
+  d.circle(0, 0, 0.13, DARK);
+  ctx.restore();
+}
+
 /** Darken (amount < 0) or lighten a #rrggbb colour. */
 function shade(hex: string, amount: number): string {
   const n = parseInt(hex.slice(1), 16);

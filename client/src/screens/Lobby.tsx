@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { HullTier, Pace, Phase, TableSummary } from "@ja/shared";
 import { net } from "../net";
+import { formatTime, loadBest } from "../tutorial/best";
 
 const NAME_KEY = "ja.name";
 
@@ -17,6 +18,11 @@ const TIER_LABELS: Record<HullTier, string> = { small: "Small", medium: "Medium"
 const PACE_LABELS: Record<Pace, string> = { frantic: "Frantic", fast: "Fast", strategic: "Strategic", unlimited: "Unlimited" };
 
 /** Every open table, plus making a new one. A name is needed either way. */
+function TutorialBest({ id }: { id: string }) {
+  const best = loadBest(id);
+  return best !== null ? <span className="mono tutorial-best">{formatTime(best)}</span> : null;
+}
+
 export function Lobby({ tables, roomId, error }: { tables: TableSummary[]; roomId: string | null; error: string | null }) {
   const [name, setName] = useState(storedName);
   const named = name.trim().length > 0;
@@ -52,6 +58,10 @@ export function Lobby({ tables, roomId, error }: { tables: TableSummary[]; roomI
         </button>
       </form>
       {error && <div className="error-text">{error}</div>}
+      <a className="tutorial-link" href="?tutorial=sheep">
+        Sheep round-up
+        <TutorialBest id="sheep" />
+      </a>
       {tables.length > 0 && (
         <ul className="table-list">
           {tables.map((t) => (

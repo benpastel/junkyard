@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { NO_INPUT, type InputState, type ShipBlueprint } from "../types.js";
-import { Arena, arenaBotInput, FightRecorder, initPhysics, replayFight, SIM, TICK_HZ } from "./index.js";
+import { Arena, arenaBotInput, FightRecorder, initPhysics, replayFight, HAZARD_SAW, SHEEP, SHEEP_ROUNDUP, SIM, TICK_HZ } from "./index.js";
 import { SANDBOX_SHIPS, parseShip } from "./testShips.js";
 
 beforeAll(async () => {
@@ -382,6 +382,60 @@ describe("arena", () => {
     run(a, 1);
     expect(a.winner).toBe("a");
     a.dispose();
+  });
+
+  describe("sheep round-up", () => {
+    it("keeps the ring still and ends once every sheep is collected", () => {
+      const a = new Arena({ ships: [bp("me", ["#C#", "^#^"])], seed: 2, scenario: SHEEP_ROUNDUP });
+      expect(a.init().sheepTotal).toBe(SHEEP_ROUNDUP.sheep);
+      expect(a.bodies.filter((b) => b.kind === "rock")).toHaveLength(0);
+      expect(a.bodies.filter((b) => b.kind === "hazard")).toHaveLength(SHEEP_ROUNDUP.hazardSaws!);
+      run(a, TICK_HZ * 6);
+      expect(a.ringRadius).toBe(SHEEP_ROUNDUP.ringRadius);
+      expect(a.over).toBe(false);
+      // Fly the ship onto each sheep in turn (teleporting it there).
+      const rb = a.ship("me")!.body.rb!;
+      for (let guard = 0; a.sheepLeft > 0 && guard < 100; guard++) {
+        const snap = a.snapshot();
+        const s = snap.sheep![0]!;
+        rb.setTranslation({ x: s.x, y: s.y }, true);
+        rb.setLinvel({ x: 0, y: 0 }, true);
+        run(a, 1);
+      }
+      expect(a.sheepLeft).toBe(0);
+      expect(a.over).toBe(true);
+      expect(a.winner).toBe("me");
+      expect(a.finishedSeconds).toBeGreaterThan(0);
+      a.dispose();
+    });
+
+    it("floating saws cut ships but nothing breaks them, and sheep keep clear of them", () => {
+      const a = new Arena({ ships: [bp("me", ["###", "#C#", "###"])], seed: 3, scenario: SHEEP_ROUNDUP });
+      const saw = a.bodies.find((b) => b.kind === "hazard")!;
+      const p = saw.rb!.translation();
+      // Park the ship on top of a blade for a second.
+      const rb = a.ship("me")!.body.rb!;
+      for (let i = 0; i < TICK_HZ && a.ship("me")!.alive; i++) {
+        const q = saw.rb!.translation();
+        rb.setTranslation({ x: q.x + 1.2, y: q.y }, true);
+        rb.setLinvel({ x: 0, y: 0 }, true);
+        a.step({});
+      }
+      expect(a.ship("me")!.cellsLost).toBeGreaterThan(0);
+      expect(saw.cells[0]!.alive).toBe(true);
+      void p;
+      for (let i = 0; i < TICK_HZ * 10; i++) {
+        a.step({});
+        for (const s of a.snapshot().sheep ?? []) {
+          for (const h of a.bodies.filter((b) => b.kind === "hazard")) {
+            const t = h.rb!.translation();
+            // Never touching: the blade and the sheep stay apart.
+            expect(Math.hypot(s.x - t.x, s.y - t.y)).toBeGreaterThan(HAZARD_SAW.radius + SHEEP.radius);
+          }
+        }
+      }
+      a.dispose();
+    });
   });
 
 });

@@ -13,11 +13,27 @@ import { Waiting } from "./screens/Waiting";
 const SandboxArena = lazy(() => import("./sandbox-arena").then((m) => ({ default: m.SandboxArena })));
 const SandboxDraft = lazy(() => import("./sandbox-draft").then((m) => ({ default: m.SandboxDraft })));
 const SandboxButtons = lazy(() => import("./sandbox-buttons").then((m) => ({ default: m.SandboxButtons })));
+const SheepTutorial = lazy(() => import("./tutorial/SheepTutorial").then((m) => ({ default: m.SheepTutorial })));
+const SandboxSheep = lazy(() => import("./sandbox-sheep").then((m) => ({ default: m.SandboxSheep })));
 
 const params = new URLSearchParams(location.search);
 const sandbox = params.get("sandbox");
 
 export function App() {
+  if (params.get("tutorial") === "sheep") {
+    return (
+      <Suspense fallback={null}>
+        <SheepTutorial />
+      </Suspense>
+    );
+  }
+  if (sandbox === "sheep") {
+    return (
+      <Suspense fallback={null}>
+        <SandboxSheep />
+      </Suspense>
+    );
+  }
   if (sandbox === "buttons") {
     return (
       <Suspense fallback={null}>

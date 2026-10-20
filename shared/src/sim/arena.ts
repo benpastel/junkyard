@@ -16,6 +16,7 @@ import {
   type InitShip,
 } from "./view.js";
 import type { ArenaSetup } from "./index.js";
+import { HAZARD_SAW, SHEEP, type Scenario } from "./scenarios.js";
 
 const DT = 1 / TICK_HZ;
 
@@ -53,7 +54,7 @@ export interface SimCell {
 
 export interface SimBody {
   id: number;
-  kind: "ship" | "debris" | "rock";
+  kind: "ship" | "debris" | "rock" | "hazard";
   owner: PlayerId | null;
   rb: RigidBody | null;
   cells: SimCell[];
@@ -152,9 +153,19 @@ export class Arena {
   private readonly initInfo: ArenaInit;
   private readonly startedShips: number;
 
+  /** The special arena this is, if any (tutorials). */
+  readonly scenario: Scenario | null;
+  /** Sheep still to collect (scenarios with sheep). */
+  private sheep: { id: number; x: number; y: number; vx: number; vy: number; a: number; w: number }[] = [];
+  readonly sheepTotal: number;
+  /** Seconds of fighting when the fight was decided (e.g. the last sheep came in). */
+  finishedSeconds: number | null = null;
+
   constructor(setup: ArenaSetup) {
     if (!physicsReady) throw new Error("call initPhysics() first");
     this.rng = new Rng(setup.seed);
+    this.scenario = setup.scenario ?? null;
+    this.sheepTotal = this.scenario?.sheep ?? 0;
     this.world = new RAPIER.World({ x: 0, y: 0 });
     this.world.timestep = DT;
     // Extra solver iterations keep jammed-together ships stable when the ring squeezes them.
@@ -163,7 +174,7 @@ export class Arena {
 
     const n = setup.ships.length;
     const spawnR = Math.max(SIM.spawnMinRadius, n * SIM.spawnRadiusPerShip);
-    this.ringStart = (spawnR + SIM.ringStartPadding) * SIM.ringStartScale;
+    this.ringStart = this.scenario?.ringRadius ?? (spawnR + SIM.ringStartPadding) * SIM.ringStartScale;
     this.ringRadius = this.ringStart;
 
     let cid = 1;
@@ -225,12 +236,19 @@ export class Arena {
     });
     this.startedShips = this.ships.length;
     const spawns = this.ships.map((s) => s.body.rb!.translation());
-    const rocks = this.spawnRocks(spawns, cid);
+    const rocks = this.scenario?.rocks === false ? [] : this.spawnRocks(spawns, cid);
+    cid += rocks.reduce((n, r) => n + r.cells.length, 0);
+    if (this.scenario?.powerup === false) this.powerupTaken = true;
+    const hazards = this.spawnHazards(spawns, this.scenario?.hazardSaws ?? 0, cid);
+    cid += hazards;
+    this.spawnSheep(spawns, this.sheepTotal);
     this.buildWalls();
     this.initInfo = {
       ships: initShips,
       ring: { startRadius: this.ringStart, minRadius: SIM.ringMinRadius },
       rocks,
+      ...(this.scenario ? { scenario: this.scenario.id } : {}),
+      ...(this.sheepTotal ? { sheepTotal: this.sheepTotal } : {}),
       countdownTicks: this.countdownTicks,
     };
   }
@@ -312,6 +330,148 @@ export class Arena {
     return out;
   }
 
+  /** Free-floating saw blades (scenarios): a lone saw cell with a centred blade, unbreakable. Returns the cids used. */
+  private spawnHazards(spawns: { x: number; y: number }[], count: number, firstCid: number): number {
+    let cid = firstCid;
+    const placed: { x: number; y: number }[] = [];
+    for (let n = 0, tries = 0; n < count && tries < count * 80; tries++) {
+      const dist = Math.sqrt(this.rng.next()) * (this.ringStart - 4);
+      const ang = this.rng.next() * Math.PI * 2;
+      const x = Math.cos(ang) * dist;
+      const y = Math.sin(ang) * dist;
+      if (spawns.some((p) => Math.hypot(p.x - x, p.y - y) < HAZARD_SAW.spawnClearance)) continue;
+      if (placed.some((p) => Math.hypot(p.x - x, p.y - y) < 8)) continue;
+      placed.push({ x, y });
+      n++;
+      const da = this.rng.next() * Math.PI * 2;
+      const body = this.newBody("hazard", null, x, y, 0, Math.cos(da) * HAZARD_SAW.speed, Math.sin(da) * HAZARD_SAW.speed, HAZARD_SAW.spin);
+      const c: SimCell = {
+        cid: cid++,
+        x: 0,
+        y: 0,
+        type: "saw",
+        dir: 0,
+        piece: undefined,
+        hp: Infinity,
+        maxHp: Infinity,
+        alive: true,
+        collider: null,
+        blade: null,
+        body,
+        thrust: 0,
+        charge: 0,
+        cooldown: 0,
+      };
+      const blade = this.world.createCollider(
+        RAPIER.ColliderDesc.ball(HAZARD_SAW.radius).setDensity(SIM.cellDensity * 2).setRestitution(0.8).setFriction(0.1).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),
+        body.rb!,
+      );
+      c.blade = blade;
+      this.cellByCollider.set(blade.handle, c);
+      this.bladeColliders.add(blade.handle);
+      body.cells.push(c);
+    }
+    return cid - firstCid;
+  }
+
+  /** Sheep (scenarios): scattered clear of the ship's start, each other and the saws. */
+  private spawnSheep(spawns: { x: number; y: number }[], count: number) {
+    const saws = this.bodies.filter((b) => b.kind === "hazard").map((b) => b.rb!.translation());
+    for (let n = 0, tries = 0; n < count && tries < count * 100; tries++) {
+      const dist = Math.sqrt(this.rng.next()) * (this.ringStart - 4);
+      const ang = this.rng.next() * Math.PI * 2;
+      const x = Math.cos(ang) * dist;
+      const y = Math.sin(ang) * dist;
+      if (spawns.some((p) => Math.hypot(p.x - x, p.y - y) < SHEEP.spawnClearance)) continue;
+      if (saws.some((p) => Math.hypot(p.x - x, p.y - y) < SHEEP.avoidRange)) continue;
+      if (this.sheep.some((p) => Math.hypot(p.x - x, p.y - y) < SHEEP.spacing)) continue;
+      this.sheep.push({ id: n + 1, x, y, vx: 0, vy: 0, a: this.rng.next() * Math.PI * 2, w: (this.rng.next() - 0.5) * 0.6 });
+      n++;
+    }
+  }
+
+  get sheepLeft(): number {
+    return this.sheep.length;
+  }
+
+  /**
+   * Sheep drift about, ease away from saws (harder the closer, and never within SHEEP.saw of
+   * one) and from the ring, and are collected when a ship touches them. Nothing can hurt them.
+   */
+  private updateSheep() {
+    if (!this.sheep.length) return;
+    const saws = this.bodies.filter((b) => b.kind === "hazard" && b.rb).map((b) => b.rb!.translation());
+    const shipCells: { x: number; y: number }[] = [];
+    for (const s of this.ships) {
+      if (!s.alive) continue;
+      for (const c of s.body.cells) {
+        const p = c.alive ? this.cellWorld(c) : null;
+        if (p) shipCells.push(p);
+      }
+    }
+    const r2 = SHEEP.collectRadius * SHEEP.collectRadius;
+    this.sheep = this.sheep.filter((s) => {
+      if (shipCells.some((p) => (p.x - s.x) ** 2 + (p.y - s.y) ** 2 < r2)) {
+        this.events.push({ e: "sheep", x: r3(s.x), y: r3(s.y) });
+        this.log(`sheep ${s.id} collected; ${this.sheep.length - 1} left`);
+        return false;
+      }
+      let ax = (this.rng.next() - 0.5) * 2 * SHEEP.wander;
+      let ay = (this.rng.next() - 0.5) * 2 * SHEEP.wander;
+      for (const p of saws) {
+        const dx = s.x - p.x;
+        const dy = s.y - p.y;
+        const d = Math.hypot(dx, dy) || 1e-6;
+        if (d < SHEEP.avoidRange) {
+          const k = SHEEP.avoidAccel * (1 - d / SHEEP.avoidRange) ** 2;
+          ax += (dx / d) * k;
+          ay += (dy / d) * k;
+        }
+      }
+      const r = Math.hypot(s.x, s.y) || 1e-6;
+      if (r > this.ringRadius - 2.5) {
+        ax -= (s.x / r) * 4;
+        ay -= (s.y / r) * 4;
+      }
+      s.vx = (s.vx + ax * DT) * (1 - SHEEP.damping * DT);
+      s.vy = (s.vy + ay * DT) * (1 - SHEEP.damping * DT);
+      const sp = Math.hypot(s.vx, s.vy);
+      if (sp > SHEEP.maxSpeed) {
+        s.vx *= SHEEP.maxSpeed / sp;
+        s.vy *= SHEEP.maxSpeed / sp;
+      }
+      s.x += s.vx * DT;
+      s.y += s.vy * DT;
+      s.a += s.w * DT;
+      // Hard floor: never close enough to a blade to touch it.
+      for (const p of saws) {
+        const dx = s.x - p.x;
+        const dy = s.y - p.y;
+        const d = Math.hypot(dx, dy) || 1e-6;
+        if (d < SHEEP.saw) {
+          s.x = p.x + (dx / d) * SHEEP.saw;
+          s.y = p.y + (dy / d) * SHEEP.saw;
+        }
+      }
+      return true;
+    });
+  }
+
+  /** Floating saws keep drifting at their speed and keep spinning, whatever they bump into. */
+  private updateHazards() {
+    for (const b of this.bodies) {
+      if (b.kind !== "hazard" || !b.rb) continue;
+      const v = b.rb.linvel();
+      const sp = Math.hypot(v.x, v.y);
+      if (sp < HAZARD_SAW.speed * 0.9) {
+        const k = sp > 0.05 ? HAZARD_SAW.speed / sp : 0;
+        const da = this.rng.next() * Math.PI * 2;
+        b.rb.setLinvel(k ? { x: v.x * k, y: v.y * k } : { x: Math.cos(da) * HAZARD_SAW.speed, y: Math.sin(da) * HAZARD_SAW.speed }, true);
+      }
+      b.rb.setAngvel(HAZARD_SAW.spin, true);
+    }
+  }
+
   // ---------------------------------------------------------------- public API
 
   init(): ArenaInit {
@@ -334,7 +494,9 @@ export class Arena {
 
   private get decided(): boolean {
     const alive = this.aliveShips.length;
-    if (this.fightSeconds >= SIM.maxSeconds) return true;
+    if (this.fightSeconds >= (this.scenario?.maxSeconds ?? SIM.maxSeconds)) return true;
+    // Rounding up sheep: done once they're all in (or the ship is lost).
+    if (this.sheepTotal) return this.sheep.length === 0 || alive === 0;
     if (this.startedShips >= 2) return alive <= 1;
     return alive === 0;
   }
@@ -393,12 +555,17 @@ export class Arena {
     this.eventQueue.drainContactForceEvents((e) => this.onPressure(e.collider1(), e.collider2(), e.totalForceMagnitude(), touched));
 
     this.updatePowerup();
+    if (this.endedAt === null) {
+      this.updateSheep();
+      this.updateHazards();
+    }
     if (this.endedAt === null && this.decided) {
       this.endedAt = this.tickCount;
       this.finalResults = this.computeResults();
       const winners = this.finalResults.filter((r) => r.place === 1 && this.ship(r.playerId)?.alive);
       const winner = winners.length === 1 ? winners[0]!.playerId : null;
       this.winner = winner;
+      this.finishedSeconds = this.fightSeconds;
       this.events.push({ e: "over", winner });
       this.log(`fight over: ${winner ?? "nobody"} wins`);
     }
@@ -453,12 +620,14 @@ export class Arena {
         if (ship && ship.mirroredUntil > this.tickCount) s.mir = 1;
       }
       if (b.kind === "rock") s.rock = 1;
+      if (b.kind === "hazard") s.haz = 1;
       bodies.push(s);
     }
     const hooks: HookSnap[] = this.hooks.map((h) => ({ from: h.from.cid, to: h.to.cid, ox: r3(h.ox), oy: r3(h.oy) }));
     const events = this.events;
     this.events = [];
-    return { tick: this.tickCount, ring: r3(this.ringRadius), powerup: this.powerupActive, bodies, hooks, events };
+    const sheep = this.sheepTotal ? this.sheep.map((s) => ({ id: s.id, x: r3(s.x), y: r3(s.y), a: r3(s.a) })) : undefined;
+    return { tick: this.tickCount, ring: r3(this.ringRadius), powerup: this.powerupActive, bodies, ...(sheep ? { sheep } : {}), hooks, events };
   }
 
   /** Standings as of the moment the fight was decided (or now, if it isn't yet). */
@@ -523,8 +692,8 @@ export class Arena {
       .setRotation(a)
       .setLinvel(vx, vy)
       .setAngvel(w)
-      .setLinearDamping(kind === "rock" ? SIM.rockLinearDamping : SIM.linearDamping)
-      .setAngularDamping(kind === "ship" ? SIM.angularDamping : kind === "rock" ? SIM.rockAngularDamping : SIM.angularDamping * 0.3)
+      .setLinearDamping(kind === "rock" ? SIM.rockLinearDamping : kind === "hazard" ? 0 : SIM.linearDamping)
+      .setAngularDamping(kind === "ship" ? SIM.angularDamping : kind === "rock" ? SIM.rockAngularDamping : kind === "hazard" ? 0 : SIM.angularDamping * 0.3)
       .setCcdEnabled(true);
     const body: SimBody = {
       id: this.nextBodyId++,
@@ -905,6 +1074,7 @@ export class Arena {
 
   private updateRing() {
     if (this.endedAt !== null) return;
+    if (this.scenario?.staticRing) return;
     const t = this.fightSeconds - SIM.ringDelaySeconds;
     const f = Math.min(1, Math.max(0, t / SIM.ringShrinkSeconds));
     this.ringRadius = this.ringStart + (SIM.ringMinRadius - this.ringStart) * f;

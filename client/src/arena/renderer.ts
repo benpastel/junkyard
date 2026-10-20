@@ -11,10 +11,13 @@ import {
   type ArenaSnapshot,
   type BodySnap,
   type InitCell,
+  type SheepSnap,
   angleDiff,
 } from "@ja/shared/sim/view";
 import { openChecker } from "@ja/shared";
-import { NEON, cockpitOrigin, drawCellPart, drawCellPlate, drawCockpit, drawRockCell, mirrorSidesOf, type CellStyle } from "../art/cells";
+import { NEON, cockpitOrigin, drawCellPart, drawCellPlate, drawCockpit, drawHazardSaw, drawRockCell, mirrorSidesOf, type CellStyle } from "../art/cells";
+import { drawSheep } from "../art/sheep";
+import { HAZARD_SAW } from "@ja/shared/sim/scenarios";
 
 /** Where the engine bell ends and the laser barrel tip sits, in cells from the cell centre (see art/cells.ts). */
 const NOZZLE_END = 0.67;
@@ -68,6 +71,8 @@ const LOOK: Look = (() => {
   const q = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("look");
   return LOOKS.includes(q as Look) ? (q as Look) : "sky";
 })();
+/** Sheep are drawn this many cells in radius: a touch bigger than they are, so they read at a glance. */
+const SHEEP_DRAW_RADIUS = 0.75;
 /** How far the far sky slides (as a fraction of its radius) between the arena centre and the ring's start. */
 const SKY_SHIFT = 0.01;
 /** Foreground rocks: how much faster than the play plane they slide, and how sparse they are. */
@@ -251,7 +256,12 @@ export class ArenaRenderer {
 
     // Debris under ships.
     const sorted = [...bodies].sort((a, b) => (a.owner ? 1 : 0) - (b.owner ? 1 : 0));
-    for (const b of sorted) this.drawBody(ctx, b, S, toScreen, nowMs, renderTick);
+    for (const b of sorted) {
+      if (b.snap.haz) this.drawHazard(ctx, b, S, toScreen);
+      else this.drawBody(ctx, b, S, toScreen, nowMs, renderTick);
+    }
+    const sheep = this.sheepAt(renderTick);
+    this.drawSheepFlock(ctx, sheep, S, toScreen, nowMs);
     for (const b of bodies) if (b.owner) this.drawEngines(ctx, b, S, toScreen, nowMs);
     this.drawHooks(ctx, bodies, S, toScreen);
     for (const b of bodies) if (b.owner) this.drawCharge(ctx, b, S, toScreen, nowMs);
@@ -262,6 +272,7 @@ export class ArenaRenderer {
     this.drawNames(ctx, bodies, S, toScreen);
     this.drawCountdown(ctx, bodies, S, toScreen, renderTick);
     this.drawOffscreen(ctx, bodies, width, height, S, toScreen);
+    this.drawOffscreenSheep(ctx, sheep, width, height, S, toScreen);
     this.drawCompass(ctx, width);
     if (this.celebration) this.drawCelebration(ctx, width, height, nowMs, dt);
   }
@@ -319,6 +330,77 @@ export class ArenaRenderer {
     ctx.fillStyle = "#c9ced4";
     ctx.fill();
     ctx.restore();
+  }
+
+  /** Sheep where they are this frame: between the two snapshots either side of the render clock. */
+  private sheepAt(renderTick: number): SheepSnap[] {
+    const a = this.current?.sheep;
+    if (!a) return [];
+    const b = this.buffer[0];
+    if (!b?.sheep || !this.current) return a;
+    const t = Math.max(0, Math.min(1, (renderTick - this.current.tick) / Math.max(1, b.tick - this.current.tick)));
+    const next = new Map(b.sheep.map((s) => [s.id, s]));
+    return a.map((s) => {
+      const n = next.get(s.id);
+      return n ? { id: s.id, x: s.x + (n.x - s.x) * t, y: s.y + (n.y - s.y) * t, a: s.a + (n.a - s.a) * t } : s;
+    });
+  }
+
+  private drawSheepFlock(ctx: CanvasRenderingContext2D, sheep: SheepSnap[], S: number, toScreen: (x: number, y: number) => { x: number; y: number }, nowMs: number) {
+    for (const s of sheep) {
+      const p = toScreen(s.x, s.y);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      // Kept upright on screen (they read better), with a lazy rock back and forth.
+      ctx.rotate(Math.sin(s.a) * 0.5);
+      drawSheep(ctx, S * SHEEP_DRAW_RADIUS, { t: nowMs / 1000 + s.id * 0.37, variant: s.id });
+      ctx.restore();
+    }
+  }
+
+  /** A floating saw blade: just the spinning disc (it's a body with one blade, no plating). */
+  private drawHazard(ctx: CanvasRenderingContext2D, b: BodyView, S: number, toScreen: (x: number, y: number) => { x: number; y: number }) {
+    const p = toScreen(b.x, b.y);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    drawHazardSaw(ctx, HAZARD_SAW.radius * S, b.a + this.viewRot);
+    ctx.restore();
+  }
+
+  /** Small white arrows at the screen edge pointing to sheep out of view. */
+  private drawOffscreenSheep(
+    ctx: CanvasRenderingContext2D,
+    sheep: SheepSnap[],
+    w: number,
+    h: number,
+    S: number,
+    toScreen: (x: number, y: number) => { x: number; y: number },
+  ) {
+    const cx = w / 2;
+    const cy = h / 2;
+    for (const s of sheep) {
+      const p = toScreen(s.x, s.y);
+      if (p.x > -S && p.x < w + S && p.y > -S && p.y < h + S) continue;
+      const dx = p.x - cx;
+      const dy = p.y - cy;
+      const k = Math.min((cx - OFFSCREEN_INSET) / Math.abs(dx || 1e-6), (cy - OFFSCREEN_INSET) / Math.abs(dy || 1e-6));
+      ctx.save();
+      ctx.translate(cx + dx * k, cy + dy * k);
+      ctx.rotate(Math.atan2(dy, dx));
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = "#f4efe2";
+      ctx.strokeStyle = "rgba(0,0,0,0.6)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(9, 0);
+      ctx.lineTo(-6, 7);
+      ctx.lineTo(-3, 0);
+      ctx.lineTo(-6, -7);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   /** A small arrow in its colour at the screen edge for every other ship that's out of view. */
@@ -406,6 +488,8 @@ export class ArenaRenderer {
   /** Winner banner, flashing in their colour, over a rain of screws, bolts and nuts. */
   private drawCelebration(ctx: CanvasRenderingContext2D, w: number, h: number, nowMs: number, dt: number) {
     const cel = this.celebration!;
+    // A lost tutorial gets no confetti.
+    if (this.init.scenario && !cel.winner) return;
     if (!cel.confetti) {
       cel.confetti = [];
       for (let i = 0; i < 140; i++) {
@@ -432,6 +516,8 @@ export class ArenaRenderer {
       drawHardware(ctx, c);
     }
 
+    // Tutorials show their own result; just the confetti here.
+    if (this.init.scenario) return;
     const info = cel.winner ? this.shipInfo.get(cel.winner) : null;
     const text = info ? `${info.name} wins` : "Draw";
     const age = (nowMs - cel.start) / 1000;
@@ -662,6 +748,10 @@ export class ArenaRenderer {
         break;
       case "over":
         this.celebration = { winner: e.winner, start: performance.now(), confetti: null };
+        break;
+      case "sheep":
+        this.particles.push({ kind: "ring", x: e.x, y: e.y, vx: 0, vy: 0, life: 0.45, max: 0.45, size: 2.2, color: "#f4efe2", rot: 0, vr: 0 });
+        this.burst(e.x, e.y, 16, "#fff8e6", 5, 0.45);
         break;
       case "pickup":
         this.particles.push({ kind: "ring", x: 0, y: 0, vx: 0, vy: 0, life: 0.5, max: 0.5, size: 4, color: "#f2ea3c", rot: 0, vr: 0 });
