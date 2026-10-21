@@ -61,6 +61,8 @@ export const SIM = {
   impactPairCooldownSeconds: 0.25,
   /** Bounciness of armor cells (other cells use 0.2). */
   armorRestitution: 0.8,
+  /** Impulse pushing a saw and the armor it grinds against apart, per cut attempt. */
+  armorSawKick: 1.5,
   /** A hit counts as on a protected edge when the incoming direction lines up this well with the edge normal. */
   edgeFacingDot: 0.5,
 

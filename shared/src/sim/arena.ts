@@ -1095,8 +1095,8 @@ export class Arena {
     this.pairCooldown.set(key, this.tickCount + Math.round(SIM.impactPairCooldownSeconds * TICK_HZ));
 
     const base = speed - SIM.impactThreshold;
-    // Armor deflects hits on its protected edge: neither cell takes damage, and the armor's bounciness does the rest.
-    const deflected = this.armorFacing(c1, w2) || this.armorFacing(c2, w1);
+    // Armor deflects rams: neither cell takes damage, and the armor's bounciness does the rest.
+    const deflected = c1.type === "armor" || c2.type === "armor";
     // One hit each.
     const to1 = deflected ? 0 : 1;
     const to2 = deflected ? 0 : 1;
@@ -1265,20 +1265,10 @@ export class Arena {
     }
   }
 
-  /** An open armor edge facing the point `at`: it deflects physical hits from there. */
-  private armorFacing(a: SimCell, at: { x: number; y: number }): boolean {
-    if (a.type !== "armor" || !this.isOpen(a)) return false;
-    const wa = this.cellWorld(a);
-    if (!wa) return false;
-    const edge = this.cellWorldDir(a);
-    const dx = at.x - wa.x;
-    const dy = at.y - wa.y;
-    return (dx * edge.x + dy * edge.y) / (Math.hypot(dx, dy) || 1) > SIM.edgeFacingDot;
-  }
-
   /**
    * Spinning saws cut whatever their blade touches, at any speed, once every SIM.sawCutSeconds
-   * while the contact lasts. Armor facing the blade turns it; a covered saw doesn't spin.
+   * while the contact lasts. Armor turns the blade: a shower of sparks and both bodies knocked
+   * apart, with no harm to either. A covered saw doesn't spin.
    */
   private updateSaws(touched: Set<SimBody>) {
     for (const [key, contact] of this.sawContacts) {
@@ -1293,8 +1283,17 @@ export class Arena {
       const target = this.bladeColliders.has(contact.other) ? undefined : this.cellByCollider.get(contact.other);
       if (!target?.alive || target.body === saw.body || !this.isOpen(saw)) continue;
       const hub = this.bladeWorld(saw);
-      if (this.armorFacing(target, hub)) continue;
       const at = this.cellWorld(target)!;
+      if (target.type === "armor") {
+        this.events.push({ e: "spark", x: r3((at.x + hub.x) / 2), y: r3((at.y + hub.y) / 2), power: 3, grind: 1 });
+        const dx = at.x - hub.x;
+        const dy = at.y - hub.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const k = SIM.armorSawKick / len;
+        target.body?.rb?.applyImpulseAtPoint({ x: dx * k, y: dy * k }, at, true);
+        saw.body.rb?.applyImpulseAtPoint({ x: -dx * k, y: -dy * k }, hub, true);
+        continue;
+      }
       this.events.push({ e: "spark", x: r3((at.x + hub.x) / 2), y: r3((at.y + hub.y) / 2), power: 3 });
       this.damageCell(target, 1, saw.body.owner, touched, "saw");
     }
@@ -1306,9 +1305,10 @@ export class Arena {
     return { x: p.x + d.x * SIM.sawReach, y: p.y + d.y * SIM.sawReach };
   }
 
-  /** An open armor edge or saw pointing at the other cell holds out against crushing. */
+  /** Armor, or an open saw pointing at the other cell, holds out against crushing. */
   private crushProof(c: SimCell, other: SimCell): boolean {
-    if ((c.type !== "armor" && c.type !== "saw") || !this.isOpen(c)) return false;
+    if (c.type === "armor") return true;
+    if (c.type !== "saw" || !this.isOpen(c)) return false;
     const a = this.cellWorld(c);
     const b = this.cellWorld(other);
     if (!a || !b) return false;

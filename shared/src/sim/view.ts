@@ -103,7 +103,8 @@ export type ArenaEvent =
   | { e: "shot"; from: number; x1: number; y1: number; x2: number; y2: number; hit: boolean }
   | { e: "hookMiss"; from: number; x1: number; y1: number; x2: number; y2: number }
   | { e: "boom"; cid: number; x: number; y: number; type: CellType }
-  | { e: "spark"; x: number; y: number; power: number }
+  /** grind: a saw skidding off armor (a big shower, no harm done). */
+  | { e: "spark"; x: number; y: number; power: number; grind?: 1 }
   | { e: "died"; playerId: PlayerId; killerId: PlayerId | null }
   /** A ship bounced off the rubber ring. */
   | { e: "bounce"; x: number; y: number; power: number }

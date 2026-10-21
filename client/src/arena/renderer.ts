@@ -741,6 +741,12 @@ export class ArenaRenderer {
         break;
       }
       case "spark":
+        if (e.grind) {
+          // Saw on armor: a long shower of white-hot sparks, no shake.
+          this.burst(e.x, e.y, 22, "#ffffff", 11, 0.5);
+          this.burst(e.x, e.y, 10, "#ffd27a", 8, 0.4);
+          break;
+        }
         this.burst(e.x, e.y, 4 + e.power * 2, "#fff0c0", 5 + e.power, 0.3);
         if (e.power >= 3 && this.isNearCamera(e.x, e.y)) this.shake = Math.min(1.2, this.shake + 0.1 * e.power);
         break;

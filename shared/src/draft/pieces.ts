@@ -56,17 +56,19 @@ export function placedCells(piece: Piece, x: number, y: number, rot: Dir, flip: 
 /** Every piece carries exactly one kind of part. */
 /**
  * What a piece's parts cost, and how likely each is to be picked when filling a piece's budget.
- * "mirror" isn't a single cell: buying it turns all the piece's remaining plain cells to mirror.
- * Armor and grapple are switched off for now (weight 0); their parts still work if they show up.
+ * Mirror and armor are coats, not single cells: buying one turns all the piece's remaining plain
+ * cells to it (one coat per piece). Grapples are switched off for now (weight 0); they still work.
+ */
+const COATS: readonly CellType[] = ["mirror", "armor"];
+/**
  */
 const PART_COST: Partial<Record<CellType, number>> = { engine: 0.5, laser: 1, saw: 1, mirror: 1, grapple: 1, armor: 1 };
 const PART_WEIGHTS: [CellType, number][] = [
   ["engine", 65],
   ["laser", 20],
   ["saw", 12],
-  // Mirrors are off for now (weight 0); the code stays.
-  ["mirror", 0],
-  ["armor", 0],
+  ["mirror", 12],
+  ["armor", 12],
   ["grapple", 0],
 ];
 /** Each piece carries this many points of parts (picked from these). */
@@ -103,18 +105,18 @@ export function generatePiece(rng: Rng, id: string, shapes: readonly PentominoNa
   const coords = PENTOMINOES[shape];
   const cells: Cell[] = coords.map(([x, y]) => ({ x, y, type: "hull", dir: 0 }));
   let budget: number = rng.pick(rules.budgets);
-  let mirrored = false;
+  let coat: CellType | null = null;
   // Squares just outside the piece that a part's overhang already uses (engine exhaust, laser
   // barrel, saw blade): no two parts may share one, so their art never piles up.
   const claimed = new Set<string>();
   const failed = new Set<CellType>();
 
   while (budget > 0) {
-    const type = pickPart(rng, (t) => (PART_COST[t] ?? Infinity) <= budget && !failed.has(t) && !(t === "mirror" && mirrored), rules.weights);
+    const type = pickPart(rng, (t) => (PART_COST[t] ?? Infinity) <= budget && !failed.has(t) && !(COATS.includes(t) && coat), rules.weights);
     if (!type) break;
-    if (type === "mirror") {
-      mirrored = true;
-      budget -= PART_COST.mirror!;
+    if (COATS.includes(type)) {
+      coat = type;
+      budget -= PART_COST[type]!;
       continue;
     }
     // Engines on one piece never push in opposite directions.
@@ -132,8 +134,8 @@ export function generatePiece(rng: Rng, id: string, shapes: readonly PentominoNa
     for (const k of overhangKeys(cells[index]!.x, cells[index]!.y, type, dir)) claimed.add(k);
     budget -= PART_COST[type]!;
   }
-  // The mirror goes on last, over whatever plain cells are left.
-  return { id, shape, cells: mirrored ? cells.map((c) => (c.type === "hull" ? { ...c, type: "mirror" } : c)) : cells };
+  // The coat goes on last, over whatever plain cells are left.
+  return { id, shape, cells: coat ? cells.map((c) => (c.type === "hull" ? { ...c, type: coat } : c)) : cells };
 }
 
 /** The squares (as "x,y") outside a part's own cell that its art hangs over. */

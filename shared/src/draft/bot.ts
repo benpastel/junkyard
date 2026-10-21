@@ -161,17 +161,13 @@ function scorePlacement(p: Placement, ctx: ShipContext): number {
         if (!isOpen(c)) score -= 5; // pointing into our own hull
         break;
       }
-      case "mirror": {
-        // Mirrors earn their keep on the outside: a little for every exposed side.
+      case "mirror":
+      case "armor": {
+        // Coats earn their keep on the outside: a little for every exposed side.
         for (const v of Object.values(DIR_VECTORS)) {
           const k = cellKey(c.x + v.x, c.y + v.y);
           if (!occupied.has(k) && !mine.has(k)) score += 0.3;
         }
-        break;
-      }
-      case "armor": {
-        // The protected edge belongs on the outside, ideally facing forward.
-        if (isOpen(c)) score += c.dir === 0 ? 0.8 : c.dir === 2 ? 0.2 : 0.5;
         break;
       }
     }
@@ -224,9 +220,10 @@ export function draftBotAction(draft: Draft, playerId: PlayerId, rng: Rng): Draf
   for (const { piece, from } of candidates) {
     const best = bestPlacement(view, piece, rng);
     if (!best) continue;
-    // Every part on the piece counts (a mirror coat once, however many cells it covers).
-    const parts = piece.cells.filter((c) => c.type !== "hull" && c.type !== "mirror").map((c) => c.type);
-    if (piece.cells.some((c) => c.type === "mirror")) parts.push("mirror");
+    // Every part on the piece counts (a coat once, however many cells it covers).
+    const coats = ["mirror", "armor"] as const;
+    const parts: CellType[] = piece.cells.filter((c) => c.type !== "hull" && !coats.includes(c.type as never)).map((c) => c.type);
+    for (const coat of coats) if (piece.cells.some((c) => c.type === coat)) parts.push(coat);
     const worth = parts.reduce((sum, t) => sum + typeValue(t, view.cells), 0);
     const score = best.score + worth + rng.next() * 2;
     if (!choice || score > choice.score) choice = { piece, from, score };

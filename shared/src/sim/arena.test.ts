@@ -207,6 +207,19 @@ describe("arena", () => {
     a.dispose();
   });
 
+  it("armor turns a saw: sparks and a shove apart, no harm to either ship", () => {
+    const a = new Arena({ ships: [bp("a", ["R", "C", "^"]), bp("b", ["AAA", "AAA", "AAA", "ACA"])], seed: 1 });
+    let sparks = 0;
+    for (let i = 0; i < TICK_HZ * 5; i++) {
+      a.step({ a: { ...NO_INPUT, up: true } });
+      sparks += a.snapshot().events.filter((e) => e.e === "spark" && e.grind).length;
+    }
+    expect(sparks).toBeGreaterThan(0);
+    expect(a.ship("a")!.cellsLost).toBe(0);
+    expect(a.ship("b")!.cellsLost).toBe(0);
+    a.dispose();
+  });
+
   it("the saw blade is wide enough to cut the tiles diagonally in front of it", () => {
     // b's nose has a gap straight in front of a's saw, with hull either side of it.
     const a = new Arena({ ships: [bp("a", ["R", "C", "^"]), bp("b", ["#.#", "###", "#C#"])], seed: 1 });

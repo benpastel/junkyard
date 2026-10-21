@@ -87,8 +87,11 @@ describe("generatePiece", () => {
       const p = generatePiece(rng, `p${i}`);
       expect(p.cells).toHaveLength(5);
       for (const c of p.cells) expect(c.type).not.toBe("core");
-      const parts = p.cells.filter((c) => c.type !== "hull" && c.type !== "mirror");
-      const points = parts.reduce((sum, c) => sum + (cost[c.type] ?? 0), 0) + (p.cells.some((c) => c.type === "mirror") ? 1 : 0);
+      const coats = ["mirror", "armor"];
+      const parts = p.cells.filter((c) => c.type !== "hull" && !coats.includes(c.type));
+      const coated = coats.filter((t) => p.cells.some((c) => c.type === t)).length;
+      expect(coated).toBeLessThanOrEqual(1);
+      const points = parts.reduce((sum, c) => sum + (cost[c.type] ?? 0), 0) + coated;
       expect(points).toBeLessThanOrEqual(2);
       expect(points).toBeGreaterThanOrEqual(1);
       total += points;

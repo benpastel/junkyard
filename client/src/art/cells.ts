@@ -28,7 +28,7 @@ export interface CellStyle {
 }
 
 /**
- * For each cell of a ship (or piece), the sides a mirror strip is drawn on. Sides buried against
+ * For each cell of a ship (or piece), the sides a mirror (or armor) strip is drawn on. Sides buried against
  * hull or other parts still show, since they start reflecting the moment whatever covers them
  * breaks off. Edges inside one piece are left plain; where two different mirror pieces meet, the
  * shared edge is drawn once (on the cell to its left or above it).
@@ -36,12 +36,14 @@ export interface CellStyle {
 export function mirrorSidesOf(
   cells: readonly { x: number; y: number; type: CellType; piece?: number }[],
 ): (c: { x: number; y: number; piece?: number }) => number {
-  const mirrors = new Map<string, number | undefined>();
+  // Coats (mirror, armor) by square.
+  const coats = new Map<string, CellType>();
   const pieceAt = new Map<string, number | undefined>();
   for (const c of cells) {
     pieceAt.set(`${c.x},${c.y}`, c.piece);
-    if (c.type === "mirror") mirrors.set(`${c.x},${c.y}`, c.piece);
+    if (c.type === "mirror" || c.type === "armor") coats.set(`${c.x},${c.y}`, c.type);
   }
+  const typeAt = new Map(cells.map((c) => [`${c.x},${c.y}`, c.type]));
   const NEIGHBOURS = [
     [0, -1],
     [1, 0],
@@ -50,12 +52,13 @@ export function mirrorSidesOf(
   ] as const;
   return (c) => {
     let sides = 0;
+    const own = typeAt.get(`${c.x},${c.y}`);
     NEIGHBOURS.forEach(([dx, dy], side) => {
       const key = `${c.x + dx},${c.y + dy}`;
-      // Inside one piece (mirror or a part sharing the piece) the edge stays plain, so the strips
-      // trace the piece's outline; against another piece's mirror, draw the shared edge once.
+      // Inside one piece (the coat or a part sharing the piece) the edge stays plain, so the strips
+      // trace the piece's outline; against another piece of the same coat, draw the shared edge once.
       const samePiece = pieceAt.has(key) && pieceAt.get(key) === c.piece;
-      const draw = !samePiece && (!mirrors.has(key) || side === 1 || side === 2);
+      const draw = !samePiece && (coats.get(key) !== own || side === 1 || side === 2);
       if (draw) sides |= 1 << side;
     });
     return sides;
@@ -258,35 +261,38 @@ const PARTS: Partial<Record<CellType, (d: Pen, s: CellStyle, dir: Dir) => void>>
     d.poly([[0.88, -0.08], [0.78, -0.22], [0.72, -0.06]], METAL_DARK);
   },
 
-  // riveted band; adjacent armor cells join into one wall
-  armor(d) {
-    d.rect(0, -0.16, 1, 0.42, METAL_DARK);
-    d.rect(0, -0.16, 1, 0.14, METAL);
-    for (const x of [0.2, 0.5, 0.8]) d.circle(x, 0.12, 0.04, EDGE);
+  // shiny silver strips, cut like the mirror's: armor stops physical hits (saws, rams, squeezes)
+  armor(d, s, dir) {
+    coatStrips(d, s, dir, { base: "#c3cad3", shine: "#ffffff", lip: "#6c737c" });
   },
 
   // laser-yellow faceted strip: only reflects lasers, so it shares their colour
   // one strip on every exposed side, so a mirror piece is edged all the way round
   mirror(d, s, dir) {
-    const sides = s.openSides ?? 15;
-    for (let side = 0; side < 4; side++) {
-      if (!(sides & (1 << side))) continue;
-      // The pen is already turned to the cell's dir; turn on to this ship-frame side.
-      const ctx = d.ctx;
-      ctx.save();
-      ctx.translate(0.5, 0.5);
-      ctx.rotate((((side - dir + 4) % 4) * PI) / 2);
-      ctx.translate(-0.5, -0.5);
-      d.rect(0, -0.14, 1, 0.28, s.inactive ? "#6b6838" : NEON);
-      for (let i = 0; i < 3; i++) {
-        const o = i * 0.33;
-        d.poly([[0.08 + o, 0.14], [0.2 + o, -0.14], [0.27 + o, -0.14], [0.15 + o, 0.14]], "#fffbd0");
-      }
-      d.rect(0, 0.1, 1, 0.04, "#a89a1a");
-      ctx.restore();
-    }
+    coatStrips(d, s, dir, { base: s.inactive ? "#6b6838" : NEON, shine: "#fffbd0", lip: "#a89a1a" });
   },
 };
+
+/** A coat's faceted strip along every exposed side of the cell (see mirrorSidesOf). */
+function coatStrips(d: Pen, s: CellStyle, dir: Dir, colors: { base: string; shine: string; lip: string }) {
+  const sides = s.openSides ?? 15;
+  for (let side = 0; side < 4; side++) {
+    if (!(sides & (1 << side))) continue;
+    // The pen is already turned to the cell's dir; turn on to this ship-frame side.
+    const ctx = d.ctx;
+    ctx.save();
+    ctx.translate(0.5, 0.5);
+    ctx.rotate((((side - dir + 4) % 4) * PI) / 2);
+    ctx.translate(-0.5, -0.5);
+    d.rect(0, -0.14, 1, 0.28, colors.base);
+    for (let i = 0; i < 3; i++) {
+      const o = i * 0.33;
+      d.poly([[0.08 + o, 0.14], [0.2 + o, -0.14], [0.27 + o, -0.14], [0.15 + o, 0.14]], colors.shine);
+    }
+    d.rect(0, 0.1, 1, 0.04, colors.lip);
+    ctx.restore();
+  }
+}
 
 // ---- T-shaped cockpit (the arrow-key cluster) ----
 // One glass dome over 4 cells laid out like a keyboard's arrow keys, nose up:
