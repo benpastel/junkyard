@@ -13,6 +13,14 @@ export function storedName(): string {
   }
 }
 
+export function rememberName(name: string) {
+  try {
+    localStorage.setItem(NAME_KEY, name);
+  } catch {
+    // Name just won't be remembered.
+  }
+}
+
 const PHASE_LABELS: Record<Phase, string> = { setup: "open", draft: "building", arena: "fighting", results: "results" };
 const TIER_LABELS: Record<HullTier, string> = { small: "Small", medium: "Medium", large: "Large" };
 const PACE_LABELS: Record<Pace, string> = { frantic: "Frantic", fast: "Fast", strategic: "Strategic", unlimited: "Unlimited" };
@@ -30,11 +38,7 @@ export function Lobby({ tables, roomId, error }: { tables: TableSummary[]; roomI
   const join = (roomId: string | null) => {
     const n = name.trim();
     if (!n) return;
-    try {
-      localStorage.setItem(NAME_KEY, n);
-    } catch {
-      // Name just won't be remembered.
-    }
+    rememberName(n);
     net.connect(n, roomId);
   };
 

@@ -108,7 +108,7 @@ export class Room {
     if (existing && !existing.isBot) {
       existing.socket?.close();
       existing.socket = socket;
-      existing.name = name || existing.name;
+      // A rejoin keeps the name they had here (they may have renamed themselves at the table).
       player = existing;
     } else {
       if (this.players.size >= MAX_PLAYERS) return null;
@@ -224,6 +224,21 @@ export class Room {
         // Applies to the next round, so it can change any time.
         if (msg.hull !== "random" && !tierHulls(this.settings.tier).includes(msg.hull)) return;
         player.hullChoice = msg.hull;
+        this.broadcastRoom();
+        return;
+      }
+      case "setName": {
+        const name = cleanName(msg.name);
+        if (this.phase !== "setup" || !name || name === player.name) return;
+        this.system(`${player.name} is now ${name}`);
+        player.name = name;
+        this.broadcastRoom();
+        return;
+      }
+      case "setColor": {
+        if (this.phase !== "setup" || !(PLAYER_COLORS as readonly string[]).includes(msg.color)) return;
+        if ([...this.players.values()].some((p) => p !== player && p.color === msg.color)) return;
+        player.color = msg.color;
         this.broadcastRoom();
         return;
       }

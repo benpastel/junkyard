@@ -48,12 +48,21 @@ export function Setup({ room, me, chat }: { room: RoomView; me: string | null; c
                     canKick={isHost}
                     showHull
                     swapTeam={swapTeam}
+                    editable
                   />
                 </div>
               ))}
             </div>
           ) : (
-            <PlayerList players={room.players} hostId={room.hostId} me={me} canKick={isHost} showHull />
+            <PlayerList
+              players={room.players}
+              hostId={room.hostId}
+              me={me}
+              canKick={isHost}
+              showHull
+              editable
+              colorsInUse={room.players.map((p) => p.color)}
+            />
           )}
           {isHost && room.players.length < MAX_PLAYERS && <button onClick={() => net.send({ t: "addBot" })}>Add bot</button>}
         </section>

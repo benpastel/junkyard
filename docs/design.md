@@ -31,6 +31,7 @@ Online multiplayer, fast-paced, round-based game:
 
 - The **lobby** lists every table with a connected human (players, class, pace, phase); anyone with a name can create one or join any. A table link (`?r=CODE`) still joins directly.
 - A table's pre-round phase is **setup** (internal name): pick ships, host sets class / build time / bots, then Launch. Results' **Next round** (host) goes back to setup; **Quit** leaves for the lobby.
+- At setup you can click your own name to rename yourself and your colour square to pick a free colour (locked to team shades in a team game).
 - Joining mid-build starts your own ship with whatever time is left; joining mid-fight or on the results lets you watch until the next round.
 
 ## Teams

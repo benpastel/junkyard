@@ -73,6 +73,9 @@ export type ClientMsg =
   /** Join a table. Omit roomId to create a new one. */
   | { t: "hello"; name: string; roomId?: string; playerId?: PlayerId }
   | { t: "pickHull"; hull: HullChoice }
+  /** Rename yourself or pick a free colour (one of PLAYER_COLORS). Setup only. */
+  | { t: "setName"; name: string }
+  | { t: "setColor"; color: string }
   /** Move a player to a team: yourself, or anyone if you're the host. Setup only. */
   | { t: "setTeam"; playerId: PlayerId; team: number }
   | { t: "chat"; text: string }
