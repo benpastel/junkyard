@@ -196,7 +196,6 @@ export function DraftScreen(props: {
         <button
           className={`draft-done${done.voted || view.full ? " on" : ""}`}
           onClick={done.toggle}
-          disabled={view.full}
         >
           Done
           {done.needed > 1 && (

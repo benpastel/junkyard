@@ -104,6 +104,11 @@ wss.on("connection", (socket: WebSocket) => {
         socket.close();
         return;
       }
+      // One seat per browser: going to a different table gives up the seat at the old one.
+      const from = msg.from;
+      if (from && typeof from.roomId === "string" && typeof from.playerId === "string" && from.roomId !== code) {
+        rooms.get(from.roomId)?.evict(from.playerId);
+      }
       room = code ? (rooms.get(code) ?? createRoom(code)) : createRoom();
       playerId = room.join(socket, String(msg.name ?? ""), msg.playerId);
       if (!playerId) {

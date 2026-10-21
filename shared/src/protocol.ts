@@ -71,7 +71,14 @@ export type ClientMsg =
   /** Watch the lobby's table list (until joining a table). */
   | { t: "lobby" }
   /** Join a table. Omit roomId to create a new one. */
-  | { t: "hello"; name: string; roomId?: string; playerId?: PlayerId }
+  | {
+      t: "hello";
+      name: string;
+      roomId?: string;
+      playerId?: PlayerId;
+      /** The seat this browser holds at another table, given up on joining this one (one seat per browser). */
+      from?: { roomId: string; playerId: PlayerId };
+    }
   | { t: "pickHull"; hull: HullChoice }
   /** Rename yourself or pick a free colour (one of PLAYER_COLORS). Setup only. */
   | { t: "setName"; name: string }
@@ -99,4 +106,6 @@ export type ServerMsg =
   | { t: "arenaInit"; init: ArenaInit }
   | { t: "arenaSnap"; snap: ArenaSnapshot }
   | { t: "results"; results: RoundResults }
-  | { t: "error"; message: string };
+  | { t: "error"; message: string }
+  /** This seat was taken over by another tab or window of the same browser; don't reconnect. */
+  | { t: "moved" };

@@ -22,6 +22,7 @@ export interface NetState {
   tables: TableSummary[];
 }
 
+/** The seat this browser holds (room + player id). Shared by every tab: one seat per browser. */
 const SESSION_KEY = "ja.session";
 /** Automatic reconnect attempts after a drop (e.g. the server restarting) before showing the button. */
 const MAX_RETRIES = 10;
@@ -98,6 +99,8 @@ class Net {
     old?.close();
     const session = readSession();
     const playerId = session && roomId && session.roomId === roomId ? session.playerId : undefined;
+    // One seat per browser: a seat held at another table is given up on joining this one.
+    const from = session && session.roomId !== roomId ? session : undefined;
 
     const ws = new WebSocket(wsUrl());
     this.ws = ws;
@@ -106,7 +109,7 @@ class Net {
     ws.onopen = () => {
       this.retries = 0;
       this.set({ status: "open" });
-      this.send({ t: "hello", name, roomId: roomId ?? undefined, playerId });
+      this.send({ t: "hello", name, roomId: roomId ?? undefined, playerId, from });
     };
     ws.onmessage = (e) => this.receive(JSON.parse(e.data as string) as ServerMsg);
     ws.onclose = () => {
@@ -178,6 +181,11 @@ class Net {
       case "results":
         this.set({ results: msg.results });
         return;
+      case "moved":
+        // Another tab or window of this browser has the seat now.
+        this.refused = true;
+        this.set({ error: "Playing in another tab" });
+        return;
       case "error":
         if (!this.welcomed) this.refused = true;
         this.set({ error: msg.message });
@@ -208,7 +216,7 @@ function wsUrl(): string {
 
 function readSession(): Session | null {
   try {
-    return JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? "null") as Session | null;
+    return JSON.parse(localStorage.getItem(SESSION_KEY) ?? "null") as Session | null;
   } catch {
     return null;
   }
@@ -216,7 +224,7 @@ function readSession(): Session | null {
 
 function clearSession() {
   try {
-    sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_KEY);
   } catch {
     // Nothing stored to clear.
   }
@@ -224,7 +232,7 @@ function clearSession() {
 
 function writeSession(s: Session) {
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    localStorage.setItem(SESSION_KEY, JSON.stringify(s));
   } catch {
     // Reconnect-after-reload just won't work; nothing else depends on it.
   }

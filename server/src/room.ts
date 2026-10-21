@@ -106,6 +106,8 @@ export class Room {
     const existing = playerId ? this.players.get(playerId) : undefined;
     let player: Player;
     if (existing && !existing.isBot) {
+      // Another tab of the same browser taking the seat over: tell the old one so it stops reconnecting.
+      if (existing.socket) this.send(existing, { t: "moved" });
       existing.socket?.close();
       existing.socket = socket;
       // A rejoin keeps the name they had here (they may have renamed themselves at the table).
@@ -164,6 +166,22 @@ export class Room {
     }
     if (!this.hasHumans()) this.emptySince = Date.now();
     this.broadcastRoom();
+  }
+
+  /** A browser that sat here has gone to another table: give up its seat (gone in setup, offline mid-round). */
+  evict(playerId: PlayerId) {
+    const player = this.players.get(playerId);
+    if (!player || player.isBot) return;
+    const socket = player.socket;
+    if (socket) {
+      this.send(player, { t: "moved" });
+      this.leave(playerId, socket);
+      socket.close();
+    } else if (this.phase === "setup") {
+      this.players.delete(playerId);
+      this.system(`${player.name} left`);
+      this.broadcastRoom();
+    }
   }
 
   hasHumans(): boolean {

@@ -1,8 +1,8 @@
 // Tutorial: build an engines-only ship, then round up the sheep floating round the arena while
 // dodging saw blades. Runs entirely in the browser (no server). Open with ?tutorial=sheep.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { NO_INPUT, PLAYER_COLORS, type InputState, type PlayerInfo } from "@ja/shared";
-import { Draft, ENGINES_ONLY, REROLL_SECONDS, type DraftAction } from "@ja/shared/draft";
+import { NO_INPUT, PLAYER_COLORS, Rng, type InputState, type PlayerInfo } from "@ja/shared";
+import { Draft, ENGINES_ONLY, REROLL_SECONDS, draftBotAction, type DraftAction } from "@ja/shared/draft";
 import { Arena, SHEEP_ROUNDUP, SNAPSHOT_EVERY, TICK_HZ, initPhysics, type ArenaInit, type ArenaSnapshot } from "@ja/shared/sim";
 import { ArenaScreen } from "../arena/ArenaScreen";
 import { drawSheep } from "../art/sheep";
@@ -63,6 +63,21 @@ function Build({ onLaunch }: { onLaunch: (cells: ReturnType<Draft["blueprintCell
   );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const view = useMemo(() => draft.view(ME), [draft, version]);
+  // Development only: lets scripted checks fill the ship the way a bot would (scripts/check-tutorial-full.mjs).
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    (window as unknown as { __tutorialFill?: () => boolean }).__tutorialFill = () => {
+      const rng = new Rng(1);
+      for (let i = 0; i < 200 && !draft.isFull(ME); i++) {
+        const a = draftBotAction(draft, ME, rng);
+        if (!a) break;
+        draft.apply(ME, a);
+        if (a.type === "reroll") draft.finishReroll(ME);
+      }
+      setVersion((v) => v + 1);
+      return draft.isFull(ME);
+    };
+  }, [draft]);
   return (
     <DraftScreen
       view={view}
