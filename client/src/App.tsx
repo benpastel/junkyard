@@ -14,6 +14,7 @@ const SandboxArena = lazy(() => import("./sandbox-arena").then((m) => ({ default
 const SandboxDraft = lazy(() => import("./sandbox-draft").then((m) => ({ default: m.SandboxDraft })));
 const SandboxButtons = lazy(() => import("./sandbox-buttons").then((m) => ({ default: m.SandboxButtons })));
 const SheepTutorial = lazy(() => import("./tutorial/SheepTutorial").then((m) => ({ default: m.SheepTutorial })));
+const SandboxResults = lazy(() => import("./sandbox-results").then((m) => ({ default: m.SandboxResults })));
 const SandboxSheep = lazy(() => import("./sandbox-sheep").then((m) => ({ default: m.SandboxSheep })));
 
 const params = new URLSearchParams(location.search);
@@ -31,6 +32,13 @@ export function App() {
     return (
       <Suspense fallback={null}>
         <SandboxSheep />
+      </Suspense>
+    );
+  }
+  if (sandbox === "results") {
+    return (
+      <Suspense fallback={null}>
+        <SandboxResults />
       </Suspense>
     );
   }
