@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { WebSocket } from "ws";
 import {
   DEFAULT_SETTINGS,
@@ -8,6 +9,7 @@ import {
   PACES,
   NO_INPUT,
   PLAYER_COLORS,
+  REPLACED,
   Rng,
   TEAMS,
   type BotSkill,
@@ -30,6 +32,8 @@ import { Arena, CELEBRATE_SECONDS, FAST_FORWARD_SPEED, FightRecorder, SIM, SNAPS
 import { saveRecording } from "./recordings.js";
 
 const CHAT_HISTORY = 100;
+/** How long a dropped human keeps their seat between rounds (long enough to reload, or for a phone to wake up). */
+const SEAT_GRACE_MS = 120_000;
 /** Shortest wait between a bot's draft actions (up to twice this), by skill. */
 const DRAFT_BOT_MS: Record<BotSkill, number> = { easy: 3750, medium: 2400, hard: 1500 };
 const BOT_NAMES = ["Rustbucket", "Scrapjaw", "Tinpot", "Clunker", "Bolt", "Dentz", "Gearmouth", "Hubcap"];
@@ -52,6 +56,8 @@ interface Player {
   /** Index into TEAMS (used when the table plays teams). */
   team: number;
   botNextActAt: number;
+  /** When a human's socket dropped; their seat is kept for SEAT_GRACE_MS in case they come back. */
+  offlineSince: number | null;
 }
 
 export class Room {
@@ -102,20 +108,20 @@ export class Room {
   // ---------------------------------------------------------------- joining
 
   /** Adds a new human, or reattaches a returning one. Returns their id, or null if full. */
-  join(socket: WebSocket, name: string, playerId?: PlayerId): PlayerId | null {
-    const existing = playerId ? this.players.get(playerId) : undefined;
+  join(socket: WebSocket, name: string, playerId: PlayerId): PlayerId | null {
+    const existing = this.players.get(playerId);
     let player: Player;
     if (existing && !existing.isBot) {
       // Another tab of the same browser taking the seat over: tell the old one so it stops reconnecting.
-      if (existing.socket) this.send(existing, { t: "moved" });
-      existing.socket?.close();
+      existing.socket?.close(REPLACED, "replaced");
       existing.socket = socket;
+      existing.offlineSince = null;
       // A rejoin keeps the name they had here (they may have renamed themselves at the table).
       player = existing;
     } else {
       if (this.players.size >= MAX_PLAYERS) return null;
       player = {
-        id: this.newPlayerId(),
+        id: playerId,
         name: cleanName(name) || "Pilot",
         color: this.freeColor(),
         isBot: false,
@@ -127,6 +133,7 @@ export class Room {
         inRound: false,
         team: this.smallerTeam(),
         botNextActAt: 0,
+        offlineSince: null,
       };
       this.players.set(player.id, player);
       this.system(`${player.name} joined`);
@@ -154,12 +161,8 @@ export class Room {
     const player = this.players.get(playerId);
     if (!player || player.socket !== socket) return;
     player.socket = null;
-    if (this.phase === "setup") {
-      this.players.delete(playerId);
-      this.system(`${player.name} left`);
-    } else {
-      this.arenaInputs[playerId] = { ...NO_INPUT };
-    }
+    player.offlineSince = Date.now();
+    this.arenaInputs[playerId] = { ...NO_INPUT };
     if (this.hostId === playerId) {
       const next = [...this.players.values()].find((p) => !p.isBot && p.socket);
       this.hostId = next?.id ?? "";
@@ -168,20 +171,31 @@ export class Room {
     this.broadcastRoom();
   }
 
-  /** A browser that sat here has gone to another table: give up its seat (gone in setup, offline mid-round). */
+  /** A player quit or went to another table: their seat goes now (in setup), or at the next round. */
   evict(playerId: PlayerId) {
     const player = this.players.get(playerId);
     if (!player || player.isBot) return;
     const socket = player.socket;
     if (socket) {
-      this.send(player, { t: "moved" });
       this.leave(playerId, socket);
-      socket.close();
-    } else if (this.phase === "setup") {
-      this.players.delete(playerId);
-      this.system(`${player.name} left`);
-      this.broadcastRoom();
+      socket.close(REPLACED, "moved");
     }
+    player.offlineSince = 0;
+    this.reap();
+  }
+
+  /** Between rounds, drops humans who've been gone longer than the grace period. */
+  reap() {
+    if (this.phase !== "setup") return;
+    const cutoff = Date.now() - SEAT_GRACE_MS;
+    let changed = false;
+    for (const p of [...this.players.values()]) {
+      if (p.isBot || p.offlineSince === null || p.offlineSince > cutoff) continue;
+      this.players.delete(p.id);
+      this.system(`${p.name} left`);
+      changed = true;
+    }
+    if (changed) this.broadcastRoom();
   }
 
   hasHumans(): boolean {
@@ -191,9 +205,9 @@ export class Room {
   addBot() {
     if (this.players.size >= MAX_PLAYERS) return;
     const used = new Set([...this.players.values()].map((p) => p.name));
-    const name = BOT_NAMES.find((n) => !used.has(n)) ?? `Bot ${this.nextPlayerNum}`;
+    const name = BOT_NAMES.find((n) => !used.has(n)) ?? `Bot ${this.nextPlayerNum++}`;
     const bot: Player = {
-      id: this.newPlayerId(),
+      id: randomUUID(),
       name,
       color: this.freeColor(),
       isBot: true,
@@ -205,6 +219,7 @@ export class Room {
       inRound: false,
       team: this.smallerTeam(),
       botNextActAt: 0,
+      offlineSince: null,
     };
     this.players.set(bot.id, bot);
   }
@@ -282,7 +297,7 @@ export class Room {
       }
       case "start": {
         if (!isHost || this.phase !== "setup") return;
-        if (this.players.size < 2) return this.send(player, { t: "error", message: "Need at least 2 players" });
+        if ([...this.players.values()].filter((p) => p.isBot || p.socket).length < 2) return this.send(player, { t: "error", message: "Need at least 2 players" });
         if (this.settings.teams && !this.bothTeamsManned()) return this.send(player, { t: "error", message: "Both teams need a player" });
         this.startDraft();
         return;
@@ -291,8 +306,7 @@ export class Room {
         if (!isHost || this.phase !== "results") return;
         this.setPhase("setup", null);
         for (const p of this.players.values()) p.inRound = false;
-        // Drop humans who disconnected during the game.
-        for (const p of [...this.players.values()]) if (!p.isBot && !p.socket) this.players.delete(p.id);
+        this.reap();
         this.broadcastRoom();
         return;
       }
@@ -653,10 +667,6 @@ export class Room {
   }
 
   // ---------------------------------------------------------------- helpers
-
-  private newPlayerId(): PlayerId {
-    return `p${this.nextPlayerNum++}`;
-  }
 
   /** The team with fewer players (of those in the round, if asked), for a newcomer. Ties go to the first. */
   private smallerTeam(inRound = false): number {

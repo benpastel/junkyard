@@ -3,6 +3,9 @@ import type { DraftAction, DraftView } from "./draft/index.js";
 import type { ArenaInit, ArenaSnapshot } from "./sim/index.js";
 import type { HullChoice, HullTier, InputState, Pace, PlayerId, RoomSettings, RoundResultRow } from "./types.js";
 
+/** Close code for a socket whose seat another tab or window has taken (or that went to another table): don't reconnect. */
+export const REPLACED = 4000;
+
 /** A table's phases. "setup" is the pre-round table: pick ships and settings, then launch. */
 export type Phase = "setup" | "draft" | "arena" | "results";
 
@@ -70,14 +73,12 @@ export interface RoundResults {
 export type ClientMsg =
   /** Watch the lobby's table list (until joining a table). */
   | { t: "lobby" }
-  /** Join a table. Omit roomId to create a new one. */
+  /** Join a table (omit roomId to create one). playerId is this browser's id from an earlier welcome. */
   | {
       t: "hello";
       name: string;
       roomId?: string;
       playerId?: PlayerId;
-      /** The seat this browser holds at another table, given up on joining this one (one seat per browser). */
-      from?: { roomId: string; playerId: PlayerId };
     }
   | { t: "pickHull"; hull: HullChoice }
   /** Rename yourself or pick a free colour (one of PLAYER_COLORS). Setup only. */
@@ -95,7 +96,9 @@ export type ClientMsg =
   | { t: "fastForward"; on: boolean }
   | { t: "done"; on: boolean }
   /** Host, from results: back to setup for the next round. */
-  | { t: "nextRound" };
+  | { t: "nextRound" }
+  /** Leave the table for good. */
+  | { t: "leave" };
 
 export type ServerMsg =
   | { t: "tables"; tables: TableSummary[] }
@@ -106,6 +109,4 @@ export type ServerMsg =
   | { t: "arenaInit"; init: ArenaInit }
   | { t: "arenaSnap"; snap: ArenaSnapshot }
   | { t: "results"; results: RoundResults }
-  | { t: "error"; message: string }
-  /** This seat was taken over by another tab or window of the same browser; don't reconnect. */
-  | { t: "moved" };
+  | { t: "error"; message: string };

@@ -47,4 +47,13 @@ await tabA.waitForSelector(".share-row");
 const rows = await mine();
 console.log("A picked her table ->", rows, "Ingrids:", rows.join("").split("Ingrid").length - 1);
 console.log("B shows:", await tabB.locator(".overlay h2").textContent().catch(() => "(no overlay)"));
+
+// The id is a UUID; a reload is the same player, so nobody "left" or "joined"; Quit gives the seat up at once.
+console.log("id:", await tabA.evaluate(() => localStorage.getItem("ja.player")));
+await tabA.reload();
+await tabA.waitForSelector(".share-row");
+await tabA.waitForTimeout(300);
+console.log("chat after reload:", await tabA.locator(".chat-list").textContent());
+await tabA.getByRole("button", { name: "Quit" }).click();
+console.log("A quit ->", await mine());
 await browser.close();

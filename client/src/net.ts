@@ -2,12 +2,12 @@
 // React components read state through useNet(); arena snapshots bypass React and go
 // straight to subscribers because they arrive 20 times a second.
 import { useSyncExternalStore } from "react";
-import type { ChatMessage, ClientMsg, PlayerId, RoomView, RoundResults, ServerMsg, TableSummary } from "@ja/shared";
+import { REPLACED, type ChatMessage, type ClientMsg, type PlayerId, type RoomView, type RoundResults, type ServerMsg, type TableSummary } from "@ja/shared";
 import type { DraftView } from "@ja/shared/draft";
 import type { ArenaInit, ArenaSnapshot } from "@ja/shared/sim";
 
 export interface NetState {
-  /** "reconnecting" = dropped and retrying on its own; "closed" = gave up. */
+  /** "reconnecting" = dropped and retrying on its own; "closed" = won't retry (refused, or another tab has the seat). */
   status: "idle" | "connecting" | "open" | "reconnecting" | "closed";
   error: string | null;
   playerId: PlayerId | null;
@@ -22,15 +22,11 @@ export interface NetState {
   tables: TableSummary[];
 }
 
-/** The seat this browser holds (room + player id). Shared by every tab: one seat per browser. */
-const SESSION_KEY = "ja.session";
-/** Automatic reconnect attempts after a drop (e.g. the server restarting) before showing the button. */
-const MAX_RETRIES = 10;
-
-interface Session {
-  roomId: string;
-  playerId: PlayerId;
-}
+/** This browser's player id, from the server's welcome. Shared by every tab: one seat per browser. */
+const ID_KEY = "ja.player";
+/** Reconnect backoff after a drop (e.g. the server restarting), doubling up to the cap. */
+const BACKOFF_MS = 500;
+const MAX_BACKOFF_MS = 8000;
 
 class Net {
   state: NetState = {
@@ -46,7 +42,7 @@ class Net {
     tables: [],
   };
   private ws: WebSocket | null = null;
-  private retries = 0;
+  private backoff = BACKOFF_MS;
   /** Set when the server refuses us (room full, bad code): retrying won't help. */
   private refused = false;
   /** Whether the current connection has been welcomed into a room yet. */
@@ -65,27 +61,22 @@ class Net {
     this.ws = ws;
     this.set({ status: "connecting" });
     ws.onopen = () => {
-      this.retries = 0;
+      this.backoff = BACKOFF_MS;
       this.set({ status: "open" });
       this.send({ t: "lobby" });
     };
     ws.onmessage = (e) => this.receive(JSON.parse(e.data as string) as ServerMsg);
     ws.onclose = () => {
       if (this.ws !== ws) return;
-      if (this.retries >= MAX_RETRIES) {
-        this.set({ status: "closed" });
-        return;
-      }
-      this.retries++;
       setTimeout(() => {
         if (this.ws === ws) this.openLobby();
-      }, Math.min(4000, 300 * 2 ** this.retries));
+      }, this.nextBackoff());
     };
   }
 
   /** Leaves the table for good and goes back to the lobby. */
   quit() {
-    clearSession();
+    this.send({ t: "leave" });
     history.replaceState(null, "", location.pathname);
     this.set({ playerId: null, room: null, chat: [], draft: null, arenaInit: null, results: null, error: null });
     this.openLobby();
@@ -97,35 +88,41 @@ class Net {
     const old = this.ws;
     this.ws = null;
     old?.close();
-    const session = readSession();
-    const playerId = session && roomId && session.roomId === roomId ? session.playerId : undefined;
-    // One seat per browser: a seat held at another table is given up on joining this one.
-    const from = session && session.roomId !== roomId ? session : undefined;
 
     const ws = new WebSocket(wsUrl());
     this.ws = ws;
     this.set({ status: "connecting", error: null });
 
     ws.onopen = () => {
-      this.retries = 0;
+      this.backoff = BACKOFF_MS;
       this.set({ status: "open" });
-      this.send({ t: "hello", name, roomId: roomId ?? undefined, playerId, from });
+      this.send({ t: "hello", name, roomId: roomId ?? undefined, playerId: readId() ?? undefined });
     };
     ws.onmessage = (e) => this.receive(JSON.parse(e.data as string) as ServerMsg);
-    ws.onclose = () => {
+    ws.onclose = ({ code }) => {
       if (this.ws !== ws) return;
-      // Rejoin whichever room we were in; the server recreates it if it restarted and forgot it.
-      const room = this.state.room?.id ?? roomId;
-      if (this.refused || this.retries >= MAX_RETRIES) {
+      if (code === REPLACED) {
+        // Another tab or window of this browser has the seat now; reconnecting would just take it back.
+        this.set({ status: "closed", error: "Playing in another tab" });
+        return;
+      }
+      if (this.refused) {
         this.set({ status: "closed" });
         return;
       }
-      this.retries++;
+      // Rejoin whichever room we were in; the server recreates it if it restarted and forgot it.
+      const room = this.state.room?.id ?? roomId;
       this.set({ status: "reconnecting" });
       setTimeout(() => {
         if (this.ws === ws) this.connect(name, room);
-      }, Math.min(4000, 300 * 2 ** this.retries));
+      }, this.nextBackoff());
     };
+  }
+
+  private nextBackoff(): number {
+    const ms = this.backoff;
+    this.backoff = Math.min(this.backoff * 2, MAX_BACKOFF_MS);
+    return ms;
   }
 
   send(msg: ClientMsg) {
@@ -148,7 +145,7 @@ class Net {
     switch (msg.t) {
       case "welcome":
         this.welcomed = true;
-        writeSession({ roomId: msg.roomId, playerId: msg.playerId });
+        writeId(msg.playerId);
         history.replaceState(null, "", `?r=${msg.roomId}`);
         // Start clean: the room may be a fresh one after a server restart.
         this.set({ playerId: msg.playerId, error: null, draft: null, arenaInit: null, results: null });
@@ -181,11 +178,6 @@ class Net {
       case "results":
         this.set({ results: msg.results });
         return;
-      case "moved":
-        // Another tab or window of this browser has the seat now.
-        this.refused = true;
-        this.set({ error: "Playing in another tab" });
-        return;
       case "error":
         if (!this.welcomed) this.refused = true;
         this.set({ error: msg.message });
@@ -214,25 +206,17 @@ function wsUrl(): string {
   return `${proto}//${location.host}/ws`;
 }
 
-function readSession(): Session | null {
+function readId(): PlayerId | null {
   try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY) ?? "null") as Session | null;
+    return localStorage.getItem(ID_KEY);
   } catch {
     return null;
   }
 }
 
-function clearSession() {
+function writeId(id: PlayerId) {
   try {
-    localStorage.removeItem(SESSION_KEY);
-  } catch {
-    // Nothing stored to clear.
-  }
-}
-
-function writeSession(s: Session) {
-  try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    localStorage.setItem(ID_KEY, id);
   } catch {
     // Reconnect-after-reload just won't work; nothing else depends on it.
   }

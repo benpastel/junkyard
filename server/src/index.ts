@@ -1,9 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, type WebSocket } from "ws";
-import type { ClientMsg } from "@ja/shared";
+import type { ClientMsg, PlayerId } from "@ja/shared";
 import { initPhysics } from "@ja/shared/sim";
 import { Room } from "./room.js";
 
@@ -15,6 +16,8 @@ const ROOM_CODE_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZ";
 const EMPTY_ROOM_TTL_MS = 5 * 60 * 1000;
 /** Bots a new room starts with, so there's someone to fight straight away. */
 const DEFAULT_BOTS = 3;
+/** Render's proxy drops idle websockets, and a phone that sleeps never says goodbye; a ping finds both. */
+const PING_MS = 25_000;
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -29,6 +32,8 @@ const MIME: Record<string, string> = {
 await initPhysics();
 
 const rooms = new Map<string, Room>();
+/** Every browser's id (kept in its localStorage) and the table it sits at, if any. One seat per browser. */
+const seats = new Map<PlayerId, string | null>();
 /** Sockets on the lobby screen, sent the table list whenever it changes. */
 const lobbyWatchers = new Set<WebSocket>();
 let tablesQueued = false;
@@ -78,6 +83,16 @@ wss.on("connection", (socket: WebSocket) => {
   let room: Room | null = null;
   let playerId: string | null = null;
 
+  let alive = true;
+  socket.on("pong", () => {
+    alive = true;
+  });
+  const ping = setInterval(() => {
+    if (!alive) return socket.terminate();
+    alive = false;
+    socket.ping();
+  }, PING_MS);
+
   socket.on("message", (data) => {
     let msg: ClientMsg;
     try {
@@ -104,24 +119,33 @@ wss.on("connection", (socket: WebSocket) => {
         socket.close();
         return;
       }
-      // One seat per browser: going to a different table gives up the seat at the old one.
-      const from = msg.from;
-      if (from && typeof from.roomId === "string" && typeof from.playerId === "string" && from.roomId !== code) {
-        rooms.get(from.roomId)?.evict(from.playerId);
-      }
+      // An id the server doesn't know (new browser, or a restart forgot it) gets a fresh one.
+      const id = typeof msg.playerId === "string" && seats.has(msg.playerId) ? msg.playerId : randomUUID();
       room = code ? (rooms.get(code) ?? createRoom(code)) : createRoom();
-      playerId = room.join(socket, String(msg.name ?? ""), msg.playerId);
+      playerId = room.join(socket, String(msg.name ?? ""), id);
       if (!playerId) {
         socket.send(JSON.stringify({ t: "error", message: "Room is full" }));
         socket.close();
+        return;
       }
+      // Sitting down at a different table gives up the seat at the old one.
+      const was = seats.get(id);
+      if (was && was !== room.id) rooms.get(was)?.evict(id);
+      seats.set(id, room.id);
       return;
     }
 
-    if (room && playerId) room.handle(playerId, msg);
+    if (!room || !playerId) return;
+    if (msg.t === "leave") {
+      room.evict(playerId);
+      seats.set(playerId, null);
+      return;
+    }
+    room.handle(playerId, msg);
   });
 
   socket.on("close", () => {
+    clearInterval(ping);
     lobbyWatchers.delete(socket);
     if (room && playerId) room.leave(playerId, socket);
   });
@@ -142,9 +166,11 @@ function createRoom(code?: string): Room {
 
 setInterval(() => {
   for (const [code, room] of rooms) {
+    room.reap();
     if (room.emptySince !== null && Date.now() - room.emptySince > EMPTY_ROOM_TTL_MS) {
       room.stop();
       rooms.delete(code);
+      for (const [id, at] of seats) if (at === code) seats.set(id, null);
       queueTables();
     }
   }
