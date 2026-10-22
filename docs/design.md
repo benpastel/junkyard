@@ -24,7 +24,7 @@ Online multiplayer, fast-paced, round-based game:
 - **Reroll** (R / hourglass): throw the hand away; 3 new offers arrive after a 1s wait, so you can't cycle for free.
 - The shared pool (unused offers go to a tray anyone can grab) is still in the code but switched off (POOL_ENABLED).
 - **Pace** (setup): Frantic / Fast (default) / Strategic / Unlimited (no timer). A Done button in the draft starts the fight early once every connected human has clicked it (in Unlimited, that is the only way it starts). Build time scales with hull tier: small 25/40/60s, medium 35/60/90s, large 50/80/120s.
-- **Hulls**, three classes of five, every hull in a class the same number of squares: small (60) Skiff, Hammerhead, Starfish, Catamaran, Chevron; medium (80) Crab, Trident, Flying Wing, Panels, Strike; large (110) Station, Wedge, Manta, Saucer, Dreadnought. Every arm is at least 2 squares wide so pentominoes can reach it.
+- **Hulls**, three classes of five, every hull in a class the same number of squares: small (60) Skiff, Hammerhead, Starfish, Catamaran, Chevron; medium (80) Crab, Trident, Flying Wing, Panels, Strike; large (110) Station, Wedge, Manta, Saucer, Dreadnought. Hulls avoid big solid blocks: holes, slots and notches break them up (portholes, gill slits, vents, crab eyes, the saucer's centre hole), so built ships have gaps and shapes rather than one slab. Every square must be coverable by some pentomino that fits the hull around the cockpit.
 - The host picks the **class**; each player picks their own hull within it (or Random, which bots always use), and can change it every round.
 
 ## Tables
