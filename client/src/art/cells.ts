@@ -294,41 +294,45 @@ function coatStrips(d: Pen, s: CellStyle, dir: Dir, colors: { base: string; shin
   }
 }
 
-// ---- T-shaped cockpit (the arrow-key cluster) ----
-// One glass dome over 4 cells laid out like a keyboard's arrow keys, nose up:
-//   . U .
-//   L D R
-// Each lobe has a backlit arrow that glows while that key is held. Arrows are in the ship frame,
-// same as the controls, so a rotated ship still shows which way you're pushing.
+// ---- The cockpit (the flying-key cluster) ----
+// One glass dome over 6 cells laid out like the flying keys, nose up:
+//   Q W E      rotate left, up, rotate right
+//   A S D      left, down, right
+// Each key has a backlit glyph that glows while it's held. They're in the ship frame, same as
+// the controls, so a rotated ship still shows which way you're pushing.
 
-/** Cockpit cells relative to the T's top-left, with the key (dir) each one stands for. */
-export const COCKPIT_CELLS: readonly { x: number; y: number; dir: Dir }[] = [
-  { x: 1, y: 0, dir: 0 },
-  { x: 2, y: 1, dir: 1 },
-  { x: 1, y: 1, dir: 2 },
-  { x: 0, y: 1, dir: 3 },
+/** Key bits (KEY_BITS) by cell of the cockpit, relative to its top-left. */
+export const COCKPIT_CELLS: readonly { x: number; y: number; key: number }[] = [
+  { x: 0, y: 0, key: 16 },
+  { x: 1, y: 0, key: 1 },
+  { x: 2, y: 0, key: 32 },
+  { x: 2, y: 1, key: 2 },
+  { x: 1, y: 1, key: 4 },
+  { x: 0, y: 1, key: 8 },
 ];
 
 export interface CockpitStyle {
   /** Player colour: pilot + fins. */
   color: string;
-  /** Held keys, bitmask over ship-frame dirs (bit 0 = up, 1 = right, 2 = down, 3 = left). */
+  /** Held keys, as KEY_BITS (up 1, right 2, down 4, left 8, rotate left 16, rotate right 32). */
   held?: number;
   /**
-   * Keys that have a working engine behind them (same bitmask; omit for all). The others are
-   * greyed out, and pressing one shows a red X instead of the glow.
+   * Keys that would do anything with the engines there are (same bits; omit for all). The others
+   * are greyed out, and pressing one shows a red X instead of the glow.
    */
   available?: number;
-  /** Draw the red X on every dead arrow, held or not (the draft board, to flag missing engines). */
+  /** Draw the red X on every dead key, held or not (the draft board, to flag missing engines). */
   markMissing?: boolean;
 }
 
-// arrow centres in T units; the down arrow is smaller since the pilot crowds that lobe
-const COCKPIT_ARROWS: readonly { x: number; y: number; dir: Dir; k: number }[] = [
-  { x: 1.5, y: 0.42, dir: 0, k: 1 },
-  { x: 2.58, y: 1.5, dir: 1, k: 1 },
-  { x: 1.5, y: 1.7, dir: 2, k: 0.8 },
-  { x: 0.42, y: 1.5, dir: 3, k: 1 },
+// glyph centres in cockpit units; the down arrow is smaller since the pilot crowds that cell
+const COCKPIT_KEYS: readonly { x: number; y: number; key: number; dir?: Dir; spin?: 1 | -1; k: number }[] = [
+  { x: 0.55, y: 0.55, key: 16, spin: -1, k: 1 },
+  { x: 1.5, y: 0.42, key: 1, dir: 0, k: 1 },
+  { x: 2.45, y: 0.55, key: 32, spin: 1, k: 1 },
+  { x: 2.58, y: 1.5, key: 2, dir: 1, k: 1 },
+  { x: 1.5, y: 1.7, key: 4, dir: 2, k: 0.8 },
+  { x: 0.42, y: 1.5, key: 8, dir: 3, k: 1 },
 ];
 
 /**
@@ -341,44 +345,63 @@ export function drawCockpit(ctx: CanvasRenderingContext2D, size: number, style: 
   ctx.scale(size, size);
   const d = pen(ctx);
 
-  // swept fins off the back corners of the side keys
+  // swept fins off the back corners
   const fin: [number, number][] = [[0.1, 1.75], [-0.25, 2.25], [0.4, 1.92]];
   d.poly(fin, style.color);
   d.poly(fin.map(([x, y]) => [3 - x, y]), style.color);
 
-  // dark dome, inset a bit from the T's cells
+  // dark dome, inset a bit from the cells, rounder at the nose
   const i = 0.08;
-  const outline: [number, number][] = [
-    [1 + i, i], [2 - i, i], [2 - i, 1 + i], [3 - i, 1 + i],
-    [3 - i, 2 - i], [i, 2 - i], [i, 1 + i], [1 + i, 1 + i],
-  ];
-  d.poly(outline, "#0c1218");
+  ctx.beginPath();
+  ctx.roundRect(i, i, 3 - 2 * i, 2 - 2 * i, [0.5, 0.5, 0.18, 0.18]);
+  ctx.fillStyle = "#0c1218";
+  ctx.fill();
   ctx.strokeStyle = "rgba(160,200,230,.45)";
   ctx.lineWidth = 0.04;
-  ctx.lineJoin = "round";
   ctx.stroke();
 
-  const available = style.available ?? 15;
-  for (const a of COCKPIT_ARROWS) {
-    const on = (held >> a.dir) & 1;
-    const works = (available >> a.dir) & 1;
+  const available = style.available ?? 63;
+  for (const g of COCKPIT_KEYS) {
+    const on = held & g.key;
+    const works = available & g.key;
     // halo spills past the dome on purpose, so held keys read at arena zoom
-    if (on && works) [0.5, 0.4, 0.3].forEach((r, j) => d.circle(a.x, a.y, r * a.k, `rgba(120,190,240,${0.12 + j * 0.08})`));
+    if (on && works) [0.5, 0.4, 0.3].forEach((r, j) => d.circle(g.x, g.y, r * g.k, `rgba(120,190,240,${0.12 + j * 0.08})`));
+    const fill = !works ? "#262c33" : on ? "#fff" : "#3d6a8a";
     ctx.save();
-    ctx.translate(a.x, a.y);
-    ctx.rotate((a.dir * PI) / 2);
-    const s = 0.24 * a.k;
-    d.poly([[0, -s], [s * 0.95, s * 0.5], [-s * 0.95, s * 0.5]], !works ? "#262c33" : on ? "#fff" : "#3d6a8a");
+    ctx.translate(g.x, g.y);
+    if (g.dir !== undefined) {
+      ctx.rotate((g.dir * PI) / 2);
+      const s = 0.24 * g.k;
+      d.poly([[0, -s], [s * 0.95, s * 0.5], [-s * 0.95, s * 0.5]], fill);
+    } else {
+      // a turning arrow: most of a ring, clockwise, its head at the end (mirrored for anticlockwise)
+      const r = 0.17 * g.k;
+      const a0 = PI * 0.75;
+      const a1 = PI * 2.1;
+      ctx.scale(g.spin!, 1);
+      ctx.beginPath();
+      ctx.arc(0, 0, r, a0, a1);
+      ctx.strokeStyle = fill;
+      ctx.lineWidth = 0.075;
+      ctx.lineCap = "round";
+      ctx.stroke();
+      const ex = r * Math.cos(a1);
+      const ey = r * Math.sin(a1);
+      const tx = -Math.sin(a1);
+      const ty = Math.cos(a1);
+      const h = 0.1;
+      d.poly([[ex + tx * h, ey + ty * h], [ex + ty * h * 0.9, ey - tx * h * 0.9], [ex - ty * h * 0.9, ey + tx * h * 0.9]], fill);
+    }
     ctx.restore();
-    // Pressing a key with nothing behind it: a red X over the dead arrow.
+    // Pressing a key with nothing behind it: a red X over the dead glyph.
     if (!works && (on || style.markMissing)) {
-      const x = 0.2 * a.k;
-      d.line([[a.x - x, a.y - x], [a.x + x, a.y + x]], "#ff4a3d", 0.08);
-      d.line([[a.x + x, a.y - x], [a.x - x, a.y + x]], "#ff4a3d", 0.08);
+      const x = 0.2 * g.k;
+      d.line([[g.x - x, g.y - x], [g.x + x, g.y + x]], "#ff4a3d", 0.08);
+      d.line([[g.x + x, g.y - x], [g.x - x, g.y + x]], "#ff4a3d", 0.08);
     }
   }
 
-  // pilot at the junction: shoulders, helmet, googly eyes looking forward
+  // pilot at the middle: shoulders, helmet, googly eyes looking forward
   const px = 1.5;
   const py = 1.1;
   d.ellipse(px, py + 0.16, 0.25, 0.12, shade(style.color, -0.45));
@@ -488,13 +511,16 @@ function drawDamage(ctx: CanvasRenderingContext2D, s: number, damage: number, v:
 }
 
 /**
- * Where to draw a full cockpit for these cells: the top-left of its T in grid units, or null if
- * the four lobes aren't all there (test ships with a lone core keep the old canopy).
+ * Where to draw a full cockpit for these cells: its top-left in grid units, or null if the six
+ * cells aren't all there (test ships with a lone core keep the old canopy).
  */
 export function cockpitOrigin(cells: readonly { x: number; y: number; type: CellType; dir: Dir }[]): { x: number; y: number } | null {
   const cores = cells.filter((c) => c.type === "core");
-  if (cores.length !== 4) return null;
-  const d = cores.find((c) => c.dir === 2);
-  if (!d || new Set(cores.map((c) => c.dir)).size !== 4) return null;
-  return { x: d.x - 1, y: d.y - 1 };
+  if (cores.length !== COCKPIT_CELLS.length) return null;
+  // The bottom-middle cell is the one pushing down; the others sit round it.
+  const s = cores.find((c) => c.dir === 2);
+  if (!s) return null;
+  const at = new Set(cores.map((c) => `${c.x - s.x + 1},${c.y - s.y + 1}`));
+  if (!COCKPIT_CELLS.every((k) => at.has(`${k.x},${k.y}`))) return null;
+  return { x: s.x - 1, y: s.y - 1 };
 }

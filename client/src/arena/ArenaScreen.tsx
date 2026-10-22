@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { InputState, PlayerId } from "@ja/shared";
 import {
   FAST_FORWARD_SPEED,
+  KEY_BITS,
   type ArenaInit,
   type ArenaSnapshot,
 } from "@ja/shared/sim/view";
@@ -12,12 +13,21 @@ import { ArenaRenderer, COMPASS_MARGIN, COMPASS_RADIUS, COMPASS_TOP, type Camera
 import { TILT_DEAD_ZONE, TILT_FULL, requestTiltPermission, watchTilt } from "./tilt";
 import "./arena.css";
 
-/** Keyboard layout. Arrow keys fire engines facing that way; letters fire weapons. Lasers fire on their own. */
+/**
+ * Keyboard layout. Arrow keys or WASD push the ship that way, Q and E turn it (the engines to
+ * fire are worked out in the sim); X fires the grapple. Lasers fire on their own.
+ */
 export const KEYMAP: Record<string, keyof InputState> = {
   ArrowUp: "up",
   ArrowDown: "down",
   ArrowLeft: "left",
   ArrowRight: "right",
+  KeyW: "up",
+  KeyS: "down",
+  KeyA: "left",
+  KeyD: "right",
+  KeyQ: "rotLeft",
+  KeyE: "rotRight",
   KeyX: "grapple",
 };
 
@@ -47,11 +57,9 @@ export function ArenaScreen(props: {
   const [camera, setCamera] = useState<CameraMode>(() =>
     CAMERA_SWITCHING ? loadCameraMode() : "ship",
   );
-  // Engine dirs your ship can push in, for greying out the on-screen arrows.
-  const [engines, setEngines] = useState(15);
-  const pressRef = useRef<(k: keyof InputState, down: boolean) => void>(
-    () => {},
-  );
+  // Steering keys your ship's engines can answer (KEY_BITS), for greying out the on-screen keys.
+  const [engines, setEngines] = useState(63);
+  const pressRef = useRef<Press>(() => {});
   const toggleCamera = () => {
     const next: CameraMode =
       (rendererRef.current?.cameraMode ?? camera) === "ship" ? "north" : "ship";
@@ -94,7 +102,7 @@ export function ArenaScreen(props: {
         lastPips = key;
         setPips(p);
       }
-      setEngines(renderer.myEngineDirs);
+      setEngines(renderer.mySteerKeys);
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -106,11 +114,18 @@ export function ArenaScreen(props: {
 
   useEffect(() => {
     const keys: InputState = { ...NO_KEYS };
+    // What's holding each input down (key codes, on-screen buttons): an arrow and its WASD twin
+    // both count, and letting go of one leaves the other held.
+    const holders = new Map<keyof InputState, Set<string>>();
     const send = () => sendRef.current({ ...keys });
     // Keyboard and the on-screen buttons both land here.
-    const press = (k: keyof InputState, down: boolean) => {
-      if (keys[k] === down) return;
-      keys[k] = down;
+    const press: Press = (k, down, by) => {
+      const set = holders.get(k) ?? new Set<string>();
+      holders.set(k, set);
+      if (down) set.add(by);
+      else set.delete(by);
+      if (keys[k] === set.size > 0) return;
+      keys[k] = set.size > 0;
       rendererRef.current?.setPan(keys);
       send();
     };
@@ -119,7 +134,7 @@ export function ArenaScreen(props: {
       const k = KEYMAP[e.code];
       if (!k) return;
       e.preventDefault();
-      press(k, down);
+      press(k, down, e.code);
     };
     const onDown = (e: KeyboardEvent) => {
       if (e.code === FAST_FORWARD_KEY && !e.repeat) ffRef.current?.toggle();
@@ -129,6 +144,7 @@ export function ArenaScreen(props: {
     };
     const onUp = (e: KeyboardEvent) => set(e, false);
     const onBlur = () => {
+      holders.clear();
       for (const k of Object.keys(keys) as (keyof InputState)[])
         keys[k] = false;
       rendererRef.current?.setPan(keys);
@@ -173,7 +189,7 @@ export function ArenaScreen(props: {
         <div className="arena-speed mono">{FAST_FORWARD_SPEED}×</div>
       )}
       {me && init.ships.some((s) => s.playerId === me) && (
-        <TouchFlight engines={engines} press={(k, d) => pressRef.current(k, d)} />
+        <TouchFlight engines={engines} press={(k, d, by) => pressRef.current(k, d, by)} />
       )}
       {(CAMERA_SWITCHING || fastForward) && (
         <div className="arena-controls">
@@ -220,11 +236,14 @@ export function ArenaScreen(props: {
   );
 }
 
+/** Sets an input held or not, saying what's holding it (a key code, or an on-screen button). */
+type Press = (k: keyof InputState, down: boolean, by: string) => void;
+
 /**
- * Touch screens: the arrow pad, or (toggled with the phone button) tilt steering with a gauge
- * showing the lean. Turning tilt on takes the current angle as level.
+ * Touch screens: the flying keys, or (toggled with the phone button) tilt steering with a gauge
+ * showing the lean and the two turn keys beside it. Turning tilt on takes the current angle as level.
  */
-function TouchFlight({ engines, press }: { engines: number; press: (k: keyof InputState, down: boolean) => void }) {
+function TouchFlight({ engines, press }: { engines: number; press: Press }) {
   // Starts the way you flew last time.
   const [tilt, setTilt] = useState(loadTiltPref);
   const [lean, setLean] = useState({ x: 0, y: 0 });
@@ -245,12 +264,12 @@ function TouchFlight({ engines, press }: { engines: number; press: (k: keyof Inp
       heard = true;
       setLean(l);
       let mask = 0;
-      for (const { k, dir } of PAD_KEYS) {
+      for (const { k, bit } of MOVE_KEYS) {
         const on = keys[k as "up" | "down" | "left" | "right"];
-        if (on) mask |= 1 << dir;
+        if (on) mask |= bit;
         if (last[k] !== on) {
           last[k] = on;
-          pressRef.current(k, on);
+          pressRef.current(k, on, "tilt");
         }
       }
       setHeld(mask);
@@ -258,7 +277,7 @@ function TouchFlight({ engines, press }: { engines: number; press: (k: keyof Inp
     return () => {
       clearTimeout(fallback);
       stop();
-      for (const { k } of PAD_KEYS) pressRef.current(k, false);
+      for (const { k } of MOVE_KEYS) pressRef.current(k, false, "tilt");
       setHeld(0);
       setLean({ x: 0, y: 0 });
     };
@@ -280,25 +299,28 @@ function TouchFlight({ engines, press }: { engines: number; press: (k: keyof Inp
         </svg>
       </button>
       {tilt ? (
-        <div className="tilt-gauge">
-          <div className="tilt-zone" style={{ width: (TILT_DEAD_ZONE / TILT_FULL) * 80, height: (TILT_DEAD_ZONE / TILT_FULL) * 80 }} />
-          {PAD_KEYS.map(({ k, dir, rot }) => (
-            <svg
-              key={k}
-              className={`tilt-arrow${(held >> dir) & 1 ? " held" : ""}${(engines >> dir) & 1 ? "" : " dead"}`}
-              width="18"
-              height="18"
-              viewBox="0 0 20 20"
-              style={{ transform: `translate(-50%, -50%) rotate(${rot}deg) translateY(-46px)` }}
-              aria-hidden
-            >
-              <path d="M10 3 L17 14 L3 14 Z" fill="currentColor" />
-            </svg>
-          ))}
-          <div className="tilt-dot" style={{ transform: `translate(calc(-50% + ${g(lean.x)}px), calc(-50% + ${g(lean.y)}px))` }} />
-        </div>
+        <>
+          <div className="tilt-gauge">
+            <div className="tilt-zone" style={{ width: (TILT_DEAD_ZONE / TILT_FULL) * 80, height: (TILT_DEAD_ZONE / TILT_FULL) * 80 }} />
+            {MOVE_KEYS.map(({ k, bit, rot }) => (
+              <svg
+                key={k}
+                className={`tilt-arrow${held & bit ? " held" : ""}${engines & bit ? "" : " dead"}`}
+                width="18"
+                height="18"
+                viewBox="0 0 20 20"
+                style={{ transform: `translate(-50%, -50%) rotate(${rot}deg) translateY(-46px)` }}
+                aria-hidden
+              >
+                <path d="M10 3 L17 14 L3 14 Z" fill="currentColor" />
+              </svg>
+            ))}
+            <div className="tilt-dot" style={{ transform: `translate(calc(-50% + ${g(lean.x)}px), calc(-50% + ${g(lean.y)}px))` }} />
+          </div>
+          <KeyPad className="turn-pad" keys={TURN_KEYS} engines={engines} press={press} />
+        </>
       ) : (
-        <ArrowPad engines={engines} press={press} />
+        <KeyPad className="arrow-pad" keys={[...TURN_KEYS, ...MOVE_KEYS]} engines={engines} press={press} />
       )}
     </div>
   );
@@ -322,62 +344,67 @@ function saveTiltPref(on: boolean) {
   }
 }
 
-const PAD_KEYS: {
+interface PadKey {
   k: keyof InputState;
-  dir: number;
+  /** KEY_BITS */
+  bit: number;
   area: string;
+  /** Arrow rotation in degrees; turn keys get a turning arrow instead (spin: -1 left, 1 right). */
   rot: number;
-}[] = [
-  { k: "up", dir: 0, area: "up", rot: 0 },
-  { k: "left", dir: 3, area: "left", rot: -90 },
-  { k: "down", dir: 2, area: "down", rot: 180 },
-  { k: "right", dir: 1, area: "right", rot: 90 },
+  spin?: 1 | -1;
+}
+
+const MOVE_KEYS: PadKey[] = [
+  { k: "up", bit: KEY_BITS.up, area: "up", rot: 0 },
+  { k: "left", bit: KEY_BITS.left, area: "left", rot: -90 },
+  { k: "down", bit: KEY_BITS.down, area: "down", rot: 180 },
+  { k: "right", bit: KEY_BITS.right, area: "right", rot: 90 },
+];
+
+const TURN_KEYS: PadKey[] = [
+  { k: "rotLeft", bit: KEY_BITS.rotLeft, area: "rotl", rot: 0, spin: -1 },
+  { k: "rotRight", bit: KEY_BITS.rotRight, area: "rotr", rot: 0, spin: 1 },
 ];
 
 /**
- * Touch screens: the cockpit's arrow keys, big, in a corner. Hold to fire those engines; several
- * fingers at once work. Arrows with no working engine behind them are greyed out.
+ * Touch screens: the cockpit's keys, big, in a corner (Q W E over A S D). Hold to fly; several
+ * fingers at once work. Keys the engines can't answer are greyed out.
  */
-function ArrowPad({
-  engines,
-  press,
-}: {
-  engines: number;
-  press: (k: keyof InputState, down: boolean) => void;
-}) {
+function KeyPad({ className, keys, engines, press }: { className: string; keys: PadKey[]; engines: number; press: Press }) {
   const [held, setHeld] = useState(0);
-  const set = (k: keyof InputState, dir: number, down: boolean) => {
-    press(k, down);
-    setHeld((h) => (down ? h | (1 << dir) : h & ~(1 << dir)));
+  const set = (k: keyof InputState, bit: number, down: boolean) => {
+    press(k, down, "pad");
+    setHeld((h) => (down ? h | bit : h & ~bit));
   };
   return (
-    <div className="arrow-pad">
-      {PAD_KEYS.map(({ k, dir, area, rot }) => (
+    <div className={className}>
+      {keys.map(({ k, bit, area, rot, spin }) => (
         <button
           key={k}
           type="button"
           aria-label={k}
-          className={`arrow-key${(held >> dir) & 1 ? " held" : ""}${(engines >> dir) & 1 ? "" : " dead"}`}
+          className={`arrow-key${held & bit ? " held" : ""}${engines & bit ? "" : " dead"}`}
           style={{ gridArea: area }}
           onPointerDown={(e) => {
             e.preventDefault();
             e.currentTarget.releasePointerCapture?.(e.pointerId);
-            set(k, dir, true);
+            set(k, bit, true);
           }}
-          onPointerUp={() => set(k, dir, false)}
-          onPointerCancel={() => set(k, dir, false)}
-          onPointerLeave={() => set(k, dir, false)}
+          onPointerUp={() => set(k, bit, false)}
+          onPointerCancel={() => set(k, bit, false)}
+          onPointerLeave={() => set(k, bit, false)}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <svg
-            width="30"
-            height="30"
-            viewBox="0 0 20 20"
-            style={{ transform: `rotate(${rot}deg)` }}
-            aria-hidden
-          >
-            <path d="M10 3 L17 14 L3 14 Z" fill="currentColor" />
-          </svg>
+          {spin ? (
+            <svg width="30" height="30" viewBox="0 0 20 20" style={{ transform: spin < 0 ? "scaleX(-1)" : undefined }} aria-hidden>
+              <path d="M5.8 14.2 A6 6 0 1 1 15.7 11.9" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+              <path d="M14.6 15.3 L18.9 12.3 L12.8 10.3 Z" fill="currentColor" />
+            </svg>
+          ) : (
+            <svg width="30" height="30" viewBox="0 0 20 20" style={{ transform: `rotate(${rot}deg)` }} aria-hidden>
+              <path d="M10 3 L17 14 L3 14 Z" fill="currentColor" />
+            </svg>
+          )}
         </button>
       ))}
     </div>
@@ -463,6 +490,8 @@ const NO_KEYS: InputState = {
   down: false,
   left: false,
   right: false,
+  rotLeft: false,
+  rotRight: false,
   laser: false,
   grapple: false,
 };

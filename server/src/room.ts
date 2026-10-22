@@ -708,6 +708,8 @@ function sanitizeInput(i: InputState): InputState {
     down: !!i.down,
     left: !!i.left,
     right: !!i.right,
+    rotLeft: !!i.rotLeft,
+    rotRight: !!i.rotRight,
     laser: !!i.laser,
     grapple: !!i.grapple,
   };

@@ -2,7 +2,7 @@
 import { DIR_VECTORS, NO_INPUT, type BotSkill, type Dir, type InputState, type PlayerId } from "../types.js";
 import { Rng } from "../rng.js";
 import { SIM } from "./constants.js";
-import { TICK_HZ, angleDiff } from "./view.js";
+import { KEY_BITS, TICK_HZ, angleDiff } from "./view.js";
 import type { Arena, ShipRecord } from "./arena.js";
 
 interface BotState {
@@ -50,12 +50,11 @@ const DODGE_SPEED = 5;
 /** Hard bots with fewer than this share of their target's cells keep to the edge of laser range. */
 const OUTGUNNED = 0.6;
 
-const ARROWS: { key: "up" | "right" | "down" | "left"; dir: Dir }[] = [
-  { key: "up", dir: 0 },
-  { key: "right", dir: 1 },
-  { key: "down", dir: 2 },
-  { key: "left", dir: 3 },
-];
+/** Every steering combination worth trying: at most one key of each opposing pair. */
+const STEER_MASKS: number[] = [];
+for (const v of [0, KEY_BITS.up, KEY_BITS.down])
+  for (const h of [0, KEY_BITS.left, KEY_BITS.right])
+    for (const r of [0, KEY_BITS.rotLeft, KEY_BITS.rotRight]) STEER_MASKS.push(v | h | r);
 
 export function arenaBotInput(arena: Arena, playerId: PlayerId, skill: BotSkill = "medium"): InputState {
   let perArena = bots.get(arena);
@@ -155,34 +154,37 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
     desiredVel = { x: -pos.x * k, y: -pos.y * k };
   }
 
-  // Force and torque of each arrow at full thrust.
+  // What each combination of steering keys does, with the engines the ship would really fire for it.
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
-  const effect = ARROWS.map(({ dir }) => {
+  const effect = (mask: number) => {
+    const { engines, throttle } = arena.thrustPlan(me, mask);
     let fx = 0;
     let fy = 0;
     let tq = 0;
-    for (const c of cells) {
-      if (c.type !== "engine" || c.dir !== dir || !arena.isOpen(c)) continue;
+    engines.forEach((c, i) => {
+      const u = throttle[i]!;
+      if (u <= 0) return;
       const d = DIR_VECTORS[c.dir];
-      const ex = (d.x * cos - d.y * sin) * SIM.engineForce;
-      const ey = (d.x * sin + d.y * cos) * SIM.engineForce;
+      const ex = (d.x * cos - d.y * sin) * SIM.engineForce * u;
+      const ey = (d.x * sin + d.y * cos) * SIM.engineForce * u;
       const px = pos.x + c.x * cos - c.y * sin - com.x;
       const py = pos.y + c.x * sin + c.y * cos - com.y;
       fx += ex;
       fy += ey;
       tq += px * ey - py * ex;
-    }
+    });
     return { fx, fy, tq };
-  });
+  };
+  const options = STEER_MASKS.map((mask) => ({ mask, ...effect(mask) }));
 
-  // Try every arrow combination against a short look-ahead and keep the cheapest.
+  // Try every combination against a short look-ahead and keep the cheapest.
   // Turning matters most: aim for an angular velocity proportional to the heading error.
   const T = 0.5;
   // Ships that can only spin one way have to go the long way round.
   let canPos = false;
   let canNeg = false;
-  for (const e of effect) {
+  for (const e of options) {
     if (e.tq > 1e-3) canPos = true;
     if (e.tq < -1e-3) canNeg = true;
   }
@@ -192,16 +194,7 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
   const wantW = Math.max(-1.6, Math.min(1.6, err * 2));
   let best = 0;
   let bestCost = Infinity;
-  for (let mask = 0; mask < 16; mask++) {
-    let fx = 0;
-    let fy = 0;
-    let tq = 0;
-    for (let i = 0; i < 4; i++) {
-      if (!(mask & (1 << i))) continue;
-      fx += effect[i]!.fx;
-      fy += effect[i]!.fy;
-      tq += effect[i]!.tq;
-    }
+  for (const { mask, fx, fy, tq } of options) {
     const w2 = w + (tq / inertia) * T;
     const vx = vel.x + (fx / mass) * T;
     const vy = vel.y + (fy / mass) * T;
@@ -216,10 +209,12 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
   }
 
   const input: InputState = {
-    up: !!(best & 1),
-    right: !!(best & 2),
-    down: !!(best & 4),
-    left: !!(best & 8),
+    up: !!(best & KEY_BITS.up),
+    right: !!(best & KEY_BITS.right),
+    down: !!(best & KEY_BITS.down),
+    left: !!(best & KEY_BITS.left),
+    rotLeft: !!(best & KEY_BITS.rotLeft),
+    rotRight: !!(best & KEY_BITS.rotRight),
     laser: false,
     grapple: false,
   };

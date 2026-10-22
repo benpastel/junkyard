@@ -87,7 +87,7 @@
   letter-spacing: 0.06em;
 }
 
-/* Touch screens: the cockpit's arrow keys, big, bottom left. */
+/* Touch screens: the cockpit's keys, big, bottom left. */
 .arena {
   touch-action: none;
   -webkit-user-select: none;
@@ -100,7 +100,7 @@
   left: 16px;
   bottom: 16px;
   grid-template-areas:
-    ". up ."
+    "rotl up rotr"
     "left down right";
   grid-template-columns: repeat(3, 68px);
   grid-template-rows: repeat(2, 68px);
@@ -178,6 +178,18 @@
 
 .touch-flight .arrow-pad {
   display: grid;
+}
+
+/* Tilt steering: the two turn keys beside the gauge. */
+.turn-pad {
+  position: absolute;
+  left: 160px;
+  bottom: 52px;
+  display: grid;
+  grid-template-areas: "rotl rotr";
+  grid-template-columns: repeat(2, 68px);
+  grid-template-rows: 68px;
+  gap: 6px;
 }
 
 .tilt-toggle {

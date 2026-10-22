@@ -1,5 +1,6 @@
 import { memo, useLayoutEffect, useRef } from "react";
 import { openChecker, type Cell } from "@ja/shared";
+import { steerKeysOfCells } from "@ja/shared/sim/view";
 import { cockpitOrigin, drawCellPart, drawCellPlate, drawCockpit, mirrorSidesOf, type CellStyle } from "../art/cells";
 import { useClock } from "../art/useClock";
 
@@ -24,7 +25,7 @@ export function drawShipCells(
   cockpitOpts?: {
     /** Cells to count engines from, if not just `cells` (e.g. with the piece being placed). */
     engineCells?: readonly Cell[];
-    /** Red X on directions with no engine yet; arrows the engineCells add (over `cells`) glow. */
+    /** Red X on keys with no engine yet; keys the engineCells add (over `cells`) glow. */
     markMissing?: boolean;
   },
 ) {
@@ -37,7 +38,7 @@ export function drawShipCells(
     overPlate?.(c);
     ctx.restore();
   }
-  // A full cockpit is drawn once over its four cells instead of cell by cell.
+  // A full cockpit is drawn once over its six cells instead of cell by cell.
   const cockpit = cockpitOrigin(cells);
   for (const c of cells) {
     if (cockpit && c.type === "core") continue;
@@ -48,9 +49,9 @@ export function drawShipCells(
   }
   if (cockpit) {
     const core = cells.find((c) => c.type === "core")!;
-    // Arrows with no working engine behind them yet are greyed out.
-    const available = engineDirs(cockpitOpts?.engineCells ?? cells);
-    const added = available & ~engineDirs(cells);
+    // Keys that wouldn't do anything with the engines so far are greyed out.
+    const available = steerable(cockpitOpts?.engineCells ?? cells);
+    const added = available & ~steerable(cells);
     ctx.save();
     ctx.translate(cockpit.x * cell, cockpit.y * cell);
     drawCockpit(ctx, cell, { color: style(core).color, available, held: added, markMissing: cockpitOpts?.markMissing });
@@ -58,12 +59,9 @@ export function drawShipCells(
   }
 }
 
-/** Bitmask of the dirs these cells have a working (uncovered) engine for. */
-function engineDirs(cells: readonly Cell[]): number {
-  const isOpen = openChecker(cells);
-  let dirs = 0;
-  for (const c of cells) if (c.type === "engine" && isOpen(c)) dirs |= 1 << c.dir;
-  return dirs;
+/** The steering keys (KEY_BITS) these cells' working engines can answer. */
+function steerable(cells: readonly Cell[]): number {
+  return steerKeysOfCells(cells, openChecker(cells));
 }
 
 /** Draws a set of cells (min x/y = 0) at `cell` CSS pixels per square, with room for overhangs. */

@@ -2,6 +2,8 @@
 // it must never import Rapier (directly or via ./arena.ts).
 import type { CellType, Dir, PlayerId } from "../types.js";
 
+export * from "./thrust.js";
+
 export const TICK_HZ = 60;
 /** The server broadcasts a snapshot every this many ticks. */
 export const SNAPSHOT_EVERY = 3;
@@ -79,6 +81,8 @@ export interface BodySnap {
   dmg?: number[];
   /** Engines currently thrusting: [cid, level 1..9]. Ships only. */
   thr?: [number, number][];
+  /** Steering keys held (KEY_BITS), when any. Ships only. */
+  keys?: number;
   /** Lasers currently charging: [cid, level 1..9]. Ships only. */
   chg?: [number, number][];
   /** Present (1) while the power-up's mirror skin is on: every outer surface reflects lasers. */

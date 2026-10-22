@@ -5,7 +5,7 @@ import { SIM } from "./constants.js";
 import { Arena } from "./arena.js";
 import type { ArenaSetup } from "./index.js";
 
-const KEYS: (keyof InputState)[] = ["up", "down", "left", "right", "laser", "grapple"];
+const KEYS: (keyof InputState)[] = ["up", "down", "left", "right", "laser", "grapple", "rotLeft", "rotRight"];
 
 export function packInput(i: InputState): number {
   return KEYS.reduce((bits, k, n) => bits | (i[k] ? 1 << n : 0), 0);

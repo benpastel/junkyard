@@ -41,12 +41,15 @@ export interface ShipBlueprint {
   team?: number;
 }
 
-/** Keys held this tick. Clients send these; the sim consumes them. */
+/** Keys held this tick. Clients send these; the sim consumes them. Directions are in the ship's frame. */
 export interface InputState {
   up: boolean;
   down: boolean;
   left: boolean;
   right: boolean;
+  /** Turn the nose left (anticlockwise) / right. */
+  rotLeft: boolean;
+  rotRight: boolean;
   laser: boolean;
   grapple: boolean;
 }
@@ -56,6 +59,8 @@ export const NO_INPUT: InputState = {
   down: false,
   left: false,
   right: false,
+  rotLeft: false,
+  rotRight: false,
   laser: false,
   grapple: false,
 };

@@ -140,7 +140,7 @@ describe("Draft", () => {
     expect(d.apply("a", { type: "place", ...spot })).toBeNull();
     const v = d.view("a");
     expect(v.held).toBeNull();
-    expect(v.cells).toHaveLength(9);
+    expect(v.cells).toHaveLength(11);
     expect(v.offers).toHaveLength(OFFER_COUNT);
     expect(v.offers.some((p) => hand.includes(p.id))).toBe(false);
   });
@@ -176,8 +176,10 @@ describe("Draft", () => {
     d.apply("a", { type: "takeOffer", pieceId: d.view("a").offers[0]!.id });
     expect(d.apply("a", { type: "place", x: -3, y: -3, rot: 0, flip: false })).toBe("Off the hull");
     expect(d.apply("a", { type: "place", x: core.x, y: core.y, rot: 0, flip: false })).toMatch(/Overlaps|Off the hull/);
-    // Bottom-left corner of the hull: on the hull but nowhere near the core.
-    const far = findSpot(d, "a", (cells) => cells.every((c) => Math.abs(c.x - core.x) + Math.abs(c.y - core.y) > 2));
+    // On the hull but touching no part of the cockpit.
+    const cockpit = cockpitCells(core.x, core.y);
+    const far = findSpot(d, "a", (cells) => cells.every((c) => cockpit.every((k) => Math.abs(c.x - k.x) + Math.abs(c.y - k.y) > 1)));
+    expect(far).not.toBeNull();
     if (far) expect(d.apply("a", { type: "place", ...far })).toBe("Not attached");
   });
 
@@ -197,7 +199,7 @@ describe("Draft", () => {
         const cells = d.blueprintCells(id);
         // Pentominoes can leave gaps nothing fits in, especially on the odd-shaped hulls.
         expect(cells.length).toBeGreaterThan(hullBuildable(hull).length * 0.5);
-        expect(cells.filter((c) => c.type === "core")).toHaveLength(4);
+        expect(cells.filter((c) => c.type === "core")).toHaveLength(6);
         expect(cells.some((c) => c.type === "engine")).toBe(true);
         expect(new Set(cells.map((c) => `${c.x},${c.y}`)).size).toBe(cells.length);
       }

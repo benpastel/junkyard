@@ -85,14 +85,17 @@ export function openChecker(cells: readonly { x: number; y: number }[]) {
 }
 
 /**
- * The cockpit: four core cells laid out like a keyboard's arrow keys, nose up.
- *   . U .
- *   L D R
- * Each cell's dir is the key it stands for. Offsets are from the "D" cell (the hull's 'C'),
- * which is also the ship's centre in the arena.
+ * The cockpit: six core cells laid out like the flying keys, nose up.
+ *   Q W E      rotate left, up, rotate right
+ *   A S D      left, down, right
+ * Offsets are from the "S" cell (the hull's 'C'), which is also the ship's centre in the arena.
+ * The bottom row's dir is the way its key pushes; the top row's is all up (Q and E are told
+ * apart by where they sit).
  */
 export const COCKPIT_LAYOUT: readonly { dx: number; dy: number; dir: Dir }[] = [
+  { dx: -1, dy: -1, dir: 0 },
   { dx: 0, dy: -1, dir: 0 },
+  { dx: 1, dy: -1, dir: 0 },
   { dx: 1, dy: 0, dir: 1 },
   { dx: 0, dy: 0, dir: 2 },
   { dx: -1, dy: 0, dir: 3 },

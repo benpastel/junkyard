@@ -17,6 +17,7 @@ import {
 } from "./view.js";
 import type { ArenaSetup } from "./index.js";
 import { HAZARD_SAW, SHEEP, type Scenario } from "./scenarios.js";
+import { keyMask, planThrust } from "./thrust.js";
 
 const DT = 1 / TICK_HZ;
 
@@ -75,7 +76,7 @@ export interface ShipRecord {
   /** Team games: index into TEAMS; null in a free-for-all. */
   team: number | null;
   body: SimBody;
-  /** The cockpit's core cells (one, or four laid out like the arrow keys). Lose any and you lose them all. */
+  /** The cockpit's core cells (one, or six laid out like the flying keys). Lose any and you lose them all. */
   cockpit: SimCell[];
   alive: boolean;
   deathTick: number | null;
@@ -87,6 +88,11 @@ export interface ShipRecord {
   /** Tick until which the ship takes no damage. */
   /** Power-up: until this tick the whole outer surface reflects lasers like a mirror. */
   mirroredUntil: number;
+  /** Steering keys held this tick (KEY_BITS), for the cockpit's lit keys. */
+  keys: number;
+  /** Thrust plans by key mask, good while the working engines and centre of mass stay as they were. */
+  plans: Map<number, number[]>;
+  plansFor: string;
 }
 
 interface Hook {
@@ -232,6 +238,9 @@ export class Arena {
         cellsLost: 0,
         cellCount: cells.length,
         mirroredUntil: 0,
+        keys: 0,
+        plans: new Map(),
+        plansFor: "",
       };
       this.ships.push(rec);
       this.shipByPlayer.set(bp.playerId, rec);
@@ -643,6 +652,7 @@ export class Arena {
         if (thr.length) s.thr = thr;
         if (chg.length) s.chg = chg;
         const ship = this.shipOf(b);
+        if (ship?.alive && ship.keys) s.keys = ship.keys;
         if (ship && ship.mirroredUntil > this.tickCount) s.mir = 1;
       }
       if (b.kind === "rock") s.rock = 1;
@@ -927,10 +937,34 @@ export class Arena {
 
   // ---------------------------------------------------------------- systems
 
+  /**
+   * The ship's working engines and how hard to fire each for these keys (see thrust.ts).
+   * Plans are cached until an engine is lost or uncovered, or the centre of mass moves.
+   */
+  thrustPlan(ship: ShipRecord, mask: number): { engines: SimCell[]; throttle: number[] } {
+    const rb = ship.body.rb;
+    const engines = ship.body.cells.filter((c) => c.alive && c.type === "engine" && this.isOpen(c));
+    if (!rb) return { engines, throttle: engines.map(() => 0) };
+    const com = rb.localCom();
+    const sig = `${engines.map((c) => c.cid).join(",")}@${com.x.toFixed(3)},${com.y.toFixed(3)}`;
+    if (sig !== ship.plansFor) {
+      ship.plans.clear();
+      ship.plansFor = sig;
+    }
+    let throttle = ship.plans.get(mask);
+    if (!throttle) {
+      throttle = planThrust(engines.map((c) => ({ x: c.x - com.x, y: c.y - com.y, dir: c.dir })), mask);
+      ship.plans.set(mask, throttle);
+    }
+    return { engines, throttle };
+  }
+
   private applyEngines(ship: ShipRecord, input: InputState) {
     const rb = ship.body.rb;
     if (!rb) return;
-    const fired: Record<Dir, boolean> = { 0: input.up, 1: input.right, 2: input.down, 3: input.left };
+    ship.keys = keyMask(input);
+    const plan = this.thrustPlan(ship, ship.keys);
+    const want = new Map(plan.engines.map((c, i) => [c, plan.throttle[i]!]));
     const t = rb.translation();
     const a = rb.rotation();
     const cos = Math.cos(a);
@@ -938,7 +972,8 @@ export class Arena {
     const ramp = DT / SIM.engineRampSeconds;
     for (const c of ship.body.cells) {
       if (!c.alive || c.type !== "engine") continue;
-      c.thrust = fired[c.dir] && this.isOpen(c) ? Math.min(1, c.thrust + ramp) : Math.max(0, c.thrust - ramp * 2);
+      const target = want.get(c) ?? 0;
+      c.thrust = c.thrust < target ? Math.min(target, c.thrust + ramp) : Math.max(target, c.thrust - ramp * 2);
       if (c.thrust <= 0) continue;
       const d = DIR_VECTORS[c.dir];
       const f = SIM.engineForce * c.thrust * DT;

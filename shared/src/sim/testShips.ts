@@ -37,7 +37,7 @@ export function parseShip(rows: string[]): Cell[] {
       if (m) cells.push({ x, y, type: m[0], dir: m[1] });
     }),
   );
-  // Each 'k' lobe stands for the key matching where it sits around the C (above, right, left).
+  // Each 'k' lobe stands for the key matching where it sits around the C (top row up, then right, left).
   const c = cells.find((q) => q.type === "core" && q.dir === 2);
   if (c) {
     for (const q of cells) {
@@ -53,7 +53,7 @@ export const SANDBOX_SHIPS: { name: string; rows: string[] }[] = [
     name: "Balanced",
     rows: [
       ".iMi.",
-      ">#k#<",
+      ">kkk<",
       ".kCk.",
       ".###.",
       ".^#^.",
@@ -62,7 +62,8 @@ export const SANDBOX_SHIPS: { name: string; rows: string[] }[] = [
   {
     name: "Lopsided",
     rows: [
-      "ik#.",
+      "i...",
+      "kkk.",
       "kCk<",
       "^#..",
       "^...",
@@ -71,7 +72,8 @@ export const SANDBOX_SHIPS: { name: string; rows: string[] }[] = [
   {
     name: "Tiny",
     rows: [
-      "iki",
+      "i.i",
+      "kkk",
       "kCk",
       "^.^",
     ],
@@ -80,7 +82,7 @@ export const SANDBOX_SHIPS: { name: string; rows: string[] }[] = [
     name: "Brute",
     rows: [
       "RAGAR",
-      ">#k#<",
+      ">kkk<",
       "#kCk#",
       "#####",
       "^^.^^",

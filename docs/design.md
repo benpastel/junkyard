@@ -54,7 +54,7 @@ Online multiplayer, fast-paced, round-based game:
 - Special cells have a facing that rotates with the piece.
 - **Damage is per cell**: single cells get destroyed / fall off. A piece is only a placement unit; after placement the ship is just a grid of cells.
 - **Covered parts do nothing.** Lasers and grapples work only while the straight line from them to the ship's edge is clear (so they never shoot their own ship). Engines and saws just need the square next to them in their working direction open (a saw also needs its two front diagonals). Saws never cut their own ship. Shooting away the cover switches it on. Covered parts are drawn dimmed.
-- The **cockpit** is four core cells laid out like the arrow keys (up on top; left, down, right below), drawn as one dome with a backlit arrow per key that glows while it's held (for other ships: while those engines fire). Lose any part of it and the whole cockpit blows, killing the ship. If destroying cells disconnects part of the ship from the core, that part breaks off as debris. Ship dies when the core dies.
+- The **cockpit** is six core cells laid out like the flying keys (Q W E over A S D: turn left, up, turn right; left, down, right), drawn as one dome with a backlit glyph per key that glows while it's held (everyone's held keys are in the snapshots). Lose any part of it and the whole cockpit blows, killing the ship. If destroying cells disconnects part of the ship from the core, that part breaks off as debris. Ship dies when the core dies.
 
 ## Art
 
@@ -68,12 +68,12 @@ Online multiplayer, fast-paced, round-based game:
 
 ## Combat
 
-- **Movement:** arrow keys. Each direction fires all engines facing the matching way (up fires back-facing engines), in the ship's frame.
-- **Physics:** thrust is applied at each engine's actual position, so a lopsided engine layout spins the ship. Ships are only sensible to pilot with weight-symmetric engines, and get weirder as cells fly off. That's intended.
-- **Rotation** will be hard with this scheme; dedicated rotation pieces (gyros) are a likely addition.
+- **Movement:** arrow keys or WASD push the ship that way, Q / E turn it, all in the ship's frame (the camera turns with the ship, so that's also the screen's). Several at once combine (diagonals, moving while turning).
+- **Thrust planning** (`shared/src/sim/thrust.ts`): the keys say what's wanted; the sim picks a throttle (0–1) for every working engine to get as much of it as possible while holding everything not asked for at exactly zero, so up goes straight with no spin or drift, partly firing engines where that balances. If nothing can be had that way (a lone off-centre engine), it fires anyway with as little unasked-for push and spin as it can. A small linear program, re-solved only when an engine is lost or uncovered or the centre of mass moves.
+- **Physics:** thrust is still applied at each engine's actual position. A lopsided layout no longer spins you, it just makes you slower in the directions that need balancing; losing engines mid-fight costs speed, not control. A ship whose engines all line up through its centre can't turn (its Q / E grey out).
 - **Weapons:** fixed-direction, one key per weapon type. Lasers fire automatically whenever their line is clear; X = grapple (toggle).
 - **Fast-forward:** an F button in the arena; once every connected human in the fight (dead ones too) has voted, the fight runs at 4× until it is decided. Snapshots stay at 20/s, and the client playback clock follows the sim speed.
-- **Cockpit arrows** grey out for directions with no working engine; pressing one shows a red X.
+- **Cockpit keys** grey out when no working engine can answer them (a direction needs an engine pushing that way; a turn needs one off-centre enough to turn that way); pressing one shows a red X.
 - **Camera:** C (or the camera button, which names the current mode) flips between the fixed view and the ship-up view (prototype; remembered per browser). Both show a fading trail behind your ship and a distant dust layer.
 - Once every human in the fight is dead, it fast-forwards on its own.
 - **Controls bar:** the arena shows each key as a clickable button that lights while held; the draft uses the same buttons for rotate (Q/E), flip (F) and discard (Esc).
@@ -93,6 +93,7 @@ Online multiplayer, fast-paced, round-based game:
   - Building: hard bots take a draft action every 1.5–3s, medium 2.4–4.8s, easy 3.75–7.5s. This is the biggest difficulty lever: slower builders field smaller ships.
   - Flying: easy reacts slowest with the sloppiest aim; medium as before; hard aims steadier, goes after small nearby ships, side-steps enemy laser lines, and fights from the edge of laser range when outgunned.
   - Faster reactions measured worse (the thrust controller over-corrects), so hard thinks as often as medium.
+  - Steering: each decision tries every key combination (at most one of each opposing pair, 27 in all) using the same thrust plans players get, and keeps the one whose push and spin best match a short look-ahead.
 - All bots only charge in to ram with a working saw lined up; otherwise they hold distance (lasers ~8, unarmed ~12) and turn round to retreat if they can't thrust in reverse.
 
 ## Architecture
@@ -144,7 +145,7 @@ Expect ~50–100ms of input lag. Hide it with game feel:
 ## Phones and fullscreen
 
 - Build screen on phones (< 720px wide): status bar (timer, Done, fullscreen), offers (smaller than the board), board, then the buttons at the bottom. On touch a piece only moves by being dragged: from its offer, or picked up again from wherever it was left (anywhere in its box counts). It is placed when a drag ends on a spot it fits; taps never move or place it, so rotating turns it in place. Snapping is forgiving (mouse too): of the grid spots within 1.2 squares of where the piece is, the nearest one it fits wins. The board sits right under the offers. Sized with `100dvh` so the page never scrolls under a drag.
-- Fight on touch screens: a big copy of the cockpit's arrow keys bottom left (hold to fire; dead directions grey). A phone button above it switches to tilt steering (experimental): how the phone is held when switched on counts as level; leaning more than 8° in any direction fires that way, with the angle picking one of eight 45° slices so diagonals fire two engine groups (tip the top away = up); a gauge with a dot shows the lean. The choice (tilt or pad) is remembered per browser; if remembered tilt gets no readings (iPhone needs a tap to allow it), it falls back to the pad.
+- Fight on touch screens: a big copy of the cockpit's keys bottom left (Q W E over A S D; hold to fly; dead keys grey). In tilt mode the two turn keys sit beside the gauge. A phone button above it switches to tilt steering (experimental): how the phone is held when switched on counts as level; leaning more than 8° in any direction fires that way, with the angle picking one of eight 45° slices so diagonals fire two engine groups (tip the top away = up); a gauge with a dot shows the lean. The choice (tilt or pad) is remembered per browser; if remembered tilt gets no readings (iPhone needs a tap to allow it), it falls back to the pad.
 - Backdrop (`?look=` to compare others; default `sky`): one far sky layer (landmark image + stars) that turns with the view and barely slides; dust on the play plane moves exactly with you.
 - Asteroids: lumpy rock bodies (rock cells), radius 1.5–3.8 weighted toward small, scattered at the start, about one per laptop screen of arena (`rocksPerArea`), clear of spawns and the centre, drifting slowly. Lasers and saws chip them, a fast collision costs both sides a cell like any impact, big broken chunks stay rock and small ones crumble to rubble.
 - Far backdrop images: one of five dark generated images (client/public/backgrounds, generator in tools/backgrounds) per fight, the same for everyone. A disc 1.3× the screen diagonal with landmarks round its edge; it turns with the view to show heading and slides only a few dozen pixels across the whole arena. `?bg=1..5` forces one.

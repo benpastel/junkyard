@@ -1,6 +1,6 @@
 // Canvas 2D arena renderer. Consumes snapshots, interpolates ~100ms behind the
 // newest one, and draws ships, effects, the rubber ring and the power-up. No React in here.
-import type { PlayerId } from "@ja/shared";
+import type { InputState, PlayerId } from "@ja/shared";
 import {
   DEBRIS_LIFETIME_SECONDS,
   TICK_HZ,
@@ -13,6 +13,8 @@ import {
   type InitCell,
   type SheepSnap,
   angleDiff,
+  keyMask,
+  steerKeysOfCells,
 } from "@ja/shared/sim/view";
 import { TEAMS, openChecker } from "@ja/shared";
 import { NEON, cockpitOrigin, drawCellPart, drawCellPlate, drawCockpit, drawHazardSaw, drawRockCell, mirrorSidesOf, type CellStyle } from "../art/cells";
@@ -620,14 +622,14 @@ export class ArenaRenderer {
   /** Your ship's recent world positions, for the fading trail in ship mode. */
   private trail: { x: number; y: number; t: number }[] = [];
 
-  /** Bitmask of dirs your ship has a working engine for, as of the last frame drawn. */
-  myEngineDirs = 15;
+  /** Steering keys (KEY_BITS) your ship's engines can answer, as of the last frame drawn. */
+  mySteerKeys = 63;
 
-  /** Arrow keys held, for panning the free camera once you have no ship. */
-  private pan = { up: false, down: false, left: false, right: false };
+  /** Keys held: your cockpit lights them, and the arrows pan the free camera once you have no ship. */
+  private pan: InputState | null = null;
 
-  setPan(keys: { up: boolean; down: boolean; left: boolean; right: boolean }) {
-    this.pan = { up: keys.up, down: keys.down, left: keys.left, right: keys.right };
+  setPan(keys: InputState) {
+    this.pan = { ...keys };
   }
 
   /**
@@ -678,8 +680,8 @@ export class ArenaRenderer {
       this.camera = { x: 0, y: 0, zoom: fit };
       this.cameraReady = true;
     }
-    const sx = (this.pan.right ? 1 : 0) - (this.pan.left ? 1 : 0);
-    const sy = (this.pan.down ? 1 : 0) - (this.pan.up ? 1 : 0);
+    const sx = (this.pan?.right ? 1 : 0) - (this.pan?.left ? 1 : 0);
+    const sy = (this.pan?.down ? 1 : 0) - (this.pan?.up ? 1 : 0);
     if (sx || sy) {
       // Screen directions back into world directions (undo the view's turn).
       const speed = (PAN_CELLS_PER_SECOND / this.camera.zoom) * dt;
@@ -1248,7 +1250,7 @@ export class ArenaRenderer {
       time: nowMs / 1000,
     });
     // Two passes: parts overhang their square, so they go on top of every plate.
-    // A full cockpit is drawn once over its four cells, its arrows lit for the keys being held.
+    // A full cockpit is drawn once over its six cells, its keys lit while held.
     const cockpit = debris ? null : cockpitOrigin(cells.cells.flatMap((cid) => this.cellInfo.get(cid) ?? []));
     for (const pass of [drawCellPlate, null] as const) {
       cells.cells.forEach((cid, i) => {
@@ -1267,8 +1269,8 @@ export class ArenaRenderer {
     if (cockpit && b.owner) {
       ctx.save();
       ctx.translate((cockpit.x - 0.5) * S, (cockpit.y - 0.5) * S);
-      const available = this.engineDirs(cells.cells);
-      if (b.owner === this.me) this.myEngineDirs = available;
+      const available = this.steerKeys(cells.cells);
+      if (b.owner === this.me) this.mySteerKeys = available;
       drawCockpit(ctx, S, {
         color: this.shipInfo.get(b.owner)?.color ?? "#fff",
         held: this.heldKeys(b),
@@ -1279,32 +1281,16 @@ export class ArenaRenderer {
     ctx.restore();
   }
 
-  /** Bitmask of the dirs this ship has at least one working (intact, uncovered) engine for. */
-  private engineDirs(cids: readonly number[]): number {
-    const isOpen = this.openCheckerFor(cids);
-    let dirs = 0;
-    for (const cid of cids) {
-      const c = this.cellInfo.get(cid);
-      if (c?.type === "engine" && isOpen(c)) dirs |= 1 << c.dir;
-    }
-    return dirs;
+  /** The steering keys (KEY_BITS) this ship's working (intact, uncovered) engines can answer. */
+  private steerKeys(cids: readonly number[]): number {
+    const cells = cids.flatMap((cid) => this.cellInfo.get(cid) ?? []);
+    return steerKeysOfCells(cells, this.openCheckerFor(cids));
   }
 
-  /**
-   * Which arrow keys a ship is holding, as a bitmask over dirs: your own straight from the
-   * keyboard; anyone else's from which of their engines are firing.
-   */
+  /** Steering keys a ship is holding (KEY_BITS): your own straight from the keyboard; anyone else's from the snapshot. */
   private heldKeys(b: BodyView): number {
-    if (b.owner === this.me) {
-      const k = this.pan;
-      return (k.up ? 1 : 0) | (k.right ? 2 : 0) | (k.down ? 4 : 0) | (k.left ? 8 : 0);
-    }
-    let held = 0;
-    for (const [cid] of b.snap.thr ?? []) {
-      const c = this.cellInfo.get(cid);
-      if (c) held |= 1 << c.dir;
-    }
-    return held;
+    if (b.owner === this.me) return this.pan ? keyMask(this.pan) : 0;
+    return b.snap.keys ?? 0;
   }
 
   private drawEngines(ctx: CanvasRenderingContext2D, b: BodyView, S: number, toScreen: (x: number, y: number) => { x: number; y: number }, nowMs: number) {
