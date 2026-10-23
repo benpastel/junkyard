@@ -1283,9 +1283,18 @@ export class ArenaRenderer {
 
   /** The steering keys (KEY_BITS) this ship's working (intact, uncovered) engines can answer. */
   private steerKeys(cids: readonly number[]): number {
-    const cells = cids.flatMap((cid) => this.cellInfo.get(cid) ?? []);
-    return steerKeysOfCells(cells, this.openCheckerFor(cids));
+    // A ship's cells only change when it breaks, and working out its turn keys takes a solve.
+    const key = cids.join(",");
+    let keys = this.steerCache.get(key);
+    if (keys === undefined) {
+      const cells = cids.flatMap((cid) => this.cellInfo.get(cid) ?? []);
+      keys = steerKeysOfCells(cells, this.openCheckerFor(cids));
+      if (this.steerCache.size > 500) this.steerCache.clear();
+      this.steerCache.set(key, keys);
+    }
+    return keys;
   }
+  private readonly steerCache = new Map<string, number>();
 
   /** Steering keys a ship is holding (KEY_BITS): your own straight from the keyboard; anyone else's from the snapshot. */
   private heldKeys(b: BodyView): number {

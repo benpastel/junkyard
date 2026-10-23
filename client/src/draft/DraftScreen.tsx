@@ -14,7 +14,7 @@ import {
   type DraftView,
   type Piece,
 } from "@ja/shared/draft";
-import { BOARD_PAD, Board, touchTrack, type DragState } from "./Board";
+import { BOARD_PAD, Board, drives, otherTouchDragging, touchTrack, type DragState } from "./Board";
 import { PIECE_PAD, PieceCanvas } from "./PieceCanvas";
 import { RivalShip } from "./RivalShip";
 import { FullscreenButton } from "../ui/FullscreenButton";
@@ -66,8 +66,6 @@ export function DraftScreen(props: {
     () => (held ? transformCells(held.cells, rot, flip) : null),
     [held, rot, flip],
   );
-  const heldBox = useRef({ w: 1, h: 1 });
-  if (heldShape) heldBox.current = shapeBox(heldShape);
 
   // Rotate and flip turn only the held piece (about the pointer), or, with nothing held, every offer.
   const handIds = [...view.offers, ...view.pool].map((p) => p.id).join(" ");
@@ -83,16 +81,23 @@ export function DraftScreen(props: {
     [heldId, handIds],
   );
 
-  const rotate = useCallback(
-    (by: 1 | -1) => {
-      const { w, h } = heldBox.current;
-      if (heldId)
-        setGrab((g) =>
-          by === 1 ? { x: h - g.y, y: g.x } : { x: g.y, y: w - g.x },
-        );
-      turn((o) => ({ ...o, rot: ((o.rot + by + 4) % 4) as Dir }));
+  // Turning the held piece keeps it where it is on screen (see stayPut); the pointer keeps its
+  // spot, so the grab point moves by however far the piece's corner did.
+  const reorient = useCallback(
+    (f: (o: Orient) => Orient) => {
+      if (held) {
+        const next = f(orientOf(held.id));
+        const t = stayPut(transformCells(held.cells, rot, flip), transformCells(held.cells, next.rot, next.flip));
+        setGrab((g) => ({ x: g.x - t.x, y: g.y - t.y }));
+      }
+      turn(f);
     },
-    [heldId, turn],
+    [held, rot, flip, turn],
+  );
+
+  const rotate = useCallback(
+    (by: 1 | -1) => reorient((o) => ({ ...o, rot: ((o.rot + by + 4) % 4) as Dir })),
+    [reorient],
   );
 
   const reroll = useCallback(() => {
@@ -106,6 +111,31 @@ export function DraftScreen(props: {
     act({ type: "discard" });
     setPending(null);
   }, [act, held]);
+
+  // Letting go of the piece over the offers puts it back, as Esc does: the end of a drag, or a
+  // click on the row between the cards. Capture phase, so the drag hasn't been cleared yet.
+  const offersRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let pressOnCard = false;
+    const down = (e: PointerEvent) => {
+      if (drives(e)) pressOnCard = e.target instanceof Element && e.target.closest(".piece-card") !== null;
+    };
+    const up = (e: PointerEvent) => {
+      const r = offersRef.current?.getBoundingClientRect();
+      if (!r || e.button !== 0 || !drives(e)) return;
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+      const d = drag.current;
+      const dragged = d.active && d.moved;
+      const clicked = !d.active && e.pointerType !== "touch" && !pressOnCard;
+      if (dragged || clicked) discard();
+    };
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("pointerup", up, true);
+    return () => {
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointerup", up, true);
+    };
+  }, [discard]);
 
   const take = (
     piece: Piece,
@@ -139,11 +169,10 @@ export function DraftScreen(props: {
 
   // Always mirror left-right as seen on screen. The transform mirrors before rotating, and
   // mirroring after a rotation r is the same as mirroring first and rotating by -r.
-  const toggleFlip = useCallback(() => {
-    const { w } = heldBox.current;
-    if (heldId) setGrab((g) => ({ x: w - g.x, y: g.y }));
-    turn((o) => ({ rot: ((4 - o.rot) % 4) as Dir, flip: !o.flip }));
-  }, [heldId, turn]);
+  const toggleFlip = useCallback(
+    () => reorient((o) => ({ rot: ((4 - o.rot) % 4) as Dir, flip: !o.flip })),
+    [reorient],
+  );
 
   // Keyboard: Q / E rotate, F flips, Esc puts the piece back, R rerolls the offers.
   useEffect(() => {
@@ -290,6 +319,7 @@ export function DraftScreen(props: {
       <section className="draft-hand">
         <div
           className="draft-offers"
+          ref={offersRef}
           style={{ height: OFFER_CELLS * offerCell, gap: GAP }}
         >
           {view.dealing ? (
@@ -457,6 +487,37 @@ const COMPACT_WIDTH = 720;
 /** Height of the offer row, in squares: room for a piece five squares tall. */
 const OFFER_CELLS = 5.6;
 
+/**
+ * Where a piece's turned shape should go so it looks to stay put: the offset (in whole squares)
+ * from the old shape's corner to the new one's that keeps its middle (the average of its squares)
+ * closest to where it was, and of those, keeps the most squares where they were. A T flipped
+ * keeps its stem; turned, its centre square; an L flipped keeps its long side.
+ */
+function stayPut(before: readonly { x: number; y: number }[], after: readonly { x: number; y: number }[]) {
+  const mid = (cs: readonly { x: number; y: number }[]) => ({
+    x: cs.reduce((s, c) => s + c.x, 0) / cs.length,
+    y: cs.reduce((s, c) => s + c.y, 0) / cs.length,
+  });
+  const a = mid(before);
+  const b = mid(after);
+  const was = new Set(before.map((c) => `${c.x},${c.y}`));
+  let best = { x: 0, y: 0 };
+  let bestScore = -Infinity;
+  for (let dx = Math.floor(a.x - b.x) - 1; dx <= Math.ceil(a.x - b.x) + 1; dx++) {
+    for (let dy = Math.floor(a.y - b.y) - 1; dy <= Math.ceil(a.y - b.y) + 1; dy++) {
+      const shift = Math.hypot(b.x + dx - a.x, b.y + dy - a.y);
+      const kept = after.filter((c) => was.has(`${c.x + dx},${c.y + dy}`)).length;
+      // Shifts within a hair of each other tie; then squares kept decide.
+      const score = -Math.round(shift * 1000) * 100 + kept;
+      if (score > bestScore) {
+        bestScore = score;
+        best = { x: dx, y: dy };
+      }
+    }
+  }
+  return best;
+}
+
 function shapeBox(cells: readonly { x: number; y: number }[]) {
   return {
     w: Math.max(...cells.map((c) => c.x)) + 1,
@@ -599,9 +660,9 @@ function PieceCard(props: {
     <button
       className={`piece-card${small ? " small" : ""}${held ? " active held" : ""}`}
       onPointerDown={(e) => {
-        if (e.button !== 0) return;
+        if (e.button !== 0 || otherTouchDragging(e)) return;
         e.preventDefault();
-        if (e.pointerType === "touch") touchTrack.on = true;
+        if (e.pointerType === "touch") touchTrack.id = e.pointerId;
         drag.current = {
           active: true,
           startX: e.clientX,
@@ -652,7 +713,7 @@ function FloatingPiece(props: {
   // (It ignores pointers itself, so catch the touch first, before whatever is underneath.)
   useEffect(() => {
     const down = (e: PointerEvent) => {
-      if (e.pointerType !== "touch") return;
+      if (e.pointerType !== "touch" || otherTouchDragging(e)) return;
       const { cells, cell, drag, onGrab } = latest.current;
       const r = ref.current!.getBoundingClientRect();
       const px = (e.clientX - r.left) / cell - PIECE_PAD;
@@ -665,7 +726,7 @@ function FloatingPiece(props: {
       lastPointer.x = e.clientX;
       lastPointer.y = e.clientY;
       onGrab({ x: px, y: py });
-      touchTrack.on = true;
+      touchTrack.id = e.pointerId;
       drag.current = { active: true, startX: e.clientX, startY: e.clientY, moved: false };
     };
     window.addEventListener("pointerdown", down, { capture: true });
@@ -681,7 +742,7 @@ function FloatingPiece(props: {
     };
     place(lastPointer.x, lastPointer.y);
     const move = (e: PointerEvent) => {
-      if (e.pointerType === "touch" && !touchTrack.on) return;
+      if (!drives(e)) return;
       place(e.clientX, e.clientY);
     };
     window.addEventListener("pointermove", move);
@@ -699,7 +760,7 @@ function FloatingPiece(props: {
 const lastPointer = { x: -1000, y: -1000 };
 if (typeof window !== "undefined") {
   const track = (e: PointerEvent) => {
-    if (e.pointerType === "touch" && !touchTrack.on) return;
+    if (!drives(e)) return;
     lastPointer.x = e.clientX;
     lastPointer.y = e.clientY;
   };

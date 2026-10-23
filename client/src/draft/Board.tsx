@@ -17,10 +17,20 @@ const FLASH_MS = 320;
 const SNAP_SLACK = 1.2;
 
 /**
- * Whether a touch currently drives the held piece: only a touch that began on an offer or on the
- * board does. Taps elsewhere (the rotate buttons) must not drag the piece over to the finger.
+ * The touch driving the held piece, if any: only a touch that began on an offer or on the board
+ * does. Other fingers (on the rotate and flip buttons, even mid-drag) must not move or drop it.
  */
-export const touchTrack = { on: false };
+export const touchTrack = { id: null as number | null };
+
+/** Whether this pointer moves the held piece: the mouse always, a touch only if it's the one dragging. */
+export function drives(e: PointerEvent): boolean {
+  return e.pointerType !== "touch" || e.pointerId === touchTrack.id;
+}
+
+/** Another finger is already dragging the piece. */
+export function otherTouchDragging(e: { pointerType: string; pointerId: number }): boolean {
+  return e.pointerType === "touch" && touchTrack.id !== null && touchTrack.id !== e.pointerId;
+}
 /** Margin around the hull, in cells, so parts overhanging the outer squares aren't clipped. */
 export const BOARD_PAD = 1;
 const PAD = BOARD_PAD;
@@ -217,19 +227,20 @@ export function Board(props: {
   useEffect(track, [track, anchorAt, rot, flip, held]);
   useEffect(() => {
     const move = (e: PointerEvent) => {
-      if (e.pointerType === "touch" && !touchTrack.on) return;
+      if (!drives(e)) return;
       pointer.current = { x: e.clientX, y: e.clientY };
       track();
       const d = drag.current;
       if (d.active && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 6) d.moved = true;
     };
     const up = (e: PointerEvent) => {
+      if (!drives(e)) return;
       const d = drag.current;
       const fromDrag = d.active && d.moved;
       const fromBoard = downOnBoard.current;
       d.active = false;
       downOnBoard.current = false;
-      if (e.pointerType === "touch") touchTrack.on = false;
+      if (e.pointerType === "touch") touchTrack.id = null;
       // Touch places only at the end of a drag; with a mouse, a click on the board places too.
       if (e.button !== 0 || !(fromDrag || (fromBoard && e.pointerType !== "touch"))) return;
       const { held, rot, flip, anchorAt, onPlace } = latest.current;
@@ -238,11 +249,20 @@ export function Board(props: {
       const cells = placedCells(held, a.x, a.y, rot, flip);
       if (placementError(buildable.current, latest.current.cells, cells) === null) onPlace(a.x, a.y);
     };
+    // A touch the browser takes over (a scroll, a system gesture) never ends with pointerup.
+    const cancel = (e: PointerEvent) => {
+      if (e.pointerType !== "touch" || e.pointerId !== touchTrack.id) return;
+      touchTrack.id = null;
+      drag.current.active = false;
+      downOnBoard.current = false;
+    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
     return () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
     };
   }, [drag, track]);
 
@@ -250,7 +270,7 @@ export function Board(props: {
     <div
       className="draft-board"
       onPointerDown={(e) => {
-        if (e.button !== 0) return;
+        if (e.button !== 0 || otherTouchDragging(e)) return;
         if (e.pointerType === "touch") {
           // Touch only ever moves the piece by dragging it: a touch on the held piece picks it
           // up from that spot (so it doesn't jump); a tap anywhere else does nothing.
@@ -258,7 +278,7 @@ export function Board(props: {
           if (!at) return;
           onGrab(at);
           downOnBoard.current = true;
-          touchTrack.on = true;
+          touchTrack.id = e.pointerId;
           drag.current = { active: true, startX: e.clientX, startY: e.clientY, moved: false };
           pointer.current = { x: e.clientX, y: e.clientY };
           return;

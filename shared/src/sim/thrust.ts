@@ -34,11 +34,15 @@ export function engineWrench(e: EngineArm): [number, number, number] {
 const STRICT_ENOUGH = 0.3;
 /** Fallback: how much each unit of unasked-for push or spin costs against a unit of what was asked. */
 const SLOPPY_COST = 0.5;
+/** Spin is counted in engines at least this many cells out, so an engine just off-centre barely turns. */
+const LEVER_UNIT = 1;
+/** A turn key does anything once its plan turns the ship by this much (in LEVER_UNIT engines). */
+const MIN_TURN = 0.1;
 
 /**
  * Throttles (0..1, one per engine) for the held keys. Opposite keys held together cancel.
- * Spin is measured against the ship's longest engine lever, so a unit of it is as much as the
- * best-placed engine can turn the ship.
+ * Spin is measured against the ship's longest engine lever (at least LEVER_UNIT), so a unit of it
+ * is as much as the best-placed engine can turn the ship.
  */
 export function planThrust(engines: readonly EngineArm[], mask: number): number[] {
   const n = engines.length;
@@ -48,7 +52,7 @@ export function planThrust(engines: readonly EngineArm[], mask: number): number[
   if (want.every((w) => w === 0)) return none;
 
   const wrenches = engines.map(engineWrench);
-  const reach = Math.max(1e-6, ...wrenches.map((w) => Math.abs(w[2])));
+  const reach = Math.max(LEVER_UNIT, ...wrenches.map((w) => Math.abs(w[2])));
   for (const w of wrenches) w[2] /= reach;
   const asked = (u: number[]) => want.reduce((s, k, j) => s + k * wrenches.reduce((t, w, i) => t + w[j]! * u[i]!, 0), 0);
   const unasked = [0, 1, 2].filter((j) => want[j] === 0);
@@ -81,15 +85,15 @@ export function planThrust(engines: readonly EngineArm[], mask: number): number[
 
 /**
  * The steering keys that would do anything (KEY_BITS): a direction needs an engine pushing that
- * way; a turn needs an engine off-centre enough to turn the ship that way.
+ * way; a turn needs its plan to turn the ship by a noticeable amount.
  */
 export function steerKeys(engines: readonly EngineArm[]): number {
   let m = 0;
-  for (const e of engines) {
-    m |= 1 << e.dir; // KEY_BITS' directions are 1 << dir
-    const spin = engineWrench(e)[2];
-    if (spin > 1e-3) m |= KEY_BITS.rotRight;
-    if (spin < -1e-3) m |= KEY_BITS.rotLeft;
+  for (const e of engines) m |= 1 << e.dir; // KEY_BITS' directions are 1 << dir
+  for (const [bit, sign] of [[KEY_BITS.rotRight, 1], [KEY_BITS.rotLeft, -1]] as const) {
+    const u = planThrust(engines, bit);
+    const spin = engines.reduce((s, e, i) => s + engineWrench(e)[2] * u[i]!, 0);
+    if (sign * spin >= MIN_TURN * LEVER_UNIT) m |= bit;
   }
   return m;
 }

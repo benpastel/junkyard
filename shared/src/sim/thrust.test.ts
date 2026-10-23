@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { KEY_BITS, engineWrench, planThrust, solveLP, type EngineArm } from "./thrust.js";
+import { KEY_BITS, engineWrench, planThrust, solveLP, steerKeys, type EngineArm } from "./thrust.js";
 
 /** Net push and spin of a plan. */
 function net(engines: EngineArm[], u: number[]) {
@@ -80,5 +80,21 @@ describe("planThrust", () => {
     const u = planThrust(engines, up | right);
     expect(u[0]).toBeCloseTo(1);
     expect(u[1]).toBeCloseTo(1);
+  });
+});
+
+describe("steerKeys", () => {
+  it("an engine just off-centre doesn't light the turn keys; one well out does", () => {
+    expect(steerKeys([{ x: 0.2, y: 2, dir: 0 }]) & (rotLeft | rotRight)).toBe(0);
+    expect(steerKeys([{ x: 3, y: 2, dir: 0 }]) & (rotLeft | rotRight)).toBe(rotLeft);
+  });
+  it("a balanced pair turns both ways", () => {
+    expect(steerKeys([{ x: -2, y: 1, dir: 0 }, { x: 2, y: 1, dir: 0 }]) & (rotLeft | rotRight)).toBe(rotLeft | rotRight);
+  });
+});
+
+describe("steerKeys on a small ship", () => {
+  it("engines one cell out still turn it", () => {
+    expect(steerKeys([{ x: -1, y: 1, dir: 0 }, { x: 1, y: 1, dir: 0 }]) & (rotLeft | rotRight)).toBe(rotLeft | rotRight);
   });
 });
