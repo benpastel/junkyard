@@ -35,7 +35,7 @@ const CHAT_HISTORY = 100;
 /** How long a dropped human keeps their seat between rounds (long enough to reload, or for a phone to wake up). */
 const SEAT_GRACE_MS = 120_000;
 /** Shortest wait between a bot's draft actions (up to twice this), by skill. */
-const DRAFT_BOT_MS: Record<BotSkill, number> = { easy: 3750, medium: 2400, hard: 1500 };
+const DRAFT_BOT_MS: Record<BotSkill, number> = { child: 5000, easy: 3750, medium: 2400, hard: 1500 };
 const BOT_NAMES = ["Rustbucket", "Scrapjaw", "Tinpot", "Clunker", "Bolt", "Dentz", "Gearmouth", "Hubcap"];
 const TICK_MS = 1000 / TICK_HZ;
 /** Never simulate more than this many ticks in one go after a stall. */

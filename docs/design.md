@@ -89,9 +89,9 @@ Online multiplayer, fast-paced, round-based game:
 
 ## Bots
 
-- Skill (setup): **Easy / Medium (default) / Hard**.
-  - Building: hard bots take a draft action every 1.5–3s, medium 2.4–4.8s, easy 3.75–7.5s. This is the biggest difficulty lever: slower builders field smaller ships.
-  - Flying: easy reacts slowest with the sloppiest aim; medium as before; hard aims steadier, goes after small nearby ships, side-steps enemy laser lines, and fights from the edge of laser range when outgunned.
+- Skill (setup): **Child / Easy / Medium (default) / Hard**, one setting for every bot at the table.
+  - Building: hard bots take a draft action every 1.5–3s, medium 2.4–4.8s, easy 3.75–7.5s, child 5–10s. This is the biggest difficulty lever: slower builders field smaller ships.
+  - Flying: each bot alternates stretches (1.5–4s) of minding the fight with stretches of wandering (its own heading, bent a little away from the nearest ship, facing anywhere). Child only wanders and never aims or grapples. Easy minds the fight 45% of the time and then aims within about ±40°. Medium always minds it, within about ±25°. Hard aims within about ±4° and turns so the lasers' own beams cross the target (not just point its way), goes after small nearby ships, side-steps enemy laser lines, and fights from the edge of laser range when outgunned. Measured over bot-only fights, a beam crosses the target 8% / 17% / 18% / 29% of the time with a foe in range. A bot's luck is seeded from its id and the fight's seed, so it differs every round.
   - Faster reactions measured worse (the thrust controller over-corrects), so hard thinks as often as medium.
   - Steering: each decision tries every key combination (at most one of each opposing pair, 27 in all) using the same thrust plans players get, and keeps the one whose push and spin best match a short look-ahead.
 - All bots only charge in to ram with a working saw lined up; otherwise they hold distance (lasers ~8, unarmed ~12) and turn round to retreat if they can't thrust in reverse.

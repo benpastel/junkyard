@@ -591,10 +591,11 @@ button.big {
 @media (max-width: 520px) {
   .segmented {
     display: flex;
+    align-self: stretch;
     max-width: 100%;
   }
   .segmented button {
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-width: 0;
     padding-left: 4px;
     padding-right: 4px;
@@ -637,4 +638,14 @@ button.big {
 .tutorial-best {
   color: var(--hazard);
   text-transform: none;
+}
+
+/* The narrowest phones: tighter type so four choices still fit. */
+@media (max-width: 360px) {
+  .segmented button {
+    font-size: 11px;
+    letter-spacing: 0;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
 }

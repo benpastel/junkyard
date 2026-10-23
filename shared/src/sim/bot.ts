@@ -12,6 +12,12 @@ interface BotState {
   input: InputState;
   aimNoise: number;
   hookedSince: number | null;
+  /** Whether it's minding the fight, until the tick after which it decides again. */
+  focused: boolean;
+  focusUntil: number;
+  /** Where it's wandering while not minding the fight: a heading to fly and one to face. */
+  wanderDir: number;
+  wanderFace: number;
 }
 
 const bots = new WeakMap<Arena, Map<PlayerId, BotState>>();
@@ -29,21 +35,38 @@ interface SkillProfile {
   reactRand: number;
   /** How far off (radians, peak to peak) its aim wanders. */
   aimNoise: number;
+  /**
+   * Share of the time it minds the fight (picks a target, faces it, keeps its distance); the rest
+   * it wanders about, drifting towards open space. Zero never aims at all.
+   */
+  focus: number;
   /** Go after small, nearby ships rather than just the nearest. */
   pickWeak: boolean;
   /** Side-step out of enemy laser lines. */
   dodge: boolean;
+  /** Turn so the lasers' own beams cross the target, not just so they point its way. */
+  lineUp: boolean;
   /** Fight from the edge of laser range when outgunned. */
   standoff: boolean;
 }
 
 export const BOT_SKILL_PROFILES: Record<BotSkill, SkillProfile> = {
-  easy: { reactMin: 14, reactRand: 10, aimNoise: 0.6, pickWeak: false, dodge: false, standoff: false },
-  medium: { reactMin: 8, reactRand: 8, aimNoise: 0.35, pickWeak: false, dodge: false, standoff: false },
+  // Child: flies about at random, never aims.
+  child: { reactMin: 20, reactRand: 16, aimNoise: 0, focus: 0, pickWeak: false, dodge: false, lineUp: false, standoff: false },
+  // Easy: faces you some of the time, and then only roughly.
+  easy: { reactMin: 14, reactRand: 10, aimNoise: 1.4, focus: 0.45, pickWeak: false, dodge: false, lineUp: false, standoff: false },
+  // Medium: always fighting, its weapons pointed your way give or take 25 degrees.
+  medium: { reactMin: 10, reactRand: 8, aimNoise: 0.9, focus: 1, pickWeak: false, dodge: false, lineUp: false, standoff: false },
   // Faster reactions measured worse (the thrust controller over-corrects), so hard thinks as
-  // often as medium; it wins on steadier aim and better choices.
-  hard: { reactMin: 8, reactRand: 8, aimNoise: 0.2, pickWeak: true, dodge: true, standoff: true },
+  // often as medium did; it wins on steady aim and better choices.
+  hard: { reactMin: 8, reactRand: 8, aimNoise: 0.15, focus: 1, pickWeak: true, dodge: true, lineUp: true, standoff: true },
 };
+/** How long a stretch of minding the fight, or of wandering, lasts (seconds): min + up to rand more. */
+const FOCUS_MIN_S = 1.5;
+const FOCUS_RAND_S = 2.5;
+/** Wandering speed (cells/s), and how strongly it steers away from the nearest ship. */
+const WANDER_SPEED = 4;
+const WANDER_AWAY = 0.2;
 
 /** Hard bots side-step this fast when an enemy laser is lined up on them. */
 const DODGE_SPEED = 5;
@@ -61,7 +84,19 @@ export function arenaBotInput(arena: Arena, playerId: PlayerId, skill: BotSkill 
   if (!perArena) bots.set(arena, (perArena = new Map()));
   let st = perArena.get(playerId);
   if (!st) {
-    st = { skill: BOT_SKILL_PROFILES[skill], rng: new Rng(hash(playerId)), nextDecision: 0, input: NO_INPUT, aimNoise: 0, hookedSince: null };
+    st = {
+      skill: BOT_SKILL_PROFILES[skill],
+      // Mixed with the arena's seed so a bot doesn't replay the same luck every round.
+      rng: new Rng(hash(playerId) ^ arena.seed),
+      nextDecision: 0,
+      input: NO_INPUT,
+      aimNoise: 0,
+      hookedSince: null,
+      focused: false,
+      focusUntil: 0,
+      wanderDir: 0,
+      wanderFace: 0,
+    };
     perArena.set(playerId, st);
   }
   if (arena.tickCount < st.nextDecision) return st.input;
@@ -84,7 +119,13 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
   const mass = Math.max(1e-3, rb.mass());
   const inertia = Math.max(1e-3, rb.principalInertia());
 
-  const foe = st.skill.pickWeak ? weakestNearby(arena, me, pos) : nearestEnemy(arena, me, pos);
+  if (arena.tickCount >= st.focusUntil) {
+    st.focusUntil = arena.tickCount + Math.round((FOCUS_MIN_S + st.rng.next() * FOCUS_RAND_S) * TICK_HZ);
+    st.focused = st.rng.chance(st.skill.focus);
+    st.wanderDir = st.rng.next() * Math.PI * 2;
+    st.wanderFace = st.rng.next() * Math.PI * 2;
+  }
+  const foe = !st.focused ? null : st.skill.pickWeak ? weakestNearby(arena, me, pos) : nearestEnemy(arena, me, pos);
   const target = foe?.at ?? null;
   const cells = me.body.cells.filter((c) => c.alive);
   // Only parts that actually work count (covered ones do nothing).
@@ -109,6 +150,16 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
     const ux = dx / dist;
     const uy = dy / dist;
     desiredAngle = Math.atan2(uy, ux) - aimLocal + st.aimNoise;
+    // Lasers off to one side fire parallel to the line through the middle and miss by as much;
+    // turn a little further so their beams (on average) pass through the target instead.
+    if (st.skill.lineUp && lasers.length) {
+      const facing = lasers.filter((c) => c.dir === aimDir);
+      const a = DIR_VECTORS[aimDir];
+      const lx = (com.x - pos.x) * Math.cos(angle) + (com.y - pos.y) * Math.sin(angle);
+      const ly = -(com.x - pos.x) * Math.sin(angle) + (com.y - pos.y) * Math.cos(angle);
+      const off = facing.reduce((sum, c) => sum + (c.x - lx) * -a.y + (c.y - ly) * a.x, 0) / Math.max(1, facing.length);
+      if (Math.abs(off) < dist) desiredAngle -= Math.asin(off / dist);
+    }
     // Only close in to ram when it pays: a working saw already pointing at the target. With
     // lasers, hold off inside their range; with nothing that hurts on contact, keep clear.
     const sawLinedUp = saws.length > 0 && !lasers.length && Math.abs(angleDiff(angle, desiredAngle - st.aimNoise)) < SAW_CHARGE_ANGLE;
@@ -132,6 +183,21 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
         desiredAngle = Math.atan2(-uy, -ux) - mainLocal;
       }
     }
+  } else if (!st.focused) {
+    // Wandering: its own heading, bent away from whoever is nearest, facing wherever.
+    let wx = Math.cos(st.wanderDir);
+    let wy = Math.sin(st.wanderDir);
+    const near = nearestEnemy(arena, me, pos);
+    if (near) {
+      const ax = pos.x - near.at.x;
+      const ay = pos.y - near.at.y;
+      const d = Math.max(Math.hypot(ax, ay), 1e-3);
+      wx += (ax / d) * WANDER_AWAY;
+      wy += (ay / d) * WANDER_AWAY;
+    }
+    const k = WANDER_SPEED / Math.max(Math.hypot(wx, wy), 1e-3);
+    desiredVel = { x: wx * k, y: wy * k };
+    desiredAngle = st.wanderFace;
   }
 
   // Hard bots step out of any enemy laser lined up on them.
@@ -141,7 +207,7 @@ function decide(arena: Arena, playerId: PlayerId, st: BotState): InputState {
   }
 
   // Go for the power-up when it's closer than the fight.
-  if (arena.powerupActive && Math.hypot(pos.x, pos.y) < Math.min(dist, 18)) {
+  if (st.focused && arena.powerupActive && Math.hypot(pos.x, pos.y) < Math.min(dist, 18)) {
     const r0 = Math.max(Math.hypot(pos.x, pos.y), 1e-3);
     const speed = r0 > 4 ? 7 : 3;
     desiredVel = { x: (-pos.x / r0) * speed, y: (-pos.y / r0) * speed };

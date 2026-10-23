@@ -122,6 +122,8 @@ export class Arena {
 
   private readonly ringStart: number;
   private readonly rng: Rng;
+  /** The fight's seed (bots mix it into their own luck). */
+  readonly seed: number;
   private readonly eventQueue: EventQueue;
   private readonly cellByCollider = new Map<number, SimCell>();
   private readonly shipByPlayer = new Map<PlayerId, ShipRecord>();
@@ -176,6 +178,7 @@ export class Arena {
 
   constructor(setup: ArenaSetup) {
     if (!physicsReady) throw new Error("call initPhysics() first");
+    this.seed = setup.seed;
     this.rng = new Rng(setup.seed);
     this.scenario = setup.scenario ?? null;
     this.sheepTotal = this.scenario?.sheep ?? 0;

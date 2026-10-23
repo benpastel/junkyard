@@ -8,7 +8,7 @@ import { PlayerList } from "./PlayerList";
 import { Segmented } from "./ui";
 
 const PACE_LABELS: Record<Pace, string> = { frantic: "Frantic", fast: "Fast", strategic: "Strategic", unlimited: "Unlimited" };
-const SKILL_LABELS: Record<BotSkill, string> = { easy: "Easy", medium: "Medium", hard: "Hard" };
+const SKILL_LABELS: Record<BotSkill, string> = { child: "Child", easy: "Easy", medium: "Medium", hard: "Hard" };
 const TIER_LABELS: Record<HullTier, string> = { small: "Small", medium: "Medium", large: "Large" };
 
 /** The table between rounds: pick your ship, the host picks the settings and launches. */

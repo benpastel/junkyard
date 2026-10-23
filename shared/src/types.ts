@@ -76,7 +76,7 @@ export const PACES = ["frantic", "fast", "strategic", "unlimited"] as const;
 export type Pace = (typeof PACES)[number];
 
 /** How well bots fly and how fast they build. */
-export const BOT_SKILLS = ["easy", "medium", "hard"] as const;
+export const BOT_SKILLS = ["child", "easy", "medium", "hard"] as const;
 export type BotSkill = (typeof BOT_SKILLS)[number];
 
 export interface RoomSettings {
