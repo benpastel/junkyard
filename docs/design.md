@@ -6,7 +6,7 @@ Working name: **Junkyard Armada** (no existing game by that name found; junkyard
 
 Online multiplayer, fast-paced, round-based game:
 
-1. **Draft / build.** Players place pentomino pieces (Blokus-style 5-cell shapes) onto their own ship grid against a timer.
+1. **Draft / build.** Players place polyomino pieces (Blokus-style pentominoes, plus tetrominoes) onto their own ship grid against a timer.
 2. **Arena combat.** When the timer ends, all ships are dumped into one arena (spread well apart) and, after a 3-2-1 countdown over the frozen ships, fight to last ship standing. The arena edge is a **rubber ring** that starts at twice the spawn circle (+ padding) and tightens all the way to nothing over 90s; ships bounce off it unharmed. When ships are jammed together with no slack left, sustained pressure **crushes the touching cells on both ships at once** (armor, or a ram facing the contact, holds out unless both sides have one). Cells pressed into the ring itself give way only as a slower fallback. A **power-up orb** sits at the centre at the start, once per fight; grabbing it gives 5s of **mirror skin**: every outer surface of the ship reflects lasers and glows bright yellow (saws, impacts and crushing still hurt).
 3. When the fight is decided, the arena keeps running for a few seconds (ring frozen, no damage) while the winner's name flashes over a rain of screws, bolts and nuts.
 4. **Stats / chat page**, then a new round. Every round starts from scratch; nothing carries over.
@@ -20,7 +20,7 @@ Online multiplayer, fast-paced, round-based game:
 ## Draft
 
 - Each player privately sees **3 piece offers**. Pick one up and the others stay on offer; switch to another, or put it back (Esc, or drop it on the offers). Rotating or flipping a held piece keeps it in place on screen: its middle stays as close to where it was as the grid allows, then as many squares as possible stay put (a T flipped keeps its stem; turned, its centre square). Placing a piece deals a fresh hand of 5.
-- Offers come from an endless bag but only in shapes that fit somewhere on your ship right now. Empty pockets of fewer than 5 squares can never be filled and are hatched dark. Once nothing fits, your ship is full and counts as Done.
+- Offers come from an endless bag but only in shapes that fit somewhere on your ship right now. Empty pockets of fewer than 4 squares can never be filled and are hatched dark. Once nothing fits, your ship is full and counts as Done.
 - **Reroll** (R / hourglass): throw the hand away; 3 new offers arrive after a 1s wait, so you can't cycle for free.
 - The shared pool (unused offers go to a tray anyone can grab) is still in the code but switched off (POOL_ENABLED).
 - **Pace** (setup): Frantic / Fast (default) / Strategic / Unlimited (no timer). A Done button in the draft starts the fight early once every connected human has clicked it (in Unlimited, that is the only way it starts). Build time scales with hull tier: small 25/40/60s, medium 35/60/90s, large 50/80/120s.
@@ -44,12 +44,12 @@ Online multiplayer, fast-paced, round-based game:
 
 ## Pieces and cells
 
-- A piece is a pentomino of 5 **cells**. Most cells are plain hull; a piece may carry one (or more) special cells: engine, laser, grappling hook, saw, mirror, armor.
+- A piece is a pentomino of 5 **cells** or (experiment) a tetromino of 4: I, O, T, L, S, with J and Z covered by flipping. Offers draw evenly from all 17 shapes, so about 29% are tetrominoes. Most cells are plain hull; a piece may carry one (or more) special cells: engine, laser, grappling hook, saw, mirror, armor.
 - **Edge pieces** protect one edge (their `dir`):
   - **Mirror**: a mirror piece is mirror all over, so its whole outer edge reflects lasers (beams can bounce back at the shooter). A mirror cell reflects off any side a beam can reach; its strips are drawn on every side except those inside the same mirror piece (cells remember which placed piece they came from); where two different mirror pieces meet, the shared edge is drawn once. Buried edges stay visible and start working once uncovered.
   - **Armor**: a coat like the mirror (same strips, in shiny silver), the physical counterpart: armor cells take no harm from rams (and neither does what hits them; armor is bouncy), saws skid off them in a shower of sparks with both ships knocked apart, and under pressure armor holds out against non-armor cells. Lasers hurt it normally.
   - A shield piece shields the whole face it shows in its direction: every cell with nothing of the piece beyond it that way (a T facing up shields its top bar).
-- Each piece carries **1.5 or 2 points** of parts in any combination: laser 1, saw 1, engine ½, mirror or armor coat 1 (all its remaining plain cells become mirror / armor; one coat per piece). Odds: engine 65, laser 20, saw 12, mirror 12, armor 12; grapples are switched off (weight 0, code kept). A flamethrower was tried and dropped: shooting fire read too much like an engine. Parts never overlap each other's overhang squares, every part works on the piece as it stands, and engines on one piece never push opposite ways.
+- Each pentomino carries **1.5 or 2 points** of parts, each tetromino **1 or 1.5** (less per square, 0.31 against 0.35 on average, since it's easier to place), in any combination: laser 1, saw 1, engine ½, mirror or armor coat 1 (all its remaining plain cells become mirror / armor; one coat per piece). Odds: engine 65, laser 20, saw 12, mirror 12, armor 12; grapples are switched off (weight 0, code kept). A flamethrower was tried and dropped: shooting fire read too much like an engine. Parts never overlap each other's overhang squares, every part works on the piece as it stands, and engines on one piece never push opposite ways.
 - No part is ever generated blocked by its own piece (same full-line rule as in play).
 - Special cells have a facing that rotates with the piece.
 - **Damage is per cell**: single cells get destroyed / fall off. A piece is only a placement unit; after placement the ship is just a grid of cells.

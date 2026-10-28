@@ -1,5 +1,5 @@
 import type { Cell, Dir } from "../types.js";
-import { PENTOMINOES, PENTOMINO_NAMES, transformCells, type PentominoName } from "./pieces.js";
+import { MIN_PIECE_SQUARES, SHAPES, SHAPE_NAMES, transformCells, type ShapeName } from "./pieces.js";
 
 export const cellKey = (x: number, y: number) => `${x},${y}`;
 const key = cellKey;
@@ -43,8 +43,8 @@ const NEIGHBOURS = [
 ] as const;
 
 /**
- * Empty hull squares that can never be filled: connected pockets of fewer than 5 squares.
- * (Any connected 5 squares is a pentomino, and every pocket borders the ship, so pockets of 5+
+ * Empty hull squares that can never be filled: connected pockets smaller than the smallest piece.
+ * (Any connected 4 squares is a tetromino, and every pocket borders the ship, so bigger pockets
  * can always take some piece.)
  */
 export function deadSquares(buildable: ReadonlySet<string>, existing: readonly Cell[]): Set<string> {
@@ -65,13 +65,13 @@ export function deadSquares(buildable: ReadonlySet<string>, existing: readonly C
         }
       }
     }
-    if (pocket.length < 5) for (const k of pocket) dead.add(k);
+    if (pocket.length < MIN_PIECE_SQUARES) for (const k of pocket) dead.add(k);
   }
   return dead;
 }
 
-/** The pentomino shapes that can be placed somewhere on this ship right now (any turn or flip). */
-export function fittingShapes(buildable: ReadonlySet<string>, existing: readonly Cell[]): PentominoName[] {
+/** The shapes that can be placed somewhere on this ship right now (any turn or flip). */
+export function fittingShapes(buildable: ReadonlySet<string>, existing: readonly Cell[]): ShapeName[] {
   const occupied = new Set(existing.map((c) => key(c.x, c.y)));
   // Anchor squares: empty buildable squares touching the ship. A placement must cover one.
   const anchors: [number, number][] = [];
@@ -81,8 +81,8 @@ export function fittingShapes(buildable: ReadonlySet<string>, existing: readonly
     if (NEIGHBOURS.some(([dx, dy]) => occupied.has(key(x + dx, y + dy)))) anchors.push([x, y]);
   }
   const free = (x: number, y: number) => buildable.has(key(x, y)) && !occupied.has(key(x, y));
-  return PENTOMINO_NAMES.filter((name) => {
-    const base = PENTOMINOES[name].map(([x, y]) => ({ x, y, type: "hull" as const, dir: 0 as Dir }));
+  return SHAPE_NAMES.filter((name) => {
+    const base = (SHAPES[name] as readonly (readonly [number, number])[]).map(([x, y]) => ({ x, y, type: "hull" as const, dir: 0 as Dir }));
     for (const flip of [false, true]) {
       for (const rot of [0, 1, 2, 3] as Dir[]) {
         const shape = transformCells(base, rot, flip);

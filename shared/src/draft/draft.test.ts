@@ -78,23 +78,26 @@ describe("hulls", () => {
 });
 
 describe("generatePiece", () => {
-  it("fills each piece with 1.5-2 points of parts that all work and never overlap", () => {
+  it("fills pentominoes with 1.5-2 points of parts and tetrominoes with 1-1.5 (less per square), all working and never overlapping", () => {
     const cost: Record<string, number> = { engine: 0.5, laser: 1, saw: 1 };
     const rng = new Rng(7);
-    let total = 0;
-    const n = 1000;
+    const total = { 4: 0, 5: 0 };
+    const count = { 4: 0, 5: 0 };
+    const n = 2000;
     for (let i = 0; i < n; i++) {
       const p = generatePiece(rng, `p${i}`);
-      expect(p.cells).toHaveLength(5);
+      const size = p.cells.length as 4 | 5;
+      expect([4, 5]).toContain(size);
       for (const c of p.cells) expect(c.type).not.toBe("core");
       const coats = ["mirror", "armor"];
       const parts = p.cells.filter((c) => c.type !== "hull" && !coats.includes(c.type));
       const coated = coats.filter((t) => p.cells.some((c) => c.type === t)).length;
       expect(coated).toBeLessThanOrEqual(1);
       const points = parts.reduce((sum, c) => sum + (cost[c.type] ?? 0), 0) + coated;
-      expect(points).toBeLessThanOrEqual(2);
-      expect(points).toBeGreaterThanOrEqual(1);
-      total += points;
+      expect(points).toBeLessThanOrEqual(size === 5 ? 2 : 1.5);
+      expect(points).toBeGreaterThanOrEqual(size === 5 ? 1 : 0.5);
+      total[size] += points;
+      count[size]++;
       // Every part works on the piece as it stands.
       const isOpen = openChecker(p.cells);
       for (const c of parts) expect(isOpen(c)).toBe(true);
@@ -105,7 +108,9 @@ describe("generatePiece", () => {
         expect(exhaustSquare(a.x, a.y, a.dir)).not.toBe(exhaustSquare(b.x, b.y, b.dir));
       }
     }
-    expect(total / n).toBeGreaterThan(1.6);
+    expect(total[5] / count[5]).toBeGreaterThan(1.6);
+    expect(count[4] / n).toBeGreaterThan(0.2);
+    expect(total[4] / count[4] / 4).toBeLessThan(total[5] / count[5] / 5);
   });
 
 });
@@ -140,7 +145,7 @@ describe("Draft", () => {
     expect(d.apply("a", { type: "place", ...spot })).toBeNull();
     const v = d.view("a");
     expect(v.held).toBeNull();
-    expect(v.cells).toHaveLength(11);
+    expect([10, 11]).toContain(v.cells.length);
     expect(v.offers).toHaveLength(OFFER_COUNT);
     expect(v.offers.some((p) => hand.includes(p.id))).toBe(false);
   });
