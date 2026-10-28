@@ -88,10 +88,12 @@ const PART_WEIGHTS: [CellType, number][] = [
 ];
 /**
  * Each pentomino carries this many points of parts (picked from these); a tetromino less, and
- * less per square too (0.31 against 0.35 on average), since it's easier to place.
+ * less per square too (0.25 against 0.35 on average), since it's easier to place.
  */
 const PIECE_BUDGETS = [1.5, 2] as const;
-const SMALL_PIECE_BUDGETS = [1, 1.5] as const;
+const SMALL_PIECE_BUDGETS = [1] as const;
+/** Share of pieces dealt as tetrominoes (when both sizes fit). */
+const TETROMINO_SHARE = 0.45;
 
 /** What a piece may carry and how much: the normal mix, or a tutorial's restricted one. */
 export interface PieceRules {
@@ -122,7 +124,10 @@ const DIRS: Dir[] = [0, 1, 2, 3];
 
 /** A random piece; pass `shapes` to draw its shape only from those (e.g. ones that fit). */
 export function generatePiece(rng: Rng, id: string, shapes: readonly ShapeName[] = SHAPE_NAMES, rules: PieceRules = DEFAULT_PIECE_RULES): Piece {
-  const shape = rng.pick(shapes);
+  // Size first, then a shape of that size, so the share holds whatever the shape counts.
+  const small = shapes.filter((n) => SHAPES[n].length < 5);
+  const big = shapes.filter((n) => SHAPES[n].length >= 5);
+  const shape = rng.pick(!big.length || (small.length && rng.chance(TETROMINO_SHARE)) ? small : big);
   const coords: readonly (readonly [number, number])[] = SHAPES[shape];
   const cells: Cell[] = coords.map(([x, y]) => ({ x, y, type: "hull", dir: 0 }));
   let budget: number = rng.pick(coords.length < 5 ? rules.smallBudgets : rules.budgets);

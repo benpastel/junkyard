@@ -78,7 +78,7 @@ describe("hulls", () => {
 });
 
 describe("generatePiece", () => {
-  it("fills pentominoes with 1.5-2 points of parts and tetrominoes with 1-1.5 (less per square), all working and never overlapping", () => {
+  it("fills pentominoes with 1.5-2 points of parts and tetrominoes with 1 (less per square), all working and never overlapping", () => {
     const cost: Record<string, number> = { engine: 0.5, laser: 1, saw: 1 };
     const rng = new Rng(7);
     const total = { 4: 0, 5: 0 };
@@ -94,7 +94,7 @@ describe("generatePiece", () => {
       const coated = coats.filter((t) => p.cells.some((c) => c.type === t)).length;
       expect(coated).toBeLessThanOrEqual(1);
       const points = parts.reduce((sum, c) => sum + (cost[c.type] ?? 0), 0) + coated;
-      expect(points).toBeLessThanOrEqual(size === 5 ? 2 : 1.5);
+      expect(points).toBeLessThanOrEqual(size === 5 ? 2 : 1);
       expect(points).toBeGreaterThanOrEqual(size === 5 ? 1 : 0.5);
       total[size] += points;
       count[size]++;
@@ -109,7 +109,8 @@ describe("generatePiece", () => {
       }
     }
     expect(total[5] / count[5]).toBeGreaterThan(1.6);
-    expect(count[4] / n).toBeGreaterThan(0.2);
+    expect(count[4] / n).toBeGreaterThan(0.4);
+    expect(count[4] / n).toBeLessThan(0.5);
     expect(total[4] / count[4] / 4).toBeLessThan(total[5] / count[5] / 5);
   });
 
