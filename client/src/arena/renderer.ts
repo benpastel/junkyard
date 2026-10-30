@@ -765,7 +765,10 @@ export class ArenaRenderer {
         break;
       case "bounce":
         this.wobbles.push({ a: Math.atan2(e.y, e.x), power: e.power, life: 1 });
-        sfx("bounce", this.heard(e.x, e.y, 0.3 + (0.7 * e.power) / 9));
+        {
+          const h = this.heard(e.x, e.y);
+          sfx("bounce", { ...h, gain: h.gain * (0.35 + (0.65 * e.power) / 9), v: e.power });
+        }
         this.burst(e.x, e.y, 3 + e.power, "#c9ced4", 3 + e.power * 0.5, 0.25);
         break;
       case "over":

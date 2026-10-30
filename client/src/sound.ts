@@ -465,11 +465,16 @@ const EFFECTS = {
     thump(c, o, t, 110, 45, 0.2);
     noise(c, o, t, { f: 1500, d: 0.04, g: 0.5 });
   },
-  /** Off the rubber ring: a boing. */
-  bounce: (c, o, t) => {
-    const lp = filter(c, o, "lowpass", 1200);
-    tone(c, lp, t, { f: 110, f2: 180, glide: 0.06, type: "triangle", d: 0.35, g: 0.9, vib: [11, 0.12] });
-    thump(c, o, t, 80, 50, 0.08, 0.6);
+  /**
+   * Off the rubber ring: a boing; v is how hard (1 a bump .. 9 a slam). A bump is a short, high
+   * "bup"; a slam is deeper, longer and wobblier, with a heavier knock.
+   */
+  bounce: (c, o, t, v) => {
+    const k = (Math.max(1, Math.min(9, v)) - 1) / 8;
+    const lp = filter(c, o, "lowpass", 900 + 600 * k);
+    const f = 170 - 70 * k;
+    tone(c, lp, t, { f, f2: f * 1.6, glide: 0.06, type: "triangle", d: 0.12 + 0.3 * k, g: 0.9, vib: [11, 0.04 + 0.1 * k] });
+    thump(c, o, t, 90 - 20 * k, 50, 0.05 + 0.08 * k, 0.4 + 0.4 * k);
   },
   /** The orb taken: a rising charge and a glassy shimmer. */
   powerup: (c, o, t) => {

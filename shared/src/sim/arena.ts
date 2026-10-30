@@ -1207,9 +1207,10 @@ export class Arena {
     const d = Math.hypot(at.x, at.y) || 1;
     const v = pointVel(p, at);
     const vn = (v.x * at.x + v.y * at.y) / d;
-    if (vn > 2 && (this.bounceCooldown.get(b) ?? -1) <= this.tickCount) {
+    // Anything faster than a nudge counts (resting against the ring doesn't), from a bump (1) to a slam (9).
+    if (vn > 0.5 && (this.bounceCooldown.get(b) ?? -1) <= this.tickCount) {
       this.bounceCooldown.set(b, this.tickCount + 15);
-      this.events.push({ e: "bounce", x: r3((at.x / d) * this.ringRadius), y: r3((at.y / d) * this.ringRadius), power: Math.min(9, Math.round(vn)) });
+      this.events.push({ e: "bounce", x: r3((at.x / d) * this.ringRadius), y: r3((at.y / d) * this.ringRadius), power: Math.max(1, Math.min(9, Math.round(vn))) });
     }
   }
 
