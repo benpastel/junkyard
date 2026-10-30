@@ -428,12 +428,14 @@ const EFFECTS = {
     for (const dt of [-12, 12]) tone(c, o, t + 0.02, { f: 3500 * r, a: 0.01, d: 0.3, g: 0.05, detune: dt, vib: [9, 0.006] });
     noise(c, o, t, { type: "highpass", f: 6000, d: 0.03, g: 0.25 });
   },
-  /** A cell crunching off, with a few bits clinking away. */
+  /** A cell blown off: a short boom with a crunch and a crackle (a ship's death is the big one). */
   break: (c, o, t) => {
-    const dr = drive(c, o, 4);
-    noise(c, dr, t, { f: rr(1100, 1600), q: 0.8, d: 0.2, g: 0.7 });
-    thump(c, o, t, 140, 50, 0.18);
-    clinks(c, o, t, 3, 0.05, 0.25, 1200, 3000, 0.25);
+    const r = rr(0.9, 1.1);
+    thump(c, o, t, 120 * r, 38, 0.3);
+    const dr = drive(c, o, 3);
+    noise(c, dr, t, { type: "lowpass", f: 3200, f2: 280, glide: 0.35, d: 0.4, g: 0.8 });
+    noise(c, o, t, { f: 900 * r, q: 0.7, d: 0.12, g: 0.5 });
+    noise(c, o, t + 0.03, { type: "highpass", f: 2500, d: 0.12, g: 0.2, am: [45, 0.7] });
   },
   /** A ship wrecked: boom, roar, and debris clattering down. */
   death: (c, o, t) => {
