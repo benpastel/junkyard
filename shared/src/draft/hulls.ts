@@ -334,7 +334,7 @@ export function buildSeconds(pace: Pace, hull: HullId): number | null {
 }
 
 const BUILD_SECONDS: Record<HullTier, Record<Exclude<Pace, "unlimited">, number>> = {
-  small: { frantic: 25, fast: 40, strategic: 60 },
+  small: { frantic: 40, fast: 60, strategic: 90 },
   medium: { frantic: 35, fast: 60, strategic: 90 },
   large: { frantic: 50, fast: 80, strategic: 120 },
 };
