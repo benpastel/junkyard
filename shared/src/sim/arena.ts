@@ -1023,15 +1023,25 @@ export class Arena {
       const hit = this.world.castRayAndGetNormal(new RAPIER.Ray(start, d), range, true, undefined, undefined, excludeCollider, exclude, passThrough);
       const toi = hit ? hit.timeOfImpact : range;
       const end = { x: start.x + d.x * toi, y: start.y + d.y * toi };
-      this.events.push({ e: "shot", from: c.cid, x1: r3(start.x), y1: r3(start.y), x2: r3(end.x), y2: r3(end.y), hit: !!hit });
-      if (!hit) return;
-      const target = this.cellByCollider.get(hit.collider.handle);
-      if (!target?.body?.rb) return;
-
+      const target = hit ? this.cellByCollider.get(hit.collider.handle) : undefined;
       // Mirror cells reflect beams off any side they're struck on (a beam can only reach an
       // exposed side), taking no damage; so does a ship wearing the power-up's mirror skin.
-      const skin = (this.shipOf(target.body)?.mirroredUntil ?? 0) > this.tickCount;
-      if (skin || target.type === "mirror") {
+      const skin = (this.shipOf(target?.body ?? null)?.mirroredUntil ?? 0) > this.tickCount;
+      const reflects = !!target?.body?.rb && (skin || target.type === "mirror");
+      this.events.push({
+        e: "shot",
+        from: c.cid,
+        x1: r3(start.x),
+        y1: r3(start.y),
+        x2: r3(end.x),
+        y2: r3(end.y),
+        hit: !!hit,
+        ...(bounce ? { bounce: 1 as const } : {}),
+        ...(reflects ? { mirror: 1 as const } : {}),
+      });
+      if (!hit || !target?.body?.rb) return;
+
+      if (reflects) {
         const n = hit.normal;
         const k = 2 * (d.x * n.x + d.y * n.y);
         d = { x: d.x - k * n.x, y: d.y - k * n.y };

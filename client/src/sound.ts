@@ -420,6 +420,14 @@ const EFFECTS = {
     noise(c, o, t, { type: "highpass", f: 3500, a: 0.002, hold: 0.03, d: 0.15, g: 0.5, am: [70, 0.8] });
     bar(c, o, t, rr(2200, 2600), 0.3, 0.05);
   },
+  /** A beam glancing off a mirror: a bright ringing ping that bends upward, with a glassy shimmer. */
+  ricochet: (c, o, t) => {
+    const r = rr(0.95, 1.05);
+    modal(c, o, t, 2100 * r, [[1, 1, 0.35], [2.32, 0.45, 0.22], [4.25, 0.2, 0.12]], 0.5);
+    tone(c, o, t, { f: 1800 * r, f2: 3400 * r, glide: 0.12, d: 0.16, g: 0.18 });
+    for (const dt of [-12, 12]) tone(c, o, t + 0.02, { f: 3500 * r, a: 0.01, d: 0.3, g: 0.05, detune: dt, vib: [9, 0.006] });
+    noise(c, o, t, { type: "highpass", f: 6000, d: 0.03, g: 0.25 });
+  },
   /** A cell crunching off, with a few bits clinking away. */
   break: (c, o, t) => {
     const dr = drive(c, o, 4);
@@ -533,7 +541,7 @@ const LEVELS: Record<Sfx, number> = {
   click: -27, join: -22, chat: -23, launch: -18,
   pickup: -22, rotate: -26, flip: -26, place: -16, nofit: -22, putback: -25, reroll: -20, deal: -25,
   lastsecs: -22, buildover: -18, done: -22, full: -20,
-  count: -19, go: -16, thrust: -25, charge: -29, laser: -19, hit: -21, break: -17, death: -13,
+  count: -19, go: -16, thrust: -25, charge: -29, laser: -19, hit: -21, ricochet: -19, break: -17, death: -13,
   saw: -21, skid: -21, impact: -17, bounce: -19, powerup: -17, mirroroff: -23, deadkey: -25,
   win: -15, lose: -17, ff: -22, sheep: -20,
   star: -21, kill: -21,

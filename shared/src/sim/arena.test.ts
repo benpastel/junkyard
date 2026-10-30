@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { NO_INPUT, type InputState, type ShipBlueprint } from "../types.js";
 import { Arena, arenaBotInput, FightRecorder, initPhysics, replayFight, HAZARD_SAW, SHEEP, SHEEP_ROUNDUP, SIM, TICK_HZ } from "./index.js";
 import { SANDBOX_SHIPS, parseShip } from "./testShips.js";
+import type { ArenaEvent } from "./view.js";
 
 beforeAll(async () => {
   await initPhysics();
@@ -74,8 +75,17 @@ describe("arena", () => {
   it("mirrors reflect lasers without taking damage", () => {
     const a = new Arena({ ships: [bp("a", ["i", "C", "^"]), bp("b", ["MMM", "MCM"])], seed: 1 });
     run(a, 40, { a: { ...NO_INPUT, up: true } });
-    run(a, TICK_HZ * 3, { a: { ...NO_INPUT, laser: true } });
+    const shots: Extract<ArenaEvent, { e: "shot" }>[] = [];
+    for (let i = 0; i < TICK_HZ * 8; i++) {
+      a.step({ a: { ...NO_INPUT, laser: true } });
+      for (const e of a.snapshot().events) if (e.e === "shot") shots.push(e);
+    }
     expect(a.ship("b")!.cellsLost).toBe(0);
+    // A beam that reflects says so, and its next stretch says it came off a mirror.
+    const i = shots.findIndex((e) => e.mirror);
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(shots[i + 1]?.bounce).toBe(1);
+    expect(shots[i]!.bounce).toBeUndefined();
     a.dispose();
   });
 

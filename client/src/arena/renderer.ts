@@ -714,10 +714,10 @@ export class ArenaRenderer {
         const x1 = e.x1 + (e.x2 - e.x1) * skip;
         const y1 = e.y1 + (e.y2 - e.y1) * skip;
         this.beams.push({ x1, y1, x2: e.x2, y2: e.y2, life: 0.1, max: 0.1, color, width: 0.12 });
-        sfx("laser", this.heard(e.x1, e.y1));
+        if (!e.bounce) sfx("laser", this.heard(e.x1, e.y1));
         if (e.hit) {
           this.burst(e.x2, e.y2, 3, "#ffd9a0", 3, 0.2);
-          sfx("hit", this.heard(e.x2, e.y2));
+          sfx(e.mirror ? "ricochet" : "hit", this.heard(e.x2, e.y2));
         }
         break;
       }

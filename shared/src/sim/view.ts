@@ -104,7 +104,8 @@ export interface HookSnap {
 }
 
 export type ArenaEvent =
-  | { e: "shot"; from: number; x1: number; y1: number; x2: number; y2: number; hit: boolean }
+  /** One straight stretch of a beam. bounce: it starts off a mirror; mirror: it ends on one and reflects. */
+  | { e: "shot"; from: number; x1: number; y1: number; x2: number; y2: number; hit: boolean; bounce?: 1; mirror?: 1 }
   | { e: "hookMiss"; from: number; x1: number; y1: number; x2: number; y2: number }
   | { e: "boom"; cid: number; x: number; y: number; type: CellType }
   /** grind: a saw skidding off armor (a big shower, no harm done); saw: a saw biting. */
