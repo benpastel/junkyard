@@ -467,14 +467,19 @@ const EFFECTS = {
   },
   /**
    * Off the rubber ring: a boing; v is how hard (1 a bump .. 9 a slam). A bump is a short, high
-   * "bup"; a slam is deeper, longer and wobblier, with a heavier knock.
+   * "bup"; a slam is deeper, longer and wobblier, with a heavier knock. Pitched in the mids, with
+   * an octave and a rubbery slap on top, so laptop and phone speakers carry it.
    */
   bounce: (c, o, t, v) => {
     const k = (Math.max(1, Math.min(9, v)) - 1) / 8;
-    const lp = filter(c, o, "lowpass", 900 + 600 * k);
-    const f = 170 - 70 * k;
-    tone(c, lp, t, { f, f2: f * 1.6, glide: 0.06, type: "triangle", d: 0.12 + 0.3 * k, g: 0.9, vib: [11, 0.04 + 0.1 * k] });
-    thump(c, o, t, 90 - 20 * k, 50, 0.05 + 0.08 * k, 0.4 + 0.4 * k);
+    const lp = filter(c, o, "lowpass", 2500);
+    const f = 340 - 140 * k;
+    const d = 0.14 + 0.3 * k;
+    const vib: [number, number] = [11, 0.04 + 0.08 * k];
+    tone(c, lp, t, { f, f2: f * 1.5, glide: 0.05, type: "triangle", d, g: 0.8, vib });
+    tone(c, lp, t, { f: f * 2, f2: f * 3, glide: 0.05, d: d * 0.7, g: 0.25, vib });
+    noise(c, o, t, { f: 1000, q: 1, d: 0.03, g: 0.5 });
+    thump(c, o, t, 130 - 30 * k, 70, 0.05 + 0.08 * k, 0.3 + 0.4 * k);
   },
   /** The orb taken: a rising charge and a glassy shimmer. */
   powerup: (c, o, t) => {
@@ -549,7 +554,7 @@ const LEVELS: Record<Sfx, number> = {
   pickup: -22, rotate: -26, flip: -26, place: -16, nofit: -22, putback: -25, reroll: -20, deal: -25,
   lastsecs: -22, buildover: -18, done: -22, full: -20,
   count: -19, go: -16, thrust: -25, charge: -29, laser: -19, hit: -21, ricochet: -19, break: -17, death: -13,
-  saw: -21, skid: -21, impact: -17, bounce: -19, powerup: -17, mirroroff: -23, deadkey: -25,
+  saw: -21, skid: -21, impact: -17, bounce: -16, powerup: -17, mirroroff: -23, deadkey: -25,
   win: -15, lose: -17, ff: -22, sheep: -20,
   star: -21, kill: -21,
 };

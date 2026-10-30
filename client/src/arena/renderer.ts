@@ -767,7 +767,7 @@ export class ArenaRenderer {
         this.wobbles.push({ a: Math.atan2(e.y, e.x), power: e.power, life: 1 });
         {
           const h = this.heard(e.x, e.y);
-          sfx("bounce", { ...h, gain: h.gain * (0.35 + (0.65 * e.power) / 9), v: e.power });
+          sfx("bounce", { ...h, gain: h.gain * (0.55 + (0.45 * e.power) / 9), v: e.power });
         }
         this.burst(e.x, e.y, 3 + e.power, "#c9ced4", 3 + e.power * 0.5, 0.25);
         break;
