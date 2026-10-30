@@ -193,7 +193,25 @@ export function ArenaScreen(props: {
       {me && init.ships.some((s) => s.playerId === me) && (
         <TouchFlight engines={engines} press={(k, d, by) => pressRef.current(k, d, by)} />
       )}
-      {(CAMERA_SWITCHING || fastForward) && (
+      {fastForward && (
+        // Quiet, beside the corner's sound / settings / fullscreen (ui/Prefs); F also votes.
+        <button
+          type="button"
+          className={`arena-ff${fastForward.voted || fastForward.active ? " on" : ""}`}
+          aria-label="Fast-forward"
+          aria-pressed={fastForward.voted}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={fastForward.toggle}
+        >
+          <FastForwardIcon />
+          {fastForward.needed > 1 && (
+            <span className="mono">
+              {fastForward.votes}/{fastForward.needed}
+            </span>
+          )}
+        </button>
+      )}
+      {CAMERA_SWITCHING && (
         <div className="arena-controls">
           {CAMERA_SWITCHING && (
             <div className="arena-controls-group">
@@ -209,26 +227,6 @@ export function ArenaScreen(props: {
                   </span>
                 }
                 onClick={toggleCamera}
-              />
-            </div>
-          )}
-          {fastForward && (
-            <div className="arena-controls-group">
-              <KeyButton
-                title="Fast-forward"
-                keyLabel="F"
-                icon={
-                  <span className="ff-icon">
-                    <FastForwardIcon />
-                    {fastForward.needed > 1 && (
-                      <span className="ff-votes mono">
-                        {fastForward.votes}/{fastForward.needed}
-                      </span>
-                    )}
-                  </span>
-                }
-                active={fastForward.voted || fastForward.active}
-                onClick={fastForward.toggle}
               />
             </div>
           )}
@@ -481,7 +479,7 @@ const CAMERA_KEY = "KeyC";
 
 function FastForwardIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 20 20" aria-hidden>
+    <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden>
       <path d="M2 4 L10 10 L2 16 Z M10 4 L18 10 L10 16 Z" fill="currentColor" />
     </svg>
   );

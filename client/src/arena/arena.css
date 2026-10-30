@@ -64,14 +64,34 @@
   pointer-events: none;
 }
 
-.ff-icon {
-  display: inline-flex;
+/* Fast-forward: a quiet icon left of the corner's buttons (ui/Prefs), lit while you've voted. */
+.arena-ff {
+  position: absolute;
+  top: 6px;
+  right: 114px;
+  height: 34px;
+  display: flex;
   align-items: center;
   gap: 4px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+  opacity: 0.75;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+  -webkit-tap-highlight-color: transparent;
 }
 
-.ff-votes {
-  font-size: 11px;
+.arena-ff:hover {
+  color: var(--text);
+  background: none;
+  opacity: 1;
+}
+
+.arena-ff.on {
+  color: var(--hazard);
+  opacity: 1;
 }
 
 .cam-mode {
