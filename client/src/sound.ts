@@ -349,11 +349,6 @@ const EFFECTS = {
       thump(c, o, t + i * 0.08, 150, 90, 0.05, 0.4);
     });
   },
-  /** The held piece moving onto a new square: a detent. */
-  snap: (c, o, t) => {
-    noise(c, o, t, { type: "highpass", f: 4000, d: 0.004, g: 0.5 });
-    modal(c, o, t, 3000, [[1, 1, 0.012]], 0.3);
-  },
   /** A clock in the last seconds; v is the second left (tick and tock alternate). */
   lastsecs: (c, o, t, v) => {
     const f = v % 2 ? 1900 : 2500;
@@ -537,7 +532,7 @@ export type Sfx = keyof typeof EFFECTS;
 const LEVELS: Record<Sfx, number> = {
   click: -27, join: -22, chat: -23, launch: -18,
   pickup: -22, rotate: -26, flip: -26, place: -16, nofit: -22, putback: -25, reroll: -20, deal: -25,
-  snap: -31, lastsecs: -22, buildover: -18, done: -22, full: -20,
+  lastsecs: -22, buildover: -18, done: -22, full: -20,
   count: -19, go: -16, thrust: -25, charge: -29, laser: -19, hit: -21, break: -17, death: -13,
   saw: -21, skid: -21, impact: -17, bounce: -19, powerup: -17, mirroroff: -23, deadkey: -25,
   win: -15, lose: -17, ff: -22, sheep: -20,

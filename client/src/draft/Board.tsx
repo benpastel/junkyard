@@ -218,14 +218,9 @@ export function Board(props: {
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const latest = useRef({ held, rot, flip, cells, anchorAt, onPlace });
   latest.current = { held, rot, flip, cells, anchorAt, onPlace };
-  // Each new square the held piece lands on gets a detent tick (not the first, as it comes on).
-  const lastSpot = useRef<{ x: number; y: number } | null>(null);
   const track = useCallback(() => {
     const p = pointer.current;
     const h = p ? latest.current.anchorAt(p.x, p.y) : null;
-    const was = lastSpot.current;
-    if (h && was && latest.current.held && (h.x !== was.x || h.y !== was.y)) sfx("snap");
-    lastSpot.current = h;
     setHover((prev) => (prev?.x === h?.x && prev?.y === h?.y ? prev : h));
     onHoverChange(h !== null);
   }, [onHoverChange]);
