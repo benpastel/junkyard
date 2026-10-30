@@ -154,6 +154,13 @@ Expect ~50–100ms of input lag. Hide it with game feel:
 - Camera is ship-up only for now; the fixed-north view is still in the code behind `CAMERA_SWITCHING`.
 - Top-right corner of every screen (`client/src/ui/Prefs.tsx`): sound on/off, settings (effects volume), fullscreen. Sound is on by default; the switch and volume are remembered per browser. Fullscreen has no shortcut key, so it can't be hit by accident; Esc or the back gesture leaves. Hidden where unsupported (iPhone Safari).
 
+## Sound
+
+- Effects only, synthesized in `client/src/sound.ts` (the "Scrap" set: metal and machinery; the candidates compared are in the gitignored `mockups/sounds/`). Each effect has a loudness in `LEVELS`; when audio starts every effect is rendered once offline and scaled to it, so one can be reworked without re-balancing the rest.
+- Tables: menu buttons click; joins, launches and others' chat messages have their own. Build: pick up, rotate (each way its own pitch), flip, place, doesn't fit, put back, reroll, a reroll's offers landing, a detent tick per square while dragging, a clock over the last 5 seconds, a whistle as the build ends, Done, ship full.
+- Fight: 3-2-1 and go, your engine rumble (a loop following your throttle), your laser charging, laser shots and hits, cells breaking, ships destroyed, saw bites, saws glancing off armor, collisions and ring bounces (louder the harder), power-up and your mirror skin wearing off, a dead clunk for a key with no engine, win or lose, fast-forward, sheep. Others' sounds fade with distance from the camera and pan left or right with where they are on screen; the same effect within 30ms of itself is dropped.
+- Results: each popping token clinks (stars, a step higher each) or crunches (kills).
+
 ## Tutorials
 
 - Scenarios (`shared/src/sim/scenarios.ts`) change a fight's rules: fixed ring size, no asteroids or power-up, sheep to collect, floating saws, no time limit. A tutorial runs entirely in the browser (no server), like the sandboxes; more tutorials (or a campaign) are new scenarios plus a screen.

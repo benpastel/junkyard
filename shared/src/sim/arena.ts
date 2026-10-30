@@ -1332,7 +1332,7 @@ export class Arena {
         saw.body.rb?.applyImpulseAtPoint({ x: -dx * k, y: -dy * k }, hub, true);
         continue;
       }
-      this.events.push({ e: "spark", x: r3((at.x + hub.x) / 2), y: r3((at.y + hub.y) / 2), power: 3 });
+      this.events.push({ e: "spark", x: r3((at.x + hub.x) / 2), y: r3((at.y + hub.y) / 2), power: 3, saw: 1 });
       this.damageCell(target, 1, saw.body.owner, touched, "saw");
     }
   }

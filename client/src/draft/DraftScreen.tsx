@@ -17,6 +17,7 @@ import {
 import { BOARD_PAD, Board, drives, otherTouchDragging, touchTrack, type DragState } from "./Board";
 import { PIECE_PAD, PieceCanvas } from "./PieceCanvas";
 import { RivalShip } from "./RivalShip";
+import { sfx } from "../sound";
 import { KeyButton } from "../ui/KeyButton";
 import "./draft.css";
 
@@ -50,6 +51,16 @@ export function DraftScreen(props: {
   });
 
   useEffect(() => setPlacing(null), [view]);
+
+  // A reroll's new offers landing, and the ship filling up.
+  const wasDealing = useRef(view.dealing);
+  const wasFull = useRef(view.full);
+  useEffect(() => {
+    if (wasDealing.current && !view.dealing) sfx("deal");
+    if (!wasFull.current && view.full) sfx("full");
+    wasDealing.current = view.dealing;
+    wasFull.current = view.full;
+  }, [view.dealing, view.full]);
 
   // The offers stay put while you hold one, so a pick is still valid while it's among them.
   const pendingStillValid =
@@ -95,18 +106,23 @@ export function DraftScreen(props: {
   );
 
   const rotate = useCallback(
-    (by: 1 | -1) => reorient((o) => ({ ...o, rot: ((o.rot + by + 4) % 4) as Dir })),
+    (by: 1 | -1) => {
+      sfx("rotate", { v: by });
+      reorient((o) => ({ ...o, rot: ((o.rot + by + 4) % 4) as Dir }));
+    },
     [reorient],
   );
 
   const reroll = useCallback(() => {
     if (view.dealing) return;
+    sfx("reroll");
     act({ type: "reroll" });
     setPending(null);
   }, [act, view.dealing]);
 
   const discard = useCallback(() => {
     if (!held) return;
+    sfx("putback");
     act({ type: "discard" });
     setPending(null);
   }, [act, held]);
@@ -146,6 +162,7 @@ export function DraftScreen(props: {
       return;
     }
     setGrab(at);
+    sfx("pickup");
     // Switching straight to another offer is fine; a pool piece has to be swapped back first.
     if (held && from === "pool") act({ type: "discard" });
     act(
@@ -159,6 +176,7 @@ export function DraftScreen(props: {
   const place = useCallback(
     (x: number, y: number) => {
       if (!held) return;
+      sfx("place");
       act({ type: "place", x, y, rot, flip });
       setPlacing(held.id);
       setPending(null);
@@ -169,7 +187,10 @@ export function DraftScreen(props: {
   // Always mirror left-right as seen on screen. The transform mirrors before rotating, and
   // mirroring after a rotation r is the same as mirroring first and rotating by -r.
   const toggleFlip = useCallback(
-    () => reorient((o) => ({ rot: ((4 - o.rot) % 4) as Dir, flip: !o.flip })),
+    () => {
+      sfx("flip");
+      reorient((o) => ({ rot: ((4 - o.rot) % 4) as Dir, flip: !o.flip }));
+    },
     [reorient],
   );
 
@@ -223,7 +244,10 @@ export function DraftScreen(props: {
       {done && (
         <button
           className={`draft-done${done.voted || view.full ? " on" : ""}`}
-          onClick={done.toggle}
+          onClick={() => {
+            if (!done.voted) sfx("done");
+            done.toggle();
+          }}
         >
           Done
           {done.needed > 1 && (
@@ -482,6 +506,8 @@ const UPRIGHT: Orient = { rot: 0, flip: false };
 const MAX_CELL = 64;
 /** Narrower than this (phones), the layout stacks: status, offers, buttons, board. */
 const COMPACT_WIDTH = 720;
+/** The clock ticks over the build's last this-many seconds. */
+const TICK_SECONDS = 5;
 
 /** Height of the offer row, in squares: room for a piece five squares tall. */
 const OFFER_CELLS = 5.6;
@@ -782,6 +808,14 @@ function Timer({ endsAt }: { endsAt: number }) {
     return () => clearInterval(id);
   }, []);
   const left = Math.max(0, Math.ceil((endsAt - now) / 1000));
+  // A clock ticks through the last seconds (the whistle at the end is App's: the fight can
+  // arrive before this reaches zero).
+  const lastLeft = useRef(left);
+  useEffect(() => {
+    if (left === lastLeft.current) return;
+    lastLeft.current = left;
+    if (left > 0 && left <= TICK_SECONDS) sfx("lastsecs", { v: left });
+  }, [left]);
   const mm = Math.floor(left / 60);
   const ss = String(left % 60).padStart(2, "0");
   return (

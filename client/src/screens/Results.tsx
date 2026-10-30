@@ -1,5 +1,7 @@
 import { TEAMS, type ChatMessage, type PlayerInfo, type RoomView, type RoundResults } from "@ja/shared";
+import { useEffect, useRef } from "react";
 import { net } from "../net";
+import { sfx } from "../sound";
 import { Chat } from "./Chat";
 
 /** Tokens per column of a stack; a taller pile starts a new column beside it. */
@@ -83,8 +85,15 @@ export function Results({ room, me, results, chat }: { room: RoomView; me: strin
   const wonNow = (p: PlayerInfo) => p.id === results?.winnerId || (winnerTeam !== null && row(p.id)?.team === winnerTeam);
   // Most stars first, then most kills.
   const ranked = [...room.players].sort((a, b) => b.wins - a.wins || b.totalKills - a.totalKills);
-  // Everyone's new tokens pop in one player after another.
+  // Everyone's new tokens pop in one player after another, each with its clink or crunch.
   let delay = POP_START_MS;
+  const pops: { sfx: "star" | "kill"; at: number }[] = [];
+  const popsRef = useRef(pops);
+  popsRef.current = pops;
+  useEffect(() => {
+    let stars = 0;
+    for (const p of popsRef.current) sfx(p.sfx, { delay: p.at / 1000, v: p.sfx === "star" ? stars++ : 0 });
+  }, [results?.round]);
 
   const pile = (p: PlayerInfo) => {
     const freshStars = wonNow(p) ? 1 : 0;
@@ -92,6 +101,8 @@ export function Results({ room, me, results, chat }: { room: RoomView; me: strin
     const starDelay = delay;
     const killDelay = delay + freshStars * POP_STEP_MS;
     delay += (freshStars + freshKills) * POP_STEP_MS;
+    if (freshStars) pops.push({ sfx: "star", at: starDelay });
+    for (let k = 0; k < freshKills; k++) pops.push({ sfx: "kill", at: killDelay + k * POP_STEP_MS });
     return (
       <div key={p.id} className={`pile${p.id === me ? " me" : ""}`}>
         <div className="stacks">

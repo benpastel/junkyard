@@ -6,6 +6,7 @@ import {
   type ArenaInit,
   type ArenaSnapshot,
 } from "@ja/shared/sim/view";
+import { sfx } from "../sound";
 import { KeyButton } from "../ui/KeyButton";
 import { loadCameraMode, saveCameraMode } from "./cameraPref";
 import { ArenaRenderer, COMPASS_MARGIN, COMPASS_RADIUS, COMPASS_TOP, type CameraMode } from "./renderer";
@@ -108,6 +109,7 @@ export function ArenaScreen(props: {
     return () => {
       cancelAnimationFrame(raf);
       unsub();
+      renderer.dispose();
     };
   }, [init, me, subscribe]);
 
@@ -121,6 +123,8 @@ export function ArenaScreen(props: {
     const press: Press = (k, down, by) => {
       const set = holders.get(k) ?? new Set<string>();
       holders.set(k, set);
+      // A steering key with no engine behind it gets a dead clunk (and its red X).
+      if (down && !set.size && k in KEY_BITS && rendererRef.current?.flying && !(rendererRef.current.mySteerKeys & KEY_BITS[k as keyof typeof KEY_BITS])) sfx("deadkey");
       if (down) set.add(by);
       else set.delete(by);
       if (keys[k] === set.size > 0) return;

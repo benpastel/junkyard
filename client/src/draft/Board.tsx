@@ -3,6 +3,7 @@ import { buildableSet, cellKey, deadSquares, placedCells, placementError, type P
 import { openChecker, type Cell, type Dir } from "@ja/shared";
 import { useClock } from "../art/useClock";
 import { cellVariant, drawShipCells } from "./PieceCanvas";
+import { sfx } from "../sound";
 
 export interface DragState {
   /** True while a piece card is being dragged with the pointer held down. */
@@ -217,9 +218,14 @@ export function Board(props: {
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const latest = useRef({ held, rot, flip, cells, anchorAt, onPlace });
   latest.current = { held, rot, flip, cells, anchorAt, onPlace };
+  // Each new square the held piece lands on gets a detent tick (not the first, as it comes on).
+  const lastSpot = useRef<{ x: number; y: number } | null>(null);
   const track = useCallback(() => {
     const p = pointer.current;
     const h = p ? latest.current.anchorAt(p.x, p.y) : null;
+    const was = lastSpot.current;
+    if (h && was && latest.current.held && (h.x !== was.x || h.y !== was.y)) sfx("snap");
+    lastSpot.current = h;
     setHover((prev) => (prev?.x === h?.x && prev?.y === h?.y ? prev : h));
     onHoverChange(h !== null);
   }, [onHoverChange]);
@@ -248,6 +254,7 @@ export function Board(props: {
       if (!held || !a) return;
       const cells = placedCells(held, a.x, a.y, rot, flip);
       if (placementError(buildable.current, latest.current.cells, cells) === null) onPlace(a.x, a.y);
+      else sfx("nofit");
     };
     // A touch the browser takes over (a scroll, a system gesture) never ends with pointerup.
     const cancel = (e: PointerEvent) => {

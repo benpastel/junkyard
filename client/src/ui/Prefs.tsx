@@ -101,8 +101,8 @@ export function Prefs() {
               value={sound.volume}
               disabled={!sound.on}
               onChange={(e) => setSoundPrefs({ volume: Number(e.target.value) })}
-              onPointerUp={() => sfx("tick")}
-              onKeyUp={() => sfx("tick")}
+              onPointerUp={() => sfx("place")}
+              onKeyUp={() => sfx("place")}
             />
           </label>
         </div>

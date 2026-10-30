@@ -19,6 +19,7 @@ import {
 import { TEAMS, openChecker } from "@ja/shared";
 import { NEON, cockpitOrigin, drawCellPart, drawCellPlate, drawCockpit, drawHazardSaw, drawRockCell, mirrorSidesOf, type CellStyle } from "../art/cells";
 import { drawSheep } from "../art/sheep";
+import { setThrust, sfx, stopThrust } from "../sound";
 import { HAZARD_SAW } from "@ja/shared/sim/scenarios";
 
 /** Where the engine bell ends and the laser barrel tip sits, in cells from the cell centre (see art/cells.ts). */
@@ -275,6 +276,7 @@ export class ArenaRenderer {
     if (LOOK === "sky-fg") this.drawForeground(ctx, width, height, S, toScreen);
     this.drawNames(ctx, bodies, S, toScreen);
     this.drawCountdown(ctx, bodies, S, toScreen, renderTick);
+    this.countdownSound(renderTick);
     this.drawOffscreen(ctx, bodies, width, height, S, toScreen);
     this.drawOffscreenSheep(ctx, sheep, width, height, S, toScreen);
     this.drawCompass(ctx, width);
@@ -572,6 +574,7 @@ export class ArenaRenderer {
         if (b.owner) this.lastShipPos.set(b.owner, { x: b.x, y: b.y });
       }
       for (const e of snap.events) this.onEvent(e);
+      this.ownSounds(snap);
       this.current = snap;
     }
   }
@@ -711,7 +714,11 @@ export class ArenaRenderer {
         const x1 = e.x1 + (e.x2 - e.x1) * skip;
         const y1 = e.y1 + (e.y2 - e.y1) * skip;
         this.beams.push({ x1, y1, x2: e.x2, y2: e.y2, life: 0.1, max: 0.1, color, width: 0.12 });
-        if (e.hit) this.burst(e.x2, e.y2, 3, "#ffd9a0", 3, 0.2);
+        sfx("laser", this.heard(e.x1, e.y1));
+        if (e.hit) {
+          this.burst(e.x2, e.y2, 3, "#ffd9a0", 3, 0.2);
+          sfx("hit", this.heard(e.x2, e.y2));
+        }
         break;
       }
       case "hookMiss":
@@ -740,9 +747,13 @@ export class ArenaRenderer {
           this.particles.push({ kind: "smoke", x: e.x, y: e.y, vx: (this.fx() - 0.5) * 1.5, vy: (this.fx() - 0.5) * 1.5, life: 1.2, max: 1.2, size: 0.6 + this.fx() * 0.6, color: "#2a2522", rot: 0, vr: 0 });
         }
         if (this.isNearCamera(e.x, e.y)) this.shake = Math.min(1.2, this.shake + 0.25);
+        sfx("break", this.heard(e.x, e.y));
         break;
       }
       case "spark":
+        if (e.grind) sfx("skid", this.heard(e.x, e.y));
+        else if (e.saw) sfx("saw", this.heard(e.x, e.y));
+        else sfx("impact", this.heard(e.x, e.y, 0.3 + (0.7 * e.power) / 9));
         if (e.grind) {
           // Saw on armor: a long shower of white-hot sparks, no shake.
           this.burst(e.x, e.y, 22, "#ffffff", 11, 0.5);
@@ -754,18 +765,22 @@ export class ArenaRenderer {
         break;
       case "bounce":
         this.wobbles.push({ a: Math.atan2(e.y, e.x), power: e.power, life: 1 });
+        sfx("bounce", this.heard(e.x, e.y, 0.3 + (0.7 * e.power) / 9));
         this.burst(e.x, e.y, 3 + e.power, "#c9ced4", 3 + e.power * 0.5, 0.25);
         break;
       case "over":
         this.celebration = { winner: e.winner, team: e.team ?? null, start: performance.now(), confetti: null };
+        sfx(this.won(e.winner, e.team ?? null) ? "win" : "lose");
         break;
       case "sheep":
         this.particles.push({ kind: "ring", x: e.x, y: e.y, vx: 0, vy: 0, life: 0.45, max: 0.45, size: 2.2, color: "#f4efe2", rot: 0, vr: 0 });
+        sfx("sheep", this.heard(e.x, e.y, 0.5));
         this.burst(e.x, e.y, 16, "#fff8e6", 5, 0.45);
         break;
       case "pickup":
         this.particles.push({ kind: "ring", x: 0, y: 0, vx: 0, vy: 0, life: 0.5, max: 0.5, size: 4, color: "#f2ea3c", rot: 0, vr: 0 });
         this.burst(0, 0, 24, "#fff7b0", 8, 0.5);
+        sfx("powerup", e.playerId === this.me ? {} : this.heard(0, 0, 0.5));
         break;
       case "died": {
         this.dead.add(e.playerId);
@@ -775,10 +790,70 @@ export class ArenaRenderer {
           this.particles.push({ kind: "ring", x: p.x, y: p.y, vx: 0, vy: 0, life: 0.6, max: 0.6, size: 7, color: "#ffcf8a", rot: 0, vr: 0 });
           this.particles.push({ kind: "flash", x: p.x, y: p.y, vx: 0, vy: 0, life: 0.3, max: 0.3, size: 5, color: "#fff2d8", rot: 0, vr: 0 });
           if (this.isNearCamera(p.x, p.y)) this.shake = 1.5;
+          sfx("death", this.heard(p.x, p.y, e.playerId === this.me ? 1 : 0.35));
         }
         break;
       }
     }
+  }
+
+  /**
+   * How something at (x, y) sounds from here: full within most of the screen, fading out past
+   * its edge (never below `floor`), and placed left or right by where it is on screen.
+   */
+  private heard(x: number, y: number, floor = 0): { gain: number; pan: number } {
+    const dx = (x - this.camera.x) * this.camera.zoom;
+    const dy = (y - this.camera.y) * this.camera.zoom;
+    const near = Math.max(0, Math.min(1, (1 - Math.hypot(dx, dy) / VIEW_CELLS) / 0.6));
+    const sx = dx * Math.cos(this.viewRot) - dy * Math.sin(this.viewRot);
+    return { gain: Math.max(floor, near * near), pan: Math.max(-0.6, Math.min(0.6, sx / (VIEW_CELLS * 0.6))) };
+  }
+
+  /** Whether the fight's result is a win for this viewer (their ship, or their team). */
+  private won(winner: PlayerId | null, team: number | null): boolean {
+    if (!this.me) return false;
+    if (winner === this.me) return true;
+    const mine = this.init.ships.find((s) => s.playerId === this.me);
+    return team !== null && mine?.team === team;
+  }
+
+  private lastCount: number | null = null;
+  /** 3, 2, 1 and GO, as the countdown shows them. */
+  private countdownSound(renderTick: number) {
+    if (!this.current) return;
+    const left = (this.init.countdownTicks - renderTick) / TICK_HZ;
+    if (left <= -GO_SECONDS) return;
+    const n = left > 0 ? Math.ceil(left) : 0;
+    if (n === this.lastCount) return;
+    this.lastCount = n;
+    sfx(n > 0 ? "count" : "go");
+  }
+
+  private charging = new Set<number>();
+  private mirrored = false;
+  private fast = false;
+  /** Your own ship's engines, laser charge and mirror skin, and the fight speeding up. */
+  private ownSounds(snap: ArenaSnapshot) {
+    const fast = (snap.speed ?? 1) > 1;
+    if (fast && !this.fast) sfx("ff");
+    this.fast = fast;
+    const mine = this.me && !this.dead.has(this.me) ? snap.bodies.find((b) => b.owner === this.me) : undefined;
+    const burn = (mine?.thr ?? []).reduce((s, [, level]) => s + level / 9, 0);
+    setThrust(burn > 0 ? Math.min(1, 0.45 + 0.2 * burn) : 0);
+    const charging = new Set((mine?.chg ?? []).map(([cid]) => cid));
+    if ([...charging].some((cid) => !this.charging.has(cid))) sfx("charge");
+    this.charging = charging;
+    if (this.mirrored && !mine?.mir && mine) sfx("mirroroff");
+    this.mirrored = !!mine?.mir;
+  }
+
+  /** Whether this viewer has a ship still flying. */
+  get flying(): boolean {
+    return !!this.me && !this.dead.has(this.me) && this.shipInfo.has(this.me);
+  }
+
+  dispose() {
+    stopThrust();
   }
 
   private isNearCamera(x: number, y: number) {

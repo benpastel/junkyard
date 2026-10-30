@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useRef } from "react";
-import type { RoomView } from "@ja/shared";
+import type { ChatMessage, RoomView } from "@ja/shared";
 import type { ArenaInit } from "@ja/shared/sim/view";
 import { ArenaScreen, type FastForward } from "./arena/ArenaScreen";
 import { DraftScreen } from "./draft/DraftScreen";
@@ -8,6 +8,7 @@ import { Lobby, storedName } from "./screens/Lobby";
 import { Setup } from "./screens/Setup";
 import { Results } from "./screens/Results";
 import { Waiting } from "./screens/Waiting";
+import { sfx } from "./sound";
 
 // Sandboxes run the sim in the browser, so they load lazily to keep Rapier out of the main bundle.
 const SandboxArena = lazy(() => import("./sandbox-arena").then((m) => ({ default: m.SandboxArena })));
@@ -71,6 +72,7 @@ function Game() {
   }, [roomParam]);
 
   const { room, playerId } = s;
+  useTableSounds(room, playerId, s.chat);
   if (!room || !playerId) {
     return <Lobby tables={s.tables} roomId={roomParam} error={s.status === "closed" ? (s.error ?? "Disconnected") : s.error} />;
   }
@@ -134,6 +136,23 @@ function Game() {
       )}
     </>
   );
+}
+
+/** Building starting and ending, someone joining the table, and someone else's chat message arriving. */
+function useTableSounds(room: RoomView | null, me: string | null, chat: ChatMessage[]) {
+  const last = useRef<{ phase: string | null; players: number; chat: ChatMessage[] } | null>(null);
+  useEffect(() => {
+    const now = { phase: room?.phase ?? null, players: room?.players.length ?? 0, chat };
+    const was = last.current;
+    last.current = now;
+    if (!was || !room || was.phase === null) return;
+    if (was.phase === "setup" && now.phase === "draft") sfx("launch");
+    if (was.phase === "draft" && now.phase === "arena") sfx("buildover");
+    if (now.phase === "setup" && was.phase === "setup" && now.players > was.players) sfx("join");
+    const msg = chat[chat.length - 1];
+    // Each chat update from the server is one new message (the history is capped, so its length can't tell).
+    if (now.chat !== was.chat && msg && msg.from !== null && msg.from !== me) sfx("chat");
+  }, [room, me, chat]);
 }
 
 /** The viewer's fast-forward vote, if they're in this fight. */
