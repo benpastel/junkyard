@@ -1,0 +1,55 @@
+/* The top-right corner of every screen: quiet icons, brighter on hover or while on. */
+.prefs {
+  position: fixed;
+  top: 6px;
+  right: 6px;
+  z-index: 40;
+  display: flex;
+  gap: 2px;
+}
+
+.prefs-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+  -webkit-tap-highlight-color: transparent;
+}
+
+.prefs-btn:hover,
+.prefs-btn[aria-expanded="true"] {
+  color: var(--text);
+  background: none;
+}
+
+.prefs-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  padding: 12px 14px;
+}
+
+.prefs-setting {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.prefs-setting input {
+  width: 140px;
+  margin: 0;
+  accent-color: var(--rust);
+}
+
+.prefs-setting input:disabled {
+  opacity: 0.35;
+}

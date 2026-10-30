@@ -17,7 +17,6 @@ import {
 import { BOARD_PAD, Board, drives, otherTouchDragging, touchTrack, type DragState } from "./Board";
 import { PIECE_PAD, PieceCanvas } from "./PieceCanvas";
 import { RivalShip } from "./RivalShip";
-import { FullscreenButton } from "../ui/FullscreenButton";
 import { KeyButton } from "../ui/KeyButton";
 import "./draft.css";
 
@@ -260,7 +259,7 @@ export function DraftScreen(props: {
       const r = rootRef.current!.getBoundingClientRect();
       const tools = toolsRef.current!.getBoundingClientRect().height;
       const offersW =
-        (r.width - 2 * EDGE - 2 * GAP) / (3 * (5 + PIECE_PAD * 2));
+        (r.width - 2 * EDGE - 2 * GAP - (r.width < COMPACT_WIDTH ? 0 : PREFS_GUTTER)) / (3 * (5 + PIECE_PAD * 2));
       if (r.width < COMPACT_WIDTH) {
         const status = statusRef.current?.getBoundingClientRect().height ?? 0;
         const offer = Math.max(
@@ -313,14 +312,13 @@ export function DraftScreen(props: {
       {compact && (
         <div className="draft-status-bar" ref={statusRef}>
           {status}
-          <FullscreenButton />
         </div>
       )}
       <section className="draft-hand">
         <div
           className="draft-offers"
           ref={offersRef}
-          style={{ height: OFFER_CELLS * offerCell, gap: GAP }}
+          style={{ height: OFFER_CELLS * offerCell, gap: GAP, marginRight: compact ? 0 : PREFS_GUTTER }}
         >
           {view.dealing ? (
             <div className="draft-dealing">
@@ -420,7 +418,6 @@ export function DraftScreen(props: {
 
         {!compact && (
           <aside className="draft-side">
-            <FullscreenButton className="draft-fullscreen" />
             {POOL_ENABLED && (
               <section className="draft-pool-section">
                 <div className="draft-pool">
@@ -474,6 +471,8 @@ export function DraftScreen(props: {
 const EDGE = 16;
 const GAP = 12;
 const SIDE = 180;
+/** Room left beside the offers for the corner's sound, settings and fullscreen buttons (ui/Prefs). */
+const PREFS_GUTTER = 100;
 
 interface Orient {
   rot: Dir;

@@ -6,7 +6,6 @@ import {
   type ArenaInit,
   type ArenaSnapshot,
 } from "@ja/shared/sim/view";
-import { FullscreenButton } from "../ui/FullscreenButton";
 import { KeyButton } from "../ui/KeyButton";
 import { loadCameraMode, saveCameraMode } from "./cameraPref";
 import { ArenaRenderer, COMPASS_MARGIN, COMPASS_RADIUS, COMPASS_TOP, type CameraMode } from "./renderer";
@@ -165,7 +164,6 @@ export function ArenaScreen(props: {
   return (
     <div className="arena">
       <canvas ref={canvasRef} className="arena-canvas" />
-      <FullscreenButton className="arena-fullscreen" />
       {hud}
       <button
         type="button"
